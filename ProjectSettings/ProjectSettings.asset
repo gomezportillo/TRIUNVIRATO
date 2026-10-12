@@ -14,6 +14,7 @@ PlayerSettings:
   accelerometerFrequency: 60
   companyName: DefaultCompany
   productName: TRIUNVIRATO
+  m_Icon: {fileID: 2800000, guid: c79729701592ab049b42fb0668881795, type: 3}
   defaultCursor: {fileID: 0}
   cursorHotspot: {x: 0, y: 0}
   m_SplashScreenBackgroundColor: {r: 0.13725491, g: 0.12156863, b: 0.1254902, a: 1}

@@ -13,10 +13,12 @@ public sealed class TriunviratoGame : MonoBehaviour
     [SerializeField] private Transform marHero;
     [SerializeField] private Transform enemySpawner;
     [SerializeField] private Transform castleTarget;
+    [SerializeField] private Sprite enemySprite;
     private readonly List<Enemy> enemies = new List<Enemy>();
     private readonly List<Projectile> projectiles = new List<Projectile>();
+    private readonly List<FloatingDamage> floatingDamage = new List<FloatingDamage>();
     private Defender[] defenders;
-    private Sprite enemySprite;
+    private Sprite projectileSprite;
     private float castleHealth;
     private float spawnTimer;
     private float intermissionTimer;
@@ -51,14 +53,23 @@ public sealed class TriunviratoGame : MonoBehaviour
     {
         public GameObject View;
         public Vector3 Destination;
+        public Enemy Target;
+        public float Damage;
+        public float SplashRadius;
+        public float RemainingLifetime;
+    }
+
+    private sealed class FloatingDamage
+    {
+        public GameObject View;
         public float RemainingLifetime;
     }
 
     private void Start()
     {
-        if (tierraHero == null || aireHero == null || marHero == null || enemySpawner == null || castleTarget == null)
+        if (tierraHero == null || aireHero == null || marHero == null || enemySpawner == null || castleTarget == null || enemySprite == null)
         {
-            Debug.LogError("Asigna los tres héroes, EnemySpawner y CastleTarget en el Inspector.", this);
+            Debug.LogError("Asigna los tres héroes, EnemySpawner, CastleTarget y el sprite Assets/Enemies/orc.png en el Inspector.", this);
             enabled = false;
             return;
         }
@@ -87,6 +98,7 @@ public sealed class TriunviratoGame : MonoBehaviour
         UpdateEnemies();
         UpdateDefenders();
         UpdateProjectiles();
+        UpdateFloatingDamage();
         RemoveDefeatedEnemies();
 
         if (castleHealth <= 0f)
@@ -109,6 +121,12 @@ public sealed class TriunviratoGame : MonoBehaviour
                 Destroy(projectile.View);
         }
         projectiles.Clear();
+        foreach (FloatingDamage damage in floatingDamage)
+        {
+            if (damage.View != null)
+                Destroy(damage.View);
+        }
+        floatingDamage.Clear();
         castleHealth = CastleStartHealth;
         spawnTimer = 1.5f;
         intermissionTimer = 0f;
@@ -140,11 +158,6 @@ public sealed class TriunviratoGame : MonoBehaviour
         {
             Debug.LogError("Falta asignar el héroe de " + name + " en la escena.", this);
             return null;
-        }
-        SpriteRenderer renderer = hero.GetComponent<SpriteRenderer>();
-        if (renderer != null)
-        {
-            renderer.sortingOrder = 1;
         }
         return new Defender
         {
@@ -195,12 +208,10 @@ public sealed class TriunviratoGame : MonoBehaviour
     {
         GameObject view = new GameObject(isBoss ? "Jefe" : "Enemigo");
         view.transform.position = enemySpawner.position;
-        view.transform.localScale = isBoss ? Vector3.one * 0.6f : Vector3.one * 0.3f;
+        view.transform.localScale = isBoss ? Vector3.one * 0.09f : Vector3.one * 0.05f;
         SpriteRenderer renderer = view.AddComponent<SpriteRenderer>();
-        if (enemySprite == null)
-            enemySprite = Sprite.Create(Texture2D.whiteTexture, new Rect(0f, 0f, 1f, 1f), new Vector2(0.5f, 0.5f), 1f);
         renderer.sprite = enemySprite;
-        renderer.color = isBoss ? new Color(0.38f, 0.08f, 0.2f) : new Color(0.82f, 0.12f, 0.16f);
+        renderer.color = Color.white;
         renderer.sortingOrder = 2;
         float health = (18f + wave * 7f) * (isBoss ? 5f : 1f);
         enemies.Add(new Enemy
@@ -252,26 +263,16 @@ public sealed class TriunviratoGame : MonoBehaviour
 
             defender.AttackTimer = defender.Cooldown;
             FireProjectile(defender, target);
-            if (defender.SplashRadius > 0f)
-            {
-                Vector3 targetPosition = target.View.transform.position;
-                foreach (Enemy enemy in enemies)
-                {
-                    if (enemy.View != null && Vector2.Distance(targetPosition, enemy.View.transform.position) <= defender.SplashRadius)
-                        enemy.Health -= defender.Damage;
-                }
-            }
-            else
-            {
-                target.Health -= defender.Damage;
-            }
         }
     }
 
     private void FireProjectile(Defender defender, Enemy target)
     {
-        if (enemySprite == null || target.View == null)
+        if (target.View == null)
             return;
+
+        if (projectileSprite == null)
+            projectileSprite = Sprite.Create(Texture2D.whiteTexture, new Rect(0f, 0f, 1f, 1f), new Vector2(0.5f, 0.5f), 1f);
 
         Vector3 origin = defender.View.transform.position + Vector3.right * 0.2f;
         Vector3 destination = target.View.transform.position;
@@ -280,7 +281,7 @@ public sealed class TriunviratoGame : MonoBehaviour
         view.transform.localScale = Vector3.one * 0.14f;
 
         SpriteRenderer renderer = view.AddComponent<SpriteRenderer>();
-        renderer.sprite = enemySprite;
+        renderer.sprite = projectileSprite;
         renderer.color = defender.ProjectileColor;
         renderer.sortingOrder = 5;
 
@@ -288,6 +289,9 @@ public sealed class TriunviratoGame : MonoBehaviour
         {
             View = view,
             Destination = destination,
+            Target = target,
+            Damage = defender.Damage,
+            SplashRadius = defender.SplashRadius,
             RemainingLifetime = 1.5f
         });
     }
@@ -304,12 +308,123 @@ public sealed class TriunviratoGame : MonoBehaviour
             }
 
             Transform view = projectile.View.transform;
+            if (projectile.Target != null && projectile.Target.View != null)
+                projectile.Destination = projectile.Target.View.transform.position;
+
+            Vector3 previousPosition = view.position;
             view.position = Vector3.MoveTowards(view.position, projectile.Destination, ProjectileSpeed * Time.deltaTime);
             projectile.RemainingLifetime -= Time.deltaTime;
-            if (projectile.RemainingLifetime <= 0f || Vector3.Distance(view.position, projectile.Destination) <= 0.08f)
+            Enemy hit = FindProjectileImpact(previousPosition, view.position);
+            if (hit != null)
+            {
+                ApplyProjectileDamage(projectile, hit);
+                Destroy(projectile.View);
+                projectiles.RemoveAt(i);
+            }
+            else if (projectile.RemainingLifetime <= 0f || Vector3.Distance(view.position, projectile.Destination) <= 0.08f)
             {
                 Destroy(projectile.View);
                 projectiles.RemoveAt(i);
+            }
+        }
+    }
+
+    private Enemy FindProjectileImpact(Vector3 start, Vector3 end)
+    {
+        Vector2 start2D = start;
+        Vector2 segment = (Vector2)end - start2D;
+        float segmentLengthSquared = segment.sqrMagnitude;
+        float firstImpact = float.MaxValue;
+        Enemy hit = null;
+
+        foreach (Enemy enemy in enemies)
+        {
+            if (enemy.View == null)
+                continue;
+
+            Vector2 enemyPosition = enemy.View.transform.position;
+            float alongSegment = segmentLengthSquared > 0f
+                ? Mathf.Clamp01(Vector2.Dot(enemyPosition - start2D, segment) / segmentLengthSquared)
+                : 0f;
+            Vector2 closestPoint = start2D + segment * alongSegment;
+            SpriteRenderer renderer = enemy.View.GetComponent<SpriteRenderer>();
+            float enemyRadius = renderer != null
+                ? Mathf.Max(renderer.bounds.extents.x, renderer.bounds.extents.y)
+                : 0.2f;
+            float hitRadius = enemyRadius + 0.08f;
+
+            if (alongSegment < firstImpact && (enemyPosition - closestPoint).sqrMagnitude <= hitRadius * hitRadius)
+            {
+                firstImpact = alongSegment;
+                hit = enemy;
+            }
+        }
+
+        return hit;
+    }
+
+    private void ApplyProjectileDamage(Projectile projectile, Enemy impactTarget)
+    {
+        if (impactTarget.View == null)
+            return;
+
+        if (projectile.SplashRadius > 0f)
+        {
+            Vector3 impactPosition = impactTarget.View.transform.position;
+            foreach (Enemy enemy in enemies)
+            {
+                if (enemy.View != null && Vector2.Distance(impactPosition, enemy.View.transform.position) <= projectile.SplashRadius)
+                    ApplyDamage(enemy, projectile.Damage);
+            }
+        }
+        else
+        {
+            ApplyDamage(impactTarget, projectile.Damage);
+        }
+    }
+
+    private void ApplyDamage(Enemy enemy, float amount)
+    {
+        enemy.Health -= amount;
+        ShowDamage(enemy, amount);
+    }
+
+    private void ShowDamage(Enemy enemy, float amount)
+    {
+        if (enemy.View == null)
+            return;
+
+        GameObject view = new GameObject("Daño - " + Mathf.RoundToInt(amount));
+        view.transform.position = enemy.View.transform.position + Vector3.up * (enemy.IsBoss ? 0.75f : 0.55f);
+        TextMesh text = view.AddComponent<TextMesh>();
+        text.text = "-" + Mathf.RoundToInt(amount);
+        text.characterSize = 0.12f;
+        text.fontSize = 48;
+        text.alignment = TextAlignment.Center;
+        text.anchor = TextAnchor.MiddleCenter;
+        text.color = new Color(1f, 0.88f, 0.35f);
+        MeshRenderer renderer = view.GetComponent<MeshRenderer>();
+        renderer.sortingOrder = 8;
+        floatingDamage.Add(new FloatingDamage { View = view, RemainingLifetime = 0.85f });
+    }
+
+    private void UpdateFloatingDamage()
+    {
+        for (int i = floatingDamage.Count - 1; i >= 0; i--)
+        {
+            FloatingDamage damage = floatingDamage[i];
+            if (damage.View == null)
+            {
+                floatingDamage.RemoveAt(i);
+                continue;
+            }
+
+            damage.View.transform.position += Vector3.up * (0.65f * Time.deltaTime);
+            damage.RemainingLifetime -= Time.deltaTime;
+            if (damage.RemainingLifetime <= 0f)
+            {
+                Destroy(damage.View);
+                floatingDamage.RemoveAt(i);
             }
         }
     }
@@ -372,7 +487,7 @@ public sealed class TriunviratoGame : MonoBehaviour
 
     private void OnDestroy()
     {
-        if (enemySprite != null)
-            Destroy(enemySprite);
+        if (projectileSprite != null)
+            Destroy(projectileSprite);
     }
 }
