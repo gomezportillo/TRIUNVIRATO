@@ -19,14 +19,29 @@ public sealed class TowerShop : MonoBehaviour
         new System.Collections.Generic.List<GameObject>();
     private static readonly int[] Costs = { 10, 15, 20 };
 
-    public bool TryPurchase(ArmyType army)
-    {
-        if (economy == null || game == null || !game.CanCombat)
-            return false;
+    public bool TryPurchase(ArmyType army) => TryPurchase(army, out _);
 
+    public bool TryPurchase(ArmyType army, out string failureReason)
+    {
+        failureReason = null;
         int index = (int)army;
-        if (index < 0 || index >= Costs.Length || !economy.TrySpend(army, Costs[index]))
+        if (index < 0 || index >= Costs.Length)
+        {
+            failureReason = "Tipo de torre desconocido.";
             return false;
+        }
+
+        if (economy == null || game == null || !game.CanCombat)
+        {
+            failureReason = "La partida no está disponible para comprar.";
+            return false;
+        }
+
+        if (!economy.TrySpend(army, Costs[index]))
+        {
+            failureReason = "Saldo insuficiente.";
+            return false;
+        }
 
         Transform anchor = GetAnchor(army);
         Sprite sprite = GetSprite(army);
@@ -34,7 +49,7 @@ public sealed class TowerShop : MonoBehaviour
         {
             // Scene wiring errors must never consume a player's balance.
             economy.Refund(army, Costs[index]);
-            Debug.LogError("Falta asignar el anclaje o sprite de torre para " + army + ".", this);
+            failureReason = "La torre no está configurada en la escena.";
             return false;
         }
 

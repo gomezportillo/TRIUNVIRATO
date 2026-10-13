@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#111827">
+  <title>TRIUNVIRATO · Control</title>
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: #111827; color: #f9fafb; display: grid; place-items: center; padding: 20px; }
+    main { width: min(100%, 460px); }
+    h1 { margin: 0 0 6px; font-size: 1.65rem; }
+    p { color: #cbd5e1; }
+    #connection { padding: 12px 14px; border-radius: 12px; background: #374151; margin: 18px 0 12px; }
+    #connection[data-state="connected"] { background: #14532d; }
+    #connection[data-state="disconnected"] { background: #7f1d1d; }
+    button { width: 100%; min-height: 64px; margin: 8px 0; padding: 14px 18px; border: 0; border-radius: 14px; color: #07111f; font-size: 1.1rem; font-weight: 750; touch-action: manipulation; }
+    button:disabled { opacity: .45; }
+    .green { background: #4ade80; }
+    .red { background: #f87171; }
+    .blue { background: #60a5fa; }
+    #reconnect { min-height: 48px; margin-top: 4px; color: #f9fafb; background: #475569; }
+    #result { min-height: 2.5em; margin-top: 14px; padding: 10px 12px; border-radius: 10px; background: #1f2937; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>TRIUNVIRATO</h1>
+    <p>Control de compra de torres</p>
+    <div id="connection" data-state="disconnected" role="status">Desconectado</div>
+    <button class="green" data-army="tierra" disabled>Comprar torre verde · Tierra</button>
+    <button class="red" data-army="aire" disabled>Comprar torre roja · Aire</button>
+    <button class="blue" data-army="mar" disabled>Comprar torre azul · Mar</button>
+    <button id="reconnect">Conectar / volver a conectar</button>
+    <div id="result" role="status" aria-live="polite">Esperando conexión con Unity.</div>
+  </main>
+  <script>
+    (() => {
+      const connection = document.getElementById('connection');
+      const result = document.getElementById('result');
+      const buttons = [...document.querySelectorAll('[data-army]')];
+      let socket;
+
+      function setConnected(connected) {
+        connection.dataset.state = connected ? 'connected' : 'disconnected';
+        connection.textContent = connected ? 'Conectado a Unity' : 'Desconectado de Unity';
+        buttons.forEach(button => button.disabled = !connected);
+      }
+
+      function connect() {
+        if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
+          result.textContent = 'La conexión ya está activa o conectando.';
+          return;
+        }
+        result.textContent = 'Conectando…';
+        socket = new WebSocket(`ws://${location.host}/ws`);
+        socket.addEventListener('open', () => setConnected(true));
+        socket.addEventListener('close', () => setConnected(false));
+        socket.addEventListener('error', () => {
+          setConnected(false);
+          result.textContent = 'No se pudo conectar. Comprueba la Wi-Fi y vuelve a intentarlo.';
+        });
+        socket.addEventListener('message', event => {
+          try {
+            const response = JSON.parse(event.data);
+            result.textContent = response.message || (response.success ? 'Compra realizada.' : 'Compra rechazada.');
+          } catch (_) {
+            result.textContent = 'Unity envió una respuesta no válida.';
+          }
+        });
+      }
+
+      document.getElementById('reconnect').addEventListener('click', connect);
+      buttons.forEach(button => button.addEventListener('click', () => {
+        if (!socket || socket.readyState !== WebSocket.OPEN) return;
+        const requestId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        socket.send(JSON.stringify({ type: 'buyTower', army: button.dataset.army, requestId }));
+        result.textContent = 'Solicitud enviada…';
+      }));
+
+      connect();
+    })();
+  </script>
+</body>
+</html>
