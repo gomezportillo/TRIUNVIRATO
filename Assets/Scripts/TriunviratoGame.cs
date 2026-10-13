@@ -14,6 +14,7 @@ public sealed class TriunviratoGame : MonoBehaviour
     [SerializeField] private Transform enemySpawner;
     [SerializeField] private Transform castleTarget;
     [SerializeField] private Sprite enemySprite;
+    [SerializeField] private Font damageFont;
     private readonly List<Enemy> enemies = new List<Enemy>();
     private readonly List<Projectile> projectiles = new List<Projectile>();
     private readonly List<FloatingDamage> floatingDamage = new List<FloatingDamage>();
@@ -55,6 +56,7 @@ public sealed class TriunviratoGame : MonoBehaviour
         public Vector3 Destination;
         public Enemy Target;
         public float Damage;
+        public Color DamageColor;
         public float SplashRadius;
         public float RemainingLifetime;
     }
@@ -67,12 +69,13 @@ public sealed class TriunviratoGame : MonoBehaviour
 
     private void Start()
     {
-        if (tierraHero == null || aireHero == null || marHero == null || enemySpawner == null || castleTarget == null || enemySprite == null)
+        if (tierraHero == null || aireHero == null || marHero == null || enemySpawner == null || castleTarget == null || enemySprite == null || damageFont == null)
         {
-            Debug.LogError("Asigna los tres héroes, EnemySpawner, CastleTarget y el sprite Assets/Enemies/orc.png en el Inspector.", this);
+            Debug.LogError("Asigna los tres héroes, EnemySpawner, CastleTarget, el sprite Assets/Enemies/orc.png y la fuente en el Inspector.", this);
             enabled = false;
             return;
         }
+        damageFont.RequestCharactersInTexture("-0123456789", 48, FontStyle.Normal);
         ResetMatch();
     }
 
@@ -136,6 +139,12 @@ public sealed class TriunviratoGame : MonoBehaviour
         paused = false;
         finished = false;
         victory = false;
+        ArmyEconomy economy = FindAnyObjectByType<ArmyEconomy>();
+        if (economy != null)
+            economy.ResetEconomy();
+        TowerShop towerShop = FindAnyObjectByType<TowerShop>();
+        if (towerShop != null)
+            towerShop.ResetPurchasedTowers();
         if (defenders == null)
         {
             defenders = new[]
@@ -271,18 +280,28 @@ public sealed class TriunviratoGame : MonoBehaviour
         if (target.View == null)
             return;
 
+        FireProjectile(defender.View, defender.Name, defender.ProjectileColor, defender.Damage,
+            defender.SplashRadius, target);
+    }
+
+    private void FireProjectile(GameObject source, string sourceName, Color projectileColor, float damage,
+        float splashRadius, Enemy target)
+    {
+        if (source == null || target == null || target.View == null)
+            return;
+
         if (projectileSprite == null)
             projectileSprite = Sprite.Create(Texture2D.whiteTexture, new Rect(0f, 0f, 1f, 1f), new Vector2(0.5f, 0.5f), 1f);
 
-        Vector3 origin = defender.View.transform.position + Vector3.right * 0.2f;
+        Vector3 origin = source.transform.position + Vector3.right * 0.2f;
         Vector3 destination = target.View.transform.position;
-        GameObject view = new GameObject("Proyectil - " + defender.Name);
+        GameObject view = new GameObject("Proyectil - " + sourceName);
         view.transform.position = origin;
         view.transform.localScale = Vector3.one * 0.14f;
 
         SpriteRenderer renderer = view.AddComponent<SpriteRenderer>();
         renderer.sprite = projectileSprite;
-        renderer.color = defender.ProjectileColor;
+        renderer.color = projectileColor;
         renderer.sortingOrder = 5;
 
         projectiles.Add(new Projectile
@@ -290,8 +309,9 @@ public sealed class TriunviratoGame : MonoBehaviour
             View = view,
             Destination = destination,
             Target = target,
-            Damage = defender.Damage,
-            SplashRadius = defender.SplashRadius,
+            Damage = damage,
+            DamageColor = projectileColor,
+            SplashRadius = splashRadius,
             RemainingLifetime = 1.5f
         });
     }
@@ -374,22 +394,22 @@ public sealed class TriunviratoGame : MonoBehaviour
             foreach (Enemy enemy in enemies)
             {
                 if (enemy.View != null && Vector2.Distance(impactPosition, enemy.View.transform.position) <= projectile.SplashRadius)
-                    ApplyDamage(enemy, projectile.Damage);
+                    ApplyDamage(enemy, projectile.Damage, projectile.DamageColor);
             }
         }
         else
         {
-            ApplyDamage(impactTarget, projectile.Damage);
+            ApplyDamage(impactTarget, projectile.Damage, projectile.DamageColor);
         }
     }
 
-    private void ApplyDamage(Enemy enemy, float amount)
+    private void ApplyDamage(Enemy enemy, float amount, Color damageColor)
     {
         enemy.Health -= amount;
-        ShowDamage(enemy, amount);
+        ShowDamage(enemy, amount, damageColor);
     }
 
-    private void ShowDamage(Enemy enemy, float amount)
+    private void ShowDamage(Enemy enemy, float amount, Color damageColor)
     {
         if (enemy.View == null)
             return;
@@ -397,13 +417,16 @@ public sealed class TriunviratoGame : MonoBehaviour
         GameObject view = new GameObject("Daño - " + Mathf.RoundToInt(amount));
         view.transform.position = enemy.View.transform.position + Vector3.up * (enemy.IsBoss ? 0.75f : 0.55f);
         TextMesh text = view.AddComponent<TextMesh>();
+        text.font = damageFont;
+        text.fontSize = 30;
         text.text = "-" + Mathf.RoundToInt(amount);
-        text.characterSize = 0.12f;
-        text.fontSize = 48;
+        text.characterSize = 0.1f;
         text.alignment = TextAlignment.Center;
         text.anchor = TextAnchor.MiddleCenter;
-        text.color = new Color(1f, 0.88f, 0.35f);
+        text.color = damageColor;
         MeshRenderer renderer = view.GetComponent<MeshRenderer>();
+        renderer.sharedMaterial = damageFont.material;
+        renderer.localBounds = new Bounds(Vector3.zero, new Vector3(4f, 1.5f, 1f));
         renderer.sortingOrder = 8;
         floatingDamage.Add(new FloatingDamage { View = view, RemainingLifetime = 0.85f });
     }
@@ -431,13 +454,18 @@ public sealed class TriunviratoGame : MonoBehaviour
 
     private Enemy FindTarget(Defender defender)
     {
+        return defender == null || defender.View == null ? null : FindTarget(defender.View.transform.position, defender.Range);
+    }
+
+    private Enemy FindTarget(Vector3 origin, float range)
+    {
         Enemy best = null;
-        float bestDistance = defender.Range;
+        float bestDistance = range;
         foreach (Enemy enemy in enemies)
         {
             if (enemy.View == null)
                 continue;
-            float distance = Vector2.Distance(defender.View.transform.position, enemy.View.transform.position);
+            float distance = Vector2.Distance(origin, enemy.View.transform.position);
             if (distance < bestDistance)
             {
                 best = enemy;
@@ -445,6 +473,36 @@ public sealed class TriunviratoGame : MonoBehaviour
             }
         }
         return best;
+    }
+
+    internal bool CanCombat => !paused && !finished;
+
+    internal void ConfigureTower(DefenseTower tower, ArmyType army)
+    {
+        if (tower == null || defenders == null)
+            return;
+
+        int index = (int)army;
+        if (index < 0 || index >= defenders.Length || defenders[index] == null)
+            return;
+
+        Defender hero = defenders[index];
+        tower.Configure(this, army, hero.Range, hero.Damage * 0.2f, hero.Cooldown, hero.SplashRadius,
+            hero.ProjectileColor);
+    }
+
+    internal bool TryTowerAttack(DefenseTower tower)
+    {
+        if (!CanCombat || tower == null)
+            return false;
+
+        Enemy target = FindTarget(tower.transform.position, tower.Range);
+        if (target == null)
+            return false;
+
+        FireProjectile(tower.gameObject, tower.Army.ToString(), tower.ProjectileColor,
+            tower.Damage, tower.SplashRadius, target);
+        return true;
     }
 
     private void RemoveDefeatedEnemies()
@@ -467,7 +525,7 @@ public sealed class TriunviratoGame : MonoBehaviour
 
     private void OnGUI()
     {
-        GUILayout.BeginArea(new Rect(18f, 18f, 360f, 165f), GUI.skin.box);
+        GUILayout.BeginArea(new Rect(18f, 175f, 360f, 165f), GUI.skin.box);
         GUILayout.Label("TRIUNVIRATO  |  Defensa cooperativa");
         GUILayout.Label("Oleada: " + Mathf.Max(1, wave) + " / " + FinalWave);
         GUILayout.Label("Castillo: " + Mathf.CeilToInt(Mathf.Max(0f, castleHealth)) + " / " + (int)CastleStartHealth);
