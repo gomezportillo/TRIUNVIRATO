@@ -491,6 +491,15 @@ public sealed class TriunviratoGame : MonoBehaviour
             hero.ProjectileColor);
     }
 
+    internal float GetBaseTowerDamage(ArmyType army)
+    {
+        int index = (int)army;
+        if (defenders == null || index < 0 || index >= defenders.Length || defenders[index] == null)
+            return 0f;
+
+        return defenders[index].Damage * 0.2f;
+    }
+
     internal bool TryTowerAttack(DefenseTower tower)
     {
         if (!CanCombat || tower == null)

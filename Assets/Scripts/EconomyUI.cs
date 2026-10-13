@@ -13,7 +13,6 @@ public sealed class EconomyUI : MonoBehaviour
         new Color(1f, 0.25f, 0.22f),
         new Color(0.2f, 0.55f, 1f)
     };
-    private static readonly int[] Costs = { 10, 15, 20 };
     private static readonly string[] Names = { "Tierra", "Aire", "Mar" };
 
     private string feedback;
@@ -24,7 +23,7 @@ public sealed class EconomyUI : MonoBehaviour
         if (economy == null || shop == null)
             return;
 
-        GUILayout.BeginArea(new Rect(18f, 18f, 580f, 145f), GUI.skin.box);
+        GUILayout.BeginArea(new Rect(18f, 18f, 580f, 155f), GUI.skin.box);
         GUILayout.Label("RECURSOS DEL EJÉRCITO");
         GUILayout.BeginHorizontal();
         for (int i = 0; i < Armies.Length; i++)
@@ -39,16 +38,20 @@ public sealed class EconomyUI : MonoBehaviour
         GUILayout.BeginHorizontal();
         for (int i = 0; i < Armies.Length; i++)
         {
-            if (GUILayout.Button("Torre " + Names[i] + "  " + Costs[i], GUILayout.Height(30f)))
+            ArmyType army = Armies[i];
+            if (GUILayout.Button(shop.GetButtonLabel(army), GUILayout.Height(64f)))
             {
-                if (!shop.TryPurchase(Armies[i]))
+                bool wasOwned = shop.HasTower(army);
+                if (!shop.TryPurchase(army, out string failureReason))
                 {
-                    feedback = "No hay monedas suficientes para Torre " + Names[i] + ".";
+                    feedback = failureReason;
                     feedbackTime = 2f;
                 }
                 else
                 {
-                    feedback = "Torre de " + Names[i] + " comprada.";
+                    feedback = wasOwned
+                        ? "Torre de " + Names[i] + " mejorada: +1% daño."
+                        : "Torre de " + Names[i] + " comprada.";
                     feedbackTime = 1.5f;
                 }
             }

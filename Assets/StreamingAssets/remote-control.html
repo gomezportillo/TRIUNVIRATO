@@ -15,7 +15,7 @@
     #connection { padding: 12px 14px; border-radius: 12px; background: #374151; margin: 18px 0 12px; }
     #connection[data-state="connected"] { background: #14532d; }
     #connection[data-state="disconnected"] { background: #7f1d1d; }
-    button { width: 100%; min-height: 64px; margin: 8px 0; padding: 14px 18px; border: 0; border-radius: 14px; color: #07111f; font-size: 1.1rem; font-weight: 750; touch-action: manipulation; }
+    button { width: 100%; min-height: 84px; margin: 8px 0; padding: 12px 18px; border: 0; border-radius: 14px; color: #07111f; font-size: 1.05rem; font-weight: 750; line-height: 1.35; white-space: pre-line; touch-action: manipulation; }
     button:disabled { opacity: .45; }
     .green { background: #4ade80; }
     .red { background: #f87171; }
@@ -27,11 +27,11 @@
 <body>
   <main>
     <h1>TRIUNVIRATO</h1>
-    <p>Control de compra de torres</p>
+    <p>Compra y mejora las torres de cada ejército</p>
     <div id="connection" data-state="disconnected" role="status">Desconectado</div>
-    <button class="green" data-army="tierra" disabled>Comprar torre verde · Tierra</button>
-    <button class="red" data-army="aire" disabled>Comprar torre roja · Aire</button>
-    <button class="blue" data-army="mar" disabled>Comprar torre azul · Mar</button>
+    <button class="green" data-army="tierra" disabled>Comprar torre de Tierra</button>
+    <button class="red" data-army="aire" disabled>Comprar torre de Aire</button>
+    <button class="blue" data-army="mar" disabled>Comprar torre de Mar</button>
     <button id="reconnect">Conectar / volver a conectar</button>
     <div id="result" role="status" aria-live="polite">Esperando conexión con Unity.</div>
   </main>
@@ -40,7 +40,25 @@
       const connection = document.getElementById('connection');
       const result = document.getElementById('result');
       const buttons = [...document.querySelectorAll('[data-army]')];
+      const armyLabels = { tierra: 'Tierra', aire: 'Aire', mar: 'Mar' };
+      const coinIcons = { tierra: '🟢', aire: '🔴', mar: '🔵' };
+      const numberFormat = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 2 });
       let socket;
+      let shopRevision = -1;
+
+      function updateShopState(state) {
+        if (!Array.isArray(state.armies)) return;
+        if (state.revision < shopRevision) return;
+        shopRevision = state.revision;
+        state.armies.forEach(army => {
+          const button = buttons.find(item => item.dataset.army === army.army);
+          if (!button) return;
+          const damage = numberFormat.format(army.currentDamage);
+          button.textContent = army.owned
+            ? `Mejorar torre de ${armyLabels[army.army]}\nDaño:  ${damage} +1%\nCoste: ${army.nextCost} ${coinIcons[army.army]}`
+            : `Comprar torre de ${armyLabels[army.army]}\nDaño:  ${damage}\nCoste: ${army.nextCost} ${coinIcons[army.army]}`;
+        });
+      }
 
       function setConnected(connected) {
         connection.dataset.state = connected ? 'connected' : 'disconnected';
@@ -64,6 +82,10 @@
         socket.addEventListener('message', event => {
           try {
             const response = JSON.parse(event.data);
+            if (response.type === 'shopState') {
+              updateShopState(response);
+              return;
+            }
             result.textContent = response.message || (response.success ? 'Compra realizada.' : 'Compra rechazada.');
           } catch (_) {
             result.textContent = 'Unity envió una respuesta no válida.';

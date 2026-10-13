@@ -6,18 +6,27 @@ public sealed class ArmyEconomy : MonoBehaviour
     [SerializeField] private TriunviratoGame game;
     [SerializeField, Min(0f)] private float coinsPerSecond = 1f;
 
-    private readonly float[] balances = new float[3];
+    private readonly int[] balances = new int[3];
+    private float generationRemainder;
 
     private void Update()
     {
         if (game == null || game.CanCombat)
         {
-            for (int i = 0; i < balances.Length; i++)
-                balances[i] += coinsPerSecond * Time.deltaTime;
+            generationRemainder += coinsPerSecond * Time.deltaTime;
+            int coinsEarned = Mathf.FloorToInt(generationRemainder);
+            if (coinsEarned > 0)
+            {
+                for (int i = 0; i < balances.Length; i++)
+                    balances[i] += coinsEarned;
+                generationRemainder -= coinsEarned;
+            }
         }
     }
 
-    public int GetWholeCoins(ArmyType army) => Mathf.FloorToInt(balances[(int)army]);
+    public int GetCoins(ArmyType army) => balances[(int)army];
+
+    public int GetWholeCoins(ArmyType army) => GetCoins(army);
 
     public bool TrySpend(ArmyType army, int amount)
     {
@@ -39,6 +48,7 @@ public sealed class ArmyEconomy : MonoBehaviour
     public void ResetEconomy()
     {
         for (int i = 0; i < balances.Length; i++)
-            balances[i] = 0f;
+            balances[i] = 0;
+        generationRemainder = 0f;
     }
 }

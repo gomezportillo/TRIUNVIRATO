@@ -25,12 +25,16 @@ public sealed class LocalControlServer : MonoBehaviour
     private readonly ConcurrentQueue<PendingMessage> pendingMessages = new ConcurrentQueue<PendingMessage>();
     private readonly ConcurrentQueue<string> backgroundErrors = new ConcurrentQueue<string>();
     private readonly ConcurrentDictionary<int, TcpClient> clients = new ConcurrentDictionary<int, TcpClient>();
+    private readonly ConcurrentDictionary<int, WebSocketClient> webSocketClients =
+        new ConcurrentDictionary<int, WebSocketClient>();
     private TcpListener listener;
     private CancellationTokenSource shutdown;
     private string pagePath;
     private string status = "Servidor detenido";
     private string accessUrl = "IP LAN no detectada";
+    private string serializedShopState;
     private int nextClientId;
+    private int observedShopRevision = -1;
 
     [Serializable]
     private sealed class PurchaseCommand
@@ -51,6 +55,32 @@ public sealed class LocalControlServer : MonoBehaviour
         public string message;
     }
 
+    [Serializable]
+    private sealed class ShopStateMessage
+    {
+        public string type = "shopState";
+        public int revision;
+        public ArmyShopState[] armies;
+    }
+
+    [Serializable]
+    private sealed class ArmyShopState
+    {
+        public string army;
+        public bool owned;
+        public int upgradeLevel;
+        public float currentDamage;
+        public int nextCost;
+    }
+
+    private sealed class WebSocketClient
+    {
+        public readonly WebSocket Socket;
+        public readonly SemaphoreSlim SendLock = new SemaphoreSlim(1, 1);
+
+        public WebSocketClient(WebSocket socket) => Socket = socket;
+    }
+
     private sealed class PendingMessage
     {
         public string Json;
@@ -66,6 +96,13 @@ public sealed class LocalControlServer : MonoBehaviour
 
         while (pendingMessages.TryDequeue(out PendingMessage pending))
             ProcessPurchase(pending);
+
+        if (shop != null && shop.StateRevision != observedShopRevision)
+        {
+            observedShopRevision = shop.StateRevision;
+            Volatile.Write(ref serializedShopState, BuildShopStateJson());
+            BroadcastShopState();
+        }
     }
 
     private void StartServer()
@@ -99,6 +136,8 @@ public sealed class LocalControlServer : MonoBehaviour
             }
 
             shutdown = new CancellationTokenSource();
+            observedShopRevision = shop.StateRevision;
+            serializedShopState = BuildShopStateJson();
             listener = new TcpListener(IPAddress.Parse(lanAddress), port);
             listener.Start();
             accessUrl = "http://" + lanAddress + ":" + port + "/";
@@ -176,7 +215,12 @@ public sealed class LocalControlServer : MonoBehaviour
 
                     await AcceptWebSocketAsync(stream, key, token).ConfigureAwait(false);
                     using (WebSocket socket = WebSocket.CreateFromStream(stream, true, null, TimeSpan.FromSeconds(30)))
-                        await HandleWebSocketAsync(socket, token).ConfigureAwait(false);
+                    {
+                        WebSocketClient webSocketClient = new WebSocketClient(socket);
+                        webSocketClients.TryAdd(clientId, webSocketClient);
+                        await SendShopStateAsync(webSocketClient, token).ConfigureAwait(false);
+                        await HandleWebSocketAsync(clientId, webSocketClient, token).ConfigureAwait(false);
+                    }
                     return;
                 }
 
@@ -216,12 +260,14 @@ public sealed class LocalControlServer : MonoBehaviour
         finally
         {
             clients.TryRemove(clientId, out _);
+            webSocketClients.TryRemove(clientId, out _);
         }
     }
 
-    private async Task HandleWebSocketAsync(WebSocket socket, CancellationToken token)
+    private async Task HandleWebSocketAsync(int clientId, WebSocketClient client, CancellationToken token)
     {
         byte[] buffer = new byte[1024];
+        WebSocket socket = client.Socket;
         while (!token.IsCancellationRequested && socket.State == WebSocketState.Open)
         {
             using (MemoryStream message = new MemoryStream())
@@ -239,7 +285,7 @@ public sealed class LocalControlServer : MonoBehaviour
                     }
                     if (result.MessageType != WebSocketMessageType.Text || message.Length + result.Count > MaxMessageBytes)
                     {
-                        await SendResponseAsync(socket, new PurchaseResponse
+                        await SendMessageAsync(client, new PurchaseResponse
                         {
                             success = false,
                             message = "Mensaje no válido o demasiado grande."
@@ -265,11 +311,11 @@ public sealed class LocalControlServer : MonoBehaviour
                 if (completed != pending.Response.Task)
                     return;
 
-                byte[] response = Encoding.UTF8.GetBytes(await pending.Response.Task.ConfigureAwait(false));
-                await socket.SendAsync(new ArraySegment<byte>(response), WebSocketMessageType.Text, true, token)
+                await SendMessageAsync(client, await pending.Response.Task.ConfigureAwait(false), token)
                     .ConfigureAwait(false);
             }
         }
+        webSocketClients.TryRemove(clientId, out _);
     }
 
     private void ProcessPurchase(PendingMessage pending)
@@ -292,9 +338,12 @@ public sealed class LocalControlServer : MonoBehaviour
             else
             {
                 response.requestId = command.requestId;
+                bool wasOwned = shop.HasTower(army);
                 response.success = shop.TryPurchase(army, out string failureReason);
                 response.message = response.success
-                    ? "Torre de " + command.army + " comprada."
+                    ? wasOwned
+                        ? "Torre de " + command.army + " mejorada: +1% daño."
+                        : "Torre de " + command.army + " comprada."
                     : failureReason;
             }
         }
@@ -399,11 +448,85 @@ public sealed class LocalControlServer : MonoBehaviour
         await stream.FlushAsync(token).ConfigureAwait(false);
     }
 
-    private static async Task SendResponseAsync(WebSocket socket, PurchaseResponse response, CancellationToken token)
+    private void BroadcastShopState()
     {
-        byte[] data = Encoding.UTF8.GetBytes(JsonUtility.ToJson(response));
-        await socket.SendAsync(new ArraySegment<byte>(data), WebSocketMessageType.Text, true, token)
-            .ConfigureAwait(false);
+        if (shutdown == null)
+            return;
+
+        CancellationToken token = shutdown.Token;
+        foreach (KeyValuePair<int, WebSocketClient> pair in webSocketClients)
+            _ = SendShopStateAsync(pair.Value, token);
+    }
+
+    private Task SendShopStateAsync(WebSocketClient client, CancellationToken token)
+    {
+        string state = Volatile.Read(ref serializedShopState);
+        return string.IsNullOrEmpty(state) ? Task.CompletedTask : SendMessageAsync(client, state, token);
+    }
+
+    private string BuildShopStateJson()
+    {
+        ShopStateMessage state = new ShopStateMessage
+        {
+            revision = shop.StateRevision,
+            armies = new[]
+            {
+                CreateArmyShopState(ArmyType.Tierra, "tierra"),
+                CreateArmyShopState(ArmyType.Aire, "aire"),
+                CreateArmyShopState(ArmyType.Mar, "mar")
+            }
+        };
+        return JsonUtility.ToJson(state);
+    }
+
+    private ArmyShopState CreateArmyShopState(ArmyType army, string name)
+    {
+        return new ArmyShopState
+        {
+            army = name,
+            owned = shop.HasTower(army),
+            upgradeLevel = shop.GetUpgradeLevel(army),
+            currentDamage = shop.GetCurrentDamage(army),
+            nextCost = shop.GetNextCost(army)
+        };
+    }
+
+    private static Task SendMessageAsync(WebSocketClient client, object message, CancellationToken token)
+    {
+        return SendMessageAsync(client, JsonUtility.ToJson(message), token);
+    }
+
+    private static async Task SendMessageAsync(WebSocketClient client, string message, CancellationToken token)
+    {
+        bool lockTaken = false;
+        try
+        {
+            await client.SendLock.WaitAsync(token).ConfigureAwait(false);
+            lockTaken = true;
+            if (client.Socket.State != WebSocketState.Open)
+                return;
+
+            byte[] data = Encoding.UTF8.GetBytes(message);
+            await client.Socket.SendAsync(new ArraySegment<byte>(data), WebSocketMessageType.Text, true, token)
+                .ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected when Unity shuts the server down.
+        }
+        catch (WebSocketException)
+        {
+            // A disconnected browser must not affect the match.
+        }
+        catch (ObjectDisposedException)
+        {
+            // Expected when Unity closes a client during shutdown.
+        }
+        finally
+        {
+            if (lockTaken)
+                client.SendLock.Release();
+        }
     }
 
     private static string FindLanAddress()

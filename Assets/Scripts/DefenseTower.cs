@@ -11,6 +11,7 @@ public sealed class DefenseTower : MonoBehaviour
     public Color ProjectileColor { get; private set; }
 
     private TriunviratoGame game;
+    private float baseDamage;
     private float attackTimer;
 
     internal void Configure(TriunviratoGame owner, ArmyType army, float range, float damage, float cooldown,
@@ -19,11 +20,17 @@ public sealed class DefenseTower : MonoBehaviour
         game = owner;
         Army = army;
         Range = range;
-        Damage = damage;
+        baseDamage = damage;
+        Damage = baseDamage;
         Cooldown = cooldown;
         SplashRadius = splashRadius;
         ProjectileColor = projectileColor;
         attackTimer = 0f;
+    }
+
+    internal void SetDamageMultiplier(float multiplier)
+    {
+        Damage = baseDamage * Mathf.Max(0f, multiplier);
     }
 
     private void Update()
