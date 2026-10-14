@@ -48,6 +48,8 @@ public sealed class LocalControlServer : MonoBehaviour
     private int observedUpgradeRevision = -1;
     private int outgoingStateRevision;
 
+    public bool IsDeveloperMode => developerToken != null;
+
     [Serializable]
     private sealed class ClientCommand
     {
@@ -81,6 +83,11 @@ public sealed class LocalControlServer : MonoBehaviour
         public string selectedArmy;
         public bool developerMode;
         public bool developerAvailable;
+        public int currentWave;
+        public int nextEarlyCallAvailableWave;
+        public bool waveInProgress;
+        public bool earlyWaveCallPending;
+        public bool canCallNextWaveEarly;
         public SeatState[] seats;
         public ArmyShopState[] armies;
     }
@@ -470,6 +477,19 @@ public sealed class LocalControlServer : MonoBehaviour
                         stateChanged = response.success;
                     }
                 }
+                else if (command.type == "callNextWaveEarly")
+                {
+                    response.type = "waveCallResult";
+                    if (!CanControl(session, ArmyType.Mar))
+                        response.message = "Solo el ejército Mar puede adelantar la siguiente oleada.";
+                    else if (game == null)
+                        response.message = "La partida no está disponible.";
+                    else
+                    {
+                        response.success = game.TryCallNextWaveEarly(out response.message);
+                        stateChanged = response.success;
+                    }
+                }
                 else
                 {
                     response.message = "Orden desconocida.";
@@ -817,6 +837,11 @@ public sealed class LocalControlServer : MonoBehaviour
             selectedArmy = session != null ? GetArmyName(session.ArmyIndex).ToLowerInvariant() : string.Empty,
             developerMode = session != null && session.Developer,
             developerAvailable = canChooseDeveloper,
+            currentWave = game != null ? game.CurrentWave : 0,
+            nextEarlyCallAvailableWave = game != null ? game.NextEarlyCallAvailableWave : 0,
+            waveInProgress = game != null && game.IsWaveInProgress,
+            earlyWaveCallPending = game != null && game.IsEarlyWaveCallPending,
+            canCallNextWaveEarly = game != null && game.CanCallNextWaveEarly && CanControl(session, ArmyType.Mar),
             seats = new[]
             {
                 CreateSeatState(ArmyType.Tierra, session),

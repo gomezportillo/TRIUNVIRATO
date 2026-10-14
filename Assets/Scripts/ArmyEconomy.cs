@@ -102,8 +102,14 @@ public sealed class ArmyEconomy : MonoBehaviour
 
     public void RewardWaveCompleted()
     {
+        RewardWaveCompleted(1f);
+    }
+
+    public void RewardWaveCompleted(float marRewardMultiplier)
+    {
         if (config != null)
-            AddCoins(ArmyType.Mar, GetWaveReward(ArmyType.Mar), "oleada completada");
+            AddCoins(ArmyType.Mar, Mathf.CeilToInt(GetWaveReward(ArmyType.Mar) * Mathf.Max(1f, marRewardMultiplier)),
+                marRewardMultiplier > 1f ? "oleada completada con llamada anticipada" : "oleada completada");
     }
 
     internal void SetIncomeUpgradeLevel(ArmyType army, int level)

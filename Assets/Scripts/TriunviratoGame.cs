@@ -6,7 +6,6 @@ using UnityEngine.InputSystem;
 public sealed class TriunviratoGame : MonoBehaviour
 {
     public enum MatchStatus { WaitingForPlayers, InProgress, Finished }
-    private const int FinalWave = 3;
     private const float CastleStartHealth = 100f;
     [SerializeField] private Transform tierraHero;
     [SerializeField] private Transform aireHero;
@@ -29,8 +28,11 @@ public sealed class TriunviratoGame : MonoBehaviour
     private float intermissionTimer;
     private int wave;
     private int lastRewardedWave;
+    private int lastEarlyCallWave = -2;
     private int remainingToSpawn;
+    private float currentWaveRewardMultiplier = 1f;
     private bool waveInProgress;
+    private bool earlyWaveCallPending;
     private bool paused;
     private bool finished;
     private bool victory;
@@ -40,6 +42,11 @@ public sealed class TriunviratoGame : MonoBehaviour
     public MatchStatus Status => matchStatus;
     public int StateRevision { get; private set; }
     public bool IsMatchInProgress => matchStatus == MatchStatus.InProgress;
+    public int CurrentWave => wave;
+    public bool IsWaveInProgress => waveInProgress;
+    public bool IsEarlyWaveCallPending => earlyWaveCallPending;
+    public int NextEarlyCallAvailableWave => lastEarlyCallWave + 2;
+    public bool CanCallNextWaveEarly => CanCombat && !earlyWaveCallPending && wave >= lastEarlyCallWave + 2;
 
     private sealed class Enemy
     {
@@ -121,8 +128,6 @@ public sealed class TriunviratoGame : MonoBehaviour
 
         if (castleHealth <= 0f)
             EndMatch(false);
-        else if (wave >= FinalWave && !waveInProgress && remainingToSpawn == 0 && enemies.Count == 0)
-            EndMatch(true);
     }
 
     private void ResetMatch(bool resumeMatch)
@@ -150,8 +155,11 @@ public sealed class TriunviratoGame : MonoBehaviour
         intermissionTimer = 0f;
         wave = 0;
         lastRewardedWave = 0;
+        lastEarlyCallWave = -2;
         remainingToSpawn = 0;
+        currentWaveRewardMultiplier = 1f;
         waveInProgress = false;
+        earlyWaveCallPending = false;
         paused = false;
         finished = false;
         victory = false;
@@ -206,7 +214,7 @@ public sealed class TriunviratoGame : MonoBehaviour
                 spawnTimer -= Time.deltaTime;
                 if (spawnTimer <= 0f)
                 {
-                    SpawnEnemy(wave == FinalWave && remainingToSpawn == 1);
+                    SpawnEnemy(wave % 3 == 0 && remainingToSpawn == 1);
                     remainingToSpawn--;
                     spawnTimer = 0.85f;
                 }
@@ -217,23 +225,58 @@ public sealed class TriunviratoGame : MonoBehaviour
                 if (wave > 0 && lastRewardedWave != wave)
                 {
                     if (economy != null)
-                        economy.RewardWaveCompleted();
+                        economy.RewardWaveCompleted(currentWaveRewardMultiplier);
                     lastRewardedWave = wave;
                 }
                 intermissionTimer = 3f;
+                currentWaveRewardMultiplier = 1f;
             }
         }
-        else if (wave < FinalWave)
+        else if (earlyWaveCallPending)
+        {
+            StartNextWave();
+        }
+        else
         {
             intermissionTimer -= Time.deltaTime;
             if (intermissionTimer <= 0f)
-            {
-                wave++;
-                remainingToSpawn = 4 + wave * 2;
-                waveInProgress = true;
-                spawnTimer = 0f;
-            }
+                StartNextWave();
         }
+    }
+
+    private void StartNextWave()
+    {
+        wave++;
+        remainingToSpawn = 4 + wave * 2;
+        waveInProgress = true;
+        spawnTimer = 0f;
+        if (earlyWaveCallPending)
+        {
+            currentWaveRewardMultiplier = 1.5f;
+            earlyWaveCallPending = false;
+            Debug.Log("Mar ha llamado antes a la oleada " + wave + ". Su recompensa de oleada aumenta un 50 %.", this);
+        }
+        StateRevision++;
+    }
+
+    public bool TryCallNextWaveEarly(out string message)
+    {
+        if (!CanCallNextWaveEarly)
+        {
+            message = earlyWaveCallPending
+                ? "Ya hay una llamada anticipada pendiente."
+                : "Mar todavía no puede adelantar otra oleada.";
+            return false;
+        }
+
+        lastEarlyCallWave = wave;
+        earlyWaveCallPending = true;
+        StateRevision++;
+        message = waveInProgress
+            ? "Llamada aceptada: la siguiente oleada empezará en cuanto se despeje la actual."
+            : "Llamada aceptada: empieza la siguiente oleada.";
+        Debug.Log("Mar solicita adelantar la siguiente oleada desde la oleada " + wave + ".", this);
+        return true;
     }
 
     public bool TryStartMatch()
@@ -285,13 +328,15 @@ public sealed class TriunviratoGame : MonoBehaviour
         SpriteRenderer renderer = view.AddComponent<SpriteRenderer>();
         renderer.sprite = enemySprite;
         renderer.color = Color.white;
-        renderer.sortingOrder = 2;
-        float health = (18f + wave * 7f) * (isBoss ? 5f : 1f);
+        renderer.sortingOrder = 10;
+        float health = (18f + wave * 7f) * Mathf.Pow(1.05f, wave - 1) * (isBoss ? 5f : 1f);
+        float waveOneSpeed = isBoss ? 1.1f : 1.9f;
+        float speed = waveOneSpeed * 0.5f * Mathf.Pow(1.05f, wave - 1);
         enemies.Add(new Enemy
         {
             View = view,
             Health = health,
-            Speed = isBoss ? 1.1f : 1.8f + wave * 0.1f,
+            Speed = speed,
             IsBoss = isBoss
         });
     }
@@ -366,7 +411,7 @@ public sealed class TriunviratoGame : MonoBehaviour
         SpriteRenderer renderer = view.AddComponent<SpriteRenderer>();
         renderer.sprite = projectileSprite;
         renderer.color = config.ProjectileColor;
-        renderer.sortingOrder = 5;
+        renderer.sortingOrder = 15;
 
         projectiles.Add(new Projectile
         {
@@ -492,7 +537,7 @@ public sealed class TriunviratoGame : MonoBehaviour
         MeshRenderer renderer = view.GetComponent<MeshRenderer>();
         renderer.sharedMaterial = damageFont.material;
         renderer.localBounds = new Bounds(Vector3.zero, new Vector3(4f, 1.5f, 1f));
-        renderer.sortingOrder = 8;
+        renderer.sortingOrder = 20;
         floatingDamage.Add(new FloatingDamage { View = view, RemainingLifetime = 0.85f });
     }
 
@@ -594,14 +639,14 @@ public sealed class TriunviratoGame : MonoBehaviour
 
     private void OnGUI()
     {
-        GUILayout.BeginArea(new Rect(18f, 175f, 360f, 165f), GUI.skin.box);
+        GUILayout.BeginArea(new Rect(18f, 175f, 420f, 205f), GUI.skin.box);
         GUILayout.Label("TRIUNVIRATO  |  Defensa cooperativa");
         GUILayout.Label(matchStatus == MatchStatus.WaitingForPlayers ? "Sala de espera: elige ejército desde el móvil." :
             "Partida: " + matchStatus);
-        GUILayout.Label("Oleada: " + Mathf.Max(1, wave) + " / " + FinalWave);
-        GUILayout.Label("Castillo: " + Mathf.CeilToInt(Mathf.Max(0f, castleHealth)) + " / " + (int)CastleStartHealth);
-        GUILayout.Label("Enemigos: " + enemies.Count + (remainingToSpawn > 0 ? "  (" + remainingToSpawn + " por aparecer)" : ""));
-        GUILayout.Label("Ejércitos: Tierra (línea)  |  Aire (área)  |  Mar (objetivo prioritario)");
+        GUILayout.Label("🌊 Oleada: " + Mathf.Max(1, wave) + " / ∞");
+        GUILayout.Label("❤️ Castillo: " + Mathf.CeilToInt(Mathf.Max(0f, castleHealth)) + " / " + (int)CastleStartHealth);
+        GUILayout.Label("👾 Enemigos: " + enemies.Count + (remainingToSpawn > 0 ? "  (" + remainingToSpawn + " por aparecer)" : ""));
+        GUILayout.Label("🟢 Tierra (línea)  |  🔴 Aire (área)  |  🔵 Mar (objetivo prioritario)");
 
         if (finished)
             GUILayout.Label(victory ? "¡Victoria! El reino está a salvo." : "Derrota: el castillo ha caído.");
@@ -610,6 +655,8 @@ public sealed class TriunviratoGame : MonoBehaviour
         else if (!waveInProgress && wave > 0)
             GUILayout.Label("Oleada despejada. Siguiente ataque en " + Mathf.CeilToInt(intermissionTimer) + " s.");
 
+        if (earlyWaveCallPending)
+            GUILayout.Label("Mar ha llamado antes a la siguiente oleada.");
         GUILayout.Label("P: pausa  |  R: reiniciar");
         GUILayout.EndArea();
     }

@@ -204,6 +204,7 @@
         const summary = document.createElement('div');
         summary.className = 'stat-grid';
         const cards = [
+          `Oleada actual · ${state.currentWave || 0}`,
           `${icons[selectedPanel]} ${army.coins} monedas`,
           army.incomeSummary,
           `Héroe · daño ${numberFormat.format(army.heroDamage)} (base ${numberFormat.format(army.heroBaseDamage)})`,
@@ -230,6 +231,23 @@
         towerButton.disabled = !connected || !canControl || !army.canPurchaseTower || (army.owned && !army.canUpgrade);
         towerButton.addEventListener('click', () => request({ type: 'buyTower', army: selectedPanel }));
         fragment.append(towerButton);
+
+        if (selectedPanel === 'mar') {
+          const waveCallButton = document.createElement('button');
+          waveCallButton.className = 'blue';
+          waveCallButton.textContent = state.earlyWaveCallPending
+            ? 'Llamada enviada · siguiente oleada al despejar la actual'
+            : `Llamar antes a la siguiente oleada\n+50 % recompensa de Mar · disponible cada 2 oleadas`;
+          waveCallButton.disabled = !connected || !canControl || !state.canCallNextWaveEarly;
+          waveCallButton.addEventListener('click', () => request({ type: 'callNextWaveEarly', army: 'mar' }));
+          fragment.append(waveCallButton);
+          if (!state.earlyWaveCallPending && !state.canCallNextWaveEarly) {
+            const cooldown = document.createElement('p');
+            cooldown.className = 'muted';
+            cooldown.textContent = `Disponible de nuevo en la oleada ${state.nextEarlyCallAvailableWave}.`;
+            fragment.append(cooldown);
+          }
+        }
 
         const upgradesTitle = document.createElement('h2');
         upgradesTitle.textContent = 'Mejoras del ejército';
