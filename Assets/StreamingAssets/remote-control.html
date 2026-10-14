@@ -4,124 +4,299 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#111827">
-  <title>TRIUNVIRATO · Control</title>
+  <title>TRIUNVIRATO · Sala de espera</title>
   <style>
     :root { color-scheme: dark; font-family: system-ui, sans-serif; }
     * { box-sizing: border-box; }
-    body { margin: 0; min-height: 100vh; background: #111827; color: #f9fafb; display: grid; place-items: center; padding: 20px; }
-    main { width: min(100%, 460px); }
-    h1 { margin: 0 0 6px; font-size: 1.65rem; }
-    p { color: #cbd5e1; }
-    #connection { padding: 12px 14px; border-radius: 12px; background: #374151; margin: 18px 0 12px; }
+    body { margin: 0; min-height: 100vh; background: #111827; color: #f9fafb; padding: 18px; }
+    main { width: min(100%, 520px); margin: 0 auto; }
+    h1 { margin: 0 0 5px; font-size: 1.55rem; }
+    h2 { margin: 18px 0 8px; font-size: 1.15rem; }
+    p, .muted { color: #cbd5e1; }
+    #connection, #result { padding: 11px 13px; border-radius: 12px; background: #374151; margin: 12px 0; }
     #connection[data-state="connected"] { background: #14532d; }
     #connection[data-state="disconnected"] { background: #7f1d1d; }
-    #resources { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 10px 0; }
-    .resource { padding: 10px 8px; border-radius: 10px; background: #1f2937; text-align: center; font-size: .88rem; white-space: pre-line; }
-    button { width: 100%; min-height: 84px; margin: 8px 0; padding: 12px 18px; border: 0; border-radius: 14px; color: #07111f; font-size: 1.05rem; font-weight: 750; line-height: 1.35; white-space: pre-line; touch-action: manipulation; }
-    button:disabled { opacity: .45; }
+    #result { min-height: 2.6em; background: #1f2937; }
+    section { margin-top: 16px; }
+    .seat, .upgrade, .stat-card { padding: 12px; border-radius: 12px; background: #1f2937; margin: 8px 0; }
+    .seat { display: flex; justify-content: space-between; align-items: center; }
+    .seat-name { font-weight: 750; }
+    .seat-state { color: #cbd5e1; font-size: .9rem; }
+    button { width: 100%; min-height: 54px; margin: 7px 0; padding: 11px 14px; border: 0; border-radius: 13px; color: #07111f; font-size: 1rem; font-weight: 750; line-height: 1.35; white-space: pre-line; touch-action: manipulation; }
+    button:disabled { opacity: .48; }
     .green { background: #4ade80; }
     .red { background: #f87171; }
     .blue { background: #60a5fa; }
-    #reconnect { min-height: 48px; margin-top: 4px; color: #f9fafb; background: #475569; }
-    #result { min-height: 2.5em; margin-top: 14px; padding: 10px 12px; border-radius: 10px; background: #1f2937; }
+    .neutral { background: #cbd5e1; }
+    .secondary { min-height: 46px; color: #f9fafb; background: #475569; }
+    .tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+    .tabs button { min-height: 45px; margin: 0; padding: 8px; }
+    .tabs button.active { outline: 2px solid white; }
+    .stat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 7px; }
+    .stat-card { margin: 0; font-size: .92rem; }
+    .upgrade h3 { margin: 0 0 7px; font-size: 1rem; }
+    .upgrade p { margin: 5px 0; font-size: .9rem; }
+    .upgrade button { min-height: 60px; margin-bottom: 0; }
+    [hidden] { display: none !important; }
   </style>
 </head>
 <body>
   <main>
     <h1>TRIUNVIRATO</h1>
-    <p>Compra y mejora las torres de cada ejército</p>
-    <div id="connection" data-state="disconnected" role="status">Desconectado</div>
-    <div id="resources" aria-label="Recursos de los ejércitos">
-      <div class="resource" id="coins-tierra">Tierra 🟢
-Conectando…</div>
-      <div class="resource" id="coins-aire">Aire 🔴
-Conectando…</div>
-      <div class="resource" id="coins-mar">Mar 🔵
-Conectando…</div>
-    </div>
-    <button class="green" data-army="tierra" disabled>Comprar torre de Tierra</button>
-    <button class="red" data-army="aire" disabled>Comprar torre de Aire</button>
-    <button class="blue" data-army="mar" disabled>Comprar torre de Mar</button>
-    <button id="reconnect">Conectar / volver a conectar</button>
-    <div id="result" role="status" aria-live="polite">Esperando conexión con Unity.</div>
+    <p>Una defensa cooperativa para tres ejércitos</p>
+    <div id="connection" data-state="disconnected" role="status">Desconectado de Unity</div>
+    <div id="result" role="status" aria-live="polite">Conectando con la partida…</div>
+
+    <section id="lobby">
+      <h2>Sala de espera</h2>
+      <p id="lobby-message">Conéctate para elegir un ejército.</p>
+      <div id="seats" aria-label="Estado de las plazas"></div>
+      <button class="green choose-army" data-army="tierra" disabled>Elegir Tierra</button>
+      <button class="red choose-army" data-army="aire" disabled>Elegir Aire</button>
+      <button class="blue choose-army" data-army="mar" disabled>Elegir Mar</button>
+      <button id="developer" class="neutral" disabled>Entrar en modo desarrollador y empezar</button>
+      <button id="reconnectLobby" class="secondary">Conectar / volver a conectar</button>
+    </section>
+
+    <section id="control" hidden>
+      <h2 id="panel-heading">Panel del ejército</h2>
+      <div id="dev-tabs" class="tabs" hidden>
+        <button class="green" data-tab="tierra">Tierra</button>
+        <button class="red" data-tab="aire">Aire</button>
+        <button class="blue" data-tab="mar">Mar</button>
+      </div>
+      <div id="army-panel"></div>
+      <button id="reconnect" class="secondary">Conectar / volver a conectar</button>
+    </section>
   </main>
+
   <script>
     (() => {
       const connection = document.getElementById('connection');
       const result = document.getElementById('result');
-      const buttons = [...document.querySelectorAll('[data-army]')];
-      const armyLabels = { tierra: 'Tierra', aire: 'Aire', mar: 'Mar' };
-      const coinIcons = { tierra: '🟢', aire: '🔴', mar: '🔵' };
+      const lobby = document.getElementById('lobby');
+      const control = document.getElementById('control');
+      const lobbyMessage = document.getElementById('lobby-message');
+      const seatsElement = document.getElementById('seats');
+      const armyPanel = document.getElementById('army-panel');
+      const developerButton = document.getElementById('developer');
+      const chooseButtons = [...document.querySelectorAll('.choose-army')];
+      const tabs = [...document.querySelectorAll('[data-tab]')];
+      const names = { tierra: 'Tierra', aire: 'Aire', mar: 'Mar' };
+      const colors = { tierra: 'green', aire: 'red', mar: 'blue' };
+      const icons = { tierra: '🟢', aire: '🔴', mar: '🔵' };
       const numberFormat = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 2 });
+      const tokenKey = 'triunvirato-session-token';
+      let token = localStorage.getItem(tokenKey);
+      if (!token) {
+        token = crypto.randomUUID ? crypto.randomUUID() :
+          Array.from(crypto.getRandomValues(new Uint8Array(24)), n => n.toString(16).padStart(2, '0')).join('');
+        localStorage.setItem(tokenKey, token);
+      }
       let socket;
-      let shopRevision = -1;
+      let state;
       let connected = false;
+      let sessionReady = false;
+      let selectedPanel = '';
+      let developerMode = false;
+      let stateRevision = -1;
+      let requestCounter = 0;
 
-      function updateShopState(state) {
-        if (!Array.isArray(state.armies)) return;
-        if (state.revision < shopRevision) return;
-        shopRevision = state.revision;
-        state.armies.forEach(army => {
-          const button = buttons.find(item => item.dataset.army === army.army);
-          if (!button) return;
-          const damage = numberFormat.format(army.currentDamage);
-          const upgrade = numberFormat.format(army.upgradeDamagePercent);
-          button.textContent = army.owned
-            ? army.canUpgrade
-              ? `Mejorar torre de ${armyLabels[army.army]}\nDaño:  ${damage} +${upgrade}%\nCoste: ${army.nextCost} ${coinIcons[army.army]}`
-              : `Torre de ${armyLabels[army.army]}\nNivel máximo\nDaño: ${damage}`
-            : `Comprar torre de ${armyLabels[army.army]}\nDaño:  ${damage}\nCoste: ${army.nextCost} ${coinIcons[army.army]}`;
-          button.disabled = !connected || (army.owned && !army.canUpgrade);
-          const resource = document.getElementById(`coins-${army.army}`);
-          if (resource) resource.textContent = `${armyLabels[army.army]} ${coinIcons[army.army]}\n${army.coins} (${numberFormat.format(army.passiveIncomePerSecond)}/s)`;
-        });
+      function request(message) {
+        if (!socket || socket.readyState !== WebSocket.OPEN) return;
+        message.requestId = `${Date.now()}-${++requestCounter}`;
+        socket.send(JSON.stringify(message));
       }
 
-      function setConnected(isConnected) {
+      function updateConnection(isConnected) {
         connected = isConnected;
         connection.dataset.state = isConnected ? 'connected' : 'disconnected';
         connection.textContent = isConnected ? 'Conectado a Unity' : 'Desconectado de Unity';
-        if (!isConnected) buttons.forEach(button => button.disabled = true);
+        if (!isConnected) {
+          sessionReady = false;
+          render();
+        }
+      }
+
+      function renderSeats() {
+        if (!state || !Array.isArray(state.seats)) return;
+        seatsElement.replaceChildren(...state.seats.map(seat => {
+          const row = document.createElement('div');
+          row.className = 'seat';
+          const name = document.createElement('span');
+          name.className = 'seat-name';
+          name.textContent = `${names[seat.army] || seat.army} ${icons[seat.army] || ''}`;
+          const status = document.createElement('span');
+          status.className = 'seat-state';
+          status.textContent = seat.selectedByMe ? 'Seleccionada por ti' :
+            seat.status === 'occupied' ? (seat.connected ? 'Ocupada' : 'Reservada · desconectado') : 'Libre';
+          row.append(name, status);
+          return row;
+        }));
+        chooseButtons.forEach(button => {
+          const seat = state.seats.find(item => item.army === button.dataset.army);
+          const mine = seat && seat.selectedByMe;
+          const free = seat && seat.status === 'free';
+          button.disabled = !connected || !sessionReady || state.status !== 'WaitingForPlayers' || developerMode || (!free && !mine);
+          button.textContent = mine ? `Seleccionado: ${names[button.dataset.army]} · cambiar` : `Elegir ${names[button.dataset.army]}`;
+        });
+        developerButton.disabled = !connected || !sessionReady || state.status !== 'WaitingForPlayers' ||
+          !state.developerAvailable || developerMode;
+      }
+
+      function makeUpgradeCard(army, option) {
+        const card = document.createElement('article');
+        card.className = 'upgrade';
+        const heading = document.createElement('h3');
+        heading.textContent = `${option.name} · nivel ${option.level}/${option.maximumLevel}`;
+        const current = document.createElement('p');
+        current.textContent = `Actual: ${option.currentEffect}`;
+        const next = document.createElement('p');
+        next.textContent = `Siguiente: ${option.nextEffect}`;
+        const button = document.createElement('button');
+        button.className = colors[army];
+        button.textContent = option.level >= option.maximumLevel
+          ? 'Nivel máximo'
+          : `Mejorar · ${option.nextCost} ${icons[army]}`;
+        button.disabled = !connected || !sessionReady || !state.armies.find(item => item.army === army).canControl || !option.canPurchase;
+        button.addEventListener('click', () => request({ type: 'buyUpgrade', army, upgrade: option.id }));
+        card.append(heading, current, next, button);
+        if (option.blockedReason) {
+          const reason = document.createElement('p');
+          reason.className = 'muted';
+          reason.textContent = option.blockedReason;
+          card.append(reason);
+        }
+        return card;
+      }
+
+      function renderPanel() {
+        if (!state || !sessionReady) return;
+        const inMatch = state.status === 'InProgress' || state.status === 'Finished';
+        if (!inMatch) {
+          control.hidden = true;
+          lobby.hidden = false;
+          lobbyMessage.textContent = state.status === 'WaitingForPlayers'
+            ? 'Elige una plaza libre. La partida empieza al ocupar Tierra, Aire y Mar.'
+            : 'Esperando a Unity…';
+          return;
+        }
+
+        lobby.hidden = true;
+        control.hidden = false;
+        if (!developerMode && !state.selectedArmy) {
+          document.getElementById('panel-heading').textContent = 'Partida en curso';
+          document.getElementById('dev-tabs').hidden = true;
+          armyPanel.textContent = 'Esta sesión no tiene un ejército asignado. Las plazas quedan cerradas durante la partida.';
+          return;
+        }
+        if (!selectedPanel || (!developerMode && selectedPanel !== state.selectedArmy))
+          selectedPanel = developerMode ? 'tierra' : state.selectedArmy;
+        const army = state.armies.find(item => item.army === selectedPanel);
+        if (!army) return;
+        const canControl = army.canControl;
+        document.getElementById('panel-heading').textContent = developerMode
+          ? `Modo desarrollador · ${names[selectedPanel]}` : `Ejército ${names[selectedPanel]}`;
+        document.getElementById('dev-tabs').hidden = !developerMode;
+        tabs.forEach(tab => tab.classList.toggle('active', tab.dataset.tab === selectedPanel));
+
+        const fragment = document.createDocumentFragment();
+        const summary = document.createElement('div');
+        summary.className = 'stat-grid';
+        const cards = [
+          `${icons[selectedPanel]} ${army.coins} monedas`,
+          army.incomeSummary,
+          `Héroe · daño ${numberFormat.format(army.heroDamage)} (base ${numberFormat.format(army.heroBaseDamage)})`,
+          `Alcance ${numberFormat.format(army.heroRange)} · cadencia ${numberFormat.format(1 / Math.max(.01, army.heroAttackCooldown))}/s`,
+          `Área de efecto · radio ${numberFormat.format(army.heroSplashRadius)}`,
+          `Torre individual · nivel ${army.upgradeLevel} · daño ${numberFormat.format(army.currentDamage)}`,
+          `Mejora global de torres · nivel ${army.armyTowerLevel} · ×${numberFormat.format(army.armyTowerMultiplier)}`
+        ];
+        cards.forEach(text => {
+          const card = document.createElement('div');
+          card.className = 'stat-card';
+          card.textContent = text;
+          summary.append(card);
+        });
+        fragment.append(summary);
+
+        const towerButton = document.createElement('button');
+        towerButton.className = colors[selectedPanel];
+        towerButton.textContent = army.owned
+          ? army.canUpgrade
+            ? `Mejorar torre de ${names[selectedPanel]}\nDaño: ${numberFormat.format(army.currentDamage)} +${numberFormat.format(army.upgradeDamagePercent)}%\nCoste: ${army.nextCost} ${icons[selectedPanel]}`
+            : `Torre de ${names[selectedPanel]}\nNivel individual máximo · daño ${numberFormat.format(army.currentDamage)}`
+          : `Comprar torre de ${names[selectedPanel]}\nDaño: ${numberFormat.format(army.currentDamage)}\nCoste: ${army.nextCost} ${icons[selectedPanel]}`;
+        towerButton.disabled = !connected || !canControl || !army.canPurchaseTower || (army.owned && !army.canUpgrade);
+        towerButton.addEventListener('click', () => request({ type: 'buyTower', army: selectedPanel }));
+        fragment.append(towerButton);
+
+        const upgradesTitle = document.createElement('h2');
+        upgradesTitle.textContent = 'Mejoras del ejército';
+        fragment.append(upgradesTitle);
+        (army.upgrades || []).forEach(option => fragment.append(makeUpgradeCard(selectedPanel, option)));
+        if (state.status === 'Finished') {
+          const finished = document.createElement('p');
+          finished.textContent = 'La partida ha finalizado. Las órdenes están bloqueadas.';
+          fragment.prepend(finished);
+        }
+        armyPanel.replaceChildren(fragment);
+      }
+
+      function render() {
+        if (!state) return;
+        renderSeats();
+        renderPanel();
       }
 
       function connect() {
-        if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
-          result.textContent = 'La conexión ya está activa o conectando.';
-          return;
-        }
+        if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) return;
         result.textContent = 'Conectando…';
         socket = new WebSocket(`ws://${location.host}/ws`);
         socket.addEventListener('open', () => {
-          shopRevision = -1;
-          setConnected(true);
+          stateRevision = -1;
+          updateConnection(true);
+          request({ type: 'hello', clientToken: token });
         });
-        socket.addEventListener('close', () => setConnected(false));
+        socket.addEventListener('close', () => updateConnection(false));
         socket.addEventListener('error', () => {
-          setConnected(false);
+          updateConnection(false);
           result.textContent = 'No se pudo conectar. Comprueba la Wi-Fi y vuelve a intentarlo.';
         });
         socket.addEventListener('message', event => {
           try {
-            const response = JSON.parse(event.data);
-            if (response.type === 'shopState') {
-              updateShopState(response);
-              return;
+            const message = JSON.parse(event.data);
+            if (message.type === 'shopState') {
+              if (message.revision < stateRevision) return;
+              stateRevision = message.revision;
+              state = message;
+              if (sessionReady && !selectedPanel) selectedPanel = message.developerMode ? 'tierra' : message.selectedArmy;
+              developerMode = message.developerMode;
+              render();
+            } else if (message.type === 'sessionResult') {
+              sessionReady = message.success;
+              if (!message.success) result.textContent = message.message || 'No se pudo recuperar la sesión.';
+              else result.textContent = message.message || 'Sesión conectada.';
+              render();
+            } else {
+              result.textContent = message.message || (message.success ? 'Orden aceptada.' : 'Orden rechazada.');
             }
-            result.textContent = response.message || (response.success ? 'Compra realizada.' : 'Compra rechazada.');
           } catch (_) {
             result.textContent = 'Unity envió una respuesta no válida.';
           }
         });
       }
 
-      document.getElementById('reconnect').addEventListener('click', connect);
-      buttons.forEach(button => button.addEventListener('click', () => {
-        if (!socket || socket.readyState !== WebSocket.OPEN) return;
-        const requestId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-        socket.send(JSON.stringify({ type: 'buyTower', army: button.dataset.army, requestId }));
-        result.textContent = 'Solicitud enviada…';
+      chooseButtons.forEach(button => button.addEventListener('click', () =>
+        request({ type: 'selectArmy', army: button.dataset.army })));
+      developerButton.addEventListener('click', () => request({ type: 'joinDeveloper' }));
+      tabs.forEach(tab => tab.addEventListener('click', () => {
+        if (!developerMode) return;
+        selectedPanel = tab.dataset.tab;
+        renderPanel();
       }));
-
+      document.getElementById('reconnect').addEventListener('click', connect);
+      document.getElementById('reconnectLobby').addEventListener('click', connect);
       connect();
     })();
   </script>

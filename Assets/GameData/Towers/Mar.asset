@@ -22,3 +22,7 @@ MonoBehaviour:
   upgradeCostGrowthRate: 0.01
   minimumUpgradeCostIncrease: 1
   maximumUpgradeLevel: 0
+  armyUpgradeBaseCost: 20
+  armyUpgradeCostMultiplier: 2
+  armyDamageIncreasePerLevel: 0.1
+  armyUpgradeMaximumLevel: 5

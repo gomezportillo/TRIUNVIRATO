@@ -8,28 +8,50 @@ public sealed class ArmyEconomy : MonoBehaviour
 
     private readonly int[] balances = new int[3];
     private readonly float[] generationRemainders = new float[3];
+    private readonly int[] incomeUpgradeLevels = new int[3];
 
     public int StateRevision { get; private set; }
 
     public float GetPassiveIncomePerSecond(ArmyType army) =>
-        IsValidArmy(army) && config != null ? config.GetPassiveIncomePerSecond(army) : 0f;
+        IsValidArmy(army) && config != null
+            ? config.GetPassiveIncomePerSecond(army) *
+              (1f + config.GetPassiveIncomeIncreasePerLevel(army) * incomeUpgradeLevels[(int)army])
+            : 0f;
+
+    public int GetIncomeUpgradeLevel(ArmyType army) =>
+        IsValidArmy(army) ? incomeUpgradeLevels[(int)army] : 0;
+
+    public int GetEnemyKillReward(ArmyType army) =>
+        config != null ? config.GetEnemyKillReward(army) +
+                         config.GetEnemyKillRewardIncreasePerLevel(army) * GetIncomeUpgradeLevel(army) : 0;
+
+    public int GetWaveReward(ArmyType army) =>
+        config != null ? config.GetWaveReward(army) +
+                         config.GetWaveRewardIncreasePerLevel(army) * GetIncomeUpgradeLevel(army) : 0;
+
+    public int GetBossReward(ArmyType army) =>
+        config != null ? config.GetBossReward(army) +
+                         config.GetBossRewardIncreasePerLevel(army) * GetIncomeUpgradeLevel(army) : 0;
+
+    public EconomyConfig Config => config;
 
     private void Update()
     {
-        if (config == null || (game != null && !game.CanCombat))
+        if (config == null || game == null || !game.CanCombat)
             return;
 
         bool balanceChanged = false;
         for (int i = 0; i < balances.Length; i++)
         {
             ArmyType army = (ArmyType)i;
-            generationRemainders[i] += config.GetPassiveIncomePerSecond(army) * Time.deltaTime;
+            generationRemainders[i] += GetPassiveIncomePerSecond(army) * Time.deltaTime;
             int coinsEarned = Mathf.FloorToInt(generationRemainders[i]);
             if (coinsEarned > 0)
             {
                 balances[i] += coinsEarned;
                 generationRemainders[i] -= coinsEarned;
                 balanceChanged = true;
+                Debug.Log("Economía " + army + ": +" + coinsEarned + " moneda(s) por ingreso pasivo. Saldo: " + balances[i] + ".", this);
             }
         }
 
@@ -47,11 +69,13 @@ public sealed class ArmyEconomy : MonoBehaviour
     public bool TrySpend(ArmyType army, int amount)
     {
         int index = (int)army;
-        if (amount < 0 || index < 0 || index >= balances.Length || balances[index] < amount)
+        if (amount < 0 || index < 0 || index >= balances.Length || balances[index] < amount ||
+            (game != null && !game.CanCombat))
             return false;
 
         balances[index] -= amount;
         StateRevision++;
+        Debug.Log("Economía " + army + ": -" + amount + " moneda(s). Saldo: " + balances[index] + ".", this);
         return true;
     }
 
@@ -62,6 +86,7 @@ public sealed class ArmyEconomy : MonoBehaviour
         {
             balances[index] += amount;
             StateRevision++;
+            Debug.Log("Economía " + army + ": reembolso de " + amount + " moneda(s). Saldo: " + balances[index] + ".", this);
         }
     }
 
@@ -70,18 +95,26 @@ public sealed class ArmyEconomy : MonoBehaviour
         if (config == null)
             return;
 
-        AddCoins(ArmyType.Aire, config.GetEnemyKillReward(ArmyType.Aire));
+        AddCoins(ArmyType.Aire, GetEnemyKillReward(ArmyType.Aire), "baja");
         if (isBoss)
-            AddCoins(ArmyType.Mar, config.GetBossReward(ArmyType.Mar));
+            AddCoins(ArmyType.Mar, GetBossReward(ArmyType.Mar), "jefe derrotado");
     }
 
     public void RewardWaveCompleted()
     {
         if (config != null)
-            AddCoins(ArmyType.Mar, config.GetWaveReward(ArmyType.Mar));
+            AddCoins(ArmyType.Mar, GetWaveReward(ArmyType.Mar), "oleada completada");
     }
 
-    private void AddCoins(ArmyType army, int amount)
+    internal void SetIncomeUpgradeLevel(ArmyType army, int level)
+    {
+        if (!IsValidArmy(army))
+            return;
+        incomeUpgradeLevels[(int)army] = Mathf.Max(0, level);
+        StateRevision++;
+    }
+
+    private void AddCoins(ArmyType army, int amount, string reason)
     {
         int index = (int)army;
         if (amount <= 0 || index < 0 || index >= balances.Length)
@@ -89,6 +122,7 @@ public sealed class ArmyEconomy : MonoBehaviour
 
         balances[index] += amount;
         StateRevision++;
+        Debug.Log("Economía " + army + ": +" + amount + " moneda(s) por " + reason + ". Saldo: " + balances[index] + ".", this);
     }
 
     public void ResetEconomy()
@@ -98,6 +132,7 @@ public sealed class ArmyEconomy : MonoBehaviour
             ArmyType army = (ArmyType)i;
             balances[i] = config != null ? config.GetInitialBalance(army) : 0;
             generationRemainders[i] = 0f;
+            incomeUpgradeLevels[i] = 0;
         }
         StateRevision++;
     }

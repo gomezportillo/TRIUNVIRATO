@@ -22,3 +22,7 @@ MonoBehaviour:
   projectileColor: {r: 1, g: 0.78, b: 0.18, a: 1}
   projectileSpeed: 10
   projectileLifetime: 1.5
+  heroUpgradeBaseCost: 15
+  heroUpgradeCostMultiplier: 2
+  heroDamageIncreasePerLevel: 0.15
+  heroUpgradeMaximumLevel: 5

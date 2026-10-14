@@ -19,21 +19,36 @@ MonoBehaviour:
     rewardPerEnemyKill: 0
     rewardPerWaveCompleted: 0
     additionalRewardPerBossDefeated: 0
-    futurePassiveIncomeUpgradeAmount: 0.25
-    futurePassiveIncomeUpgradeCost: 10
+    incomeUpgradeBaseCost: 20
+    incomeUpgradeCostMultiplier: 2
+    incomeUpgradeMaximumLevel: 5
+    passiveIncomeIncreasePerLevel: 0.5
+    enemyKillRewardIncreasePerLevel: 0
+    waveRewardIncreasePerLevel: 0
+    bossRewardIncreasePerLevel: 0
   - army: 1
     initialBalance: 0
     passiveIncomePerSecond: 0.25
     rewardPerEnemyKill: 1
     rewardPerWaveCompleted: 0
     additionalRewardPerBossDefeated: 0
-    futurePassiveIncomeUpgradeAmount: 0.1
-    futurePassiveIncomeUpgradeCost: 10
+    incomeUpgradeBaseCost: 15
+    incomeUpgradeCostMultiplier: 2
+    incomeUpgradeMaximumLevel: 5
+    passiveIncomeIncreasePerLevel: 0
+    enemyKillRewardIncreasePerLevel: 1
+    waveRewardIncreasePerLevel: 0
+    bossRewardIncreasePerLevel: 0
   - army: 2
     initialBalance: 0
     passiveIncomePerSecond: 0
     rewardPerEnemyKill: 0
     rewardPerWaveCompleted: 10
     additionalRewardPerBossDefeated: 10
-    futurePassiveIncomeUpgradeAmount: 0
-    futurePassiveIncomeUpgradeCost: 0
+    incomeUpgradeBaseCost: 20
+    incomeUpgradeCostMultiplier: 2
+    incomeUpgradeMaximumLevel: 5
+    passiveIncomeIncreasePerLevel: 0
+    enemyKillRewardIncreasePerLevel: 0
+    waveRewardIncreasePerLevel: 5
+    bossRewardIncreasePerLevel: 5

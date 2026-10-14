@@ -14,6 +14,11 @@ public sealed class TowerConfig : ScriptableObject
     [SerializeField, Min(0f)] private float upgradeCostGrowthRate = 0.01f;
     [SerializeField, Min(1)] private int minimumUpgradeCostIncrease = 1;
     [SerializeField, Min(0)] private int maximumUpgradeLevel;
+    [Header("Mejora global del ejército")]
+    [SerializeField, Min(0)] private int armyUpgradeBaseCost = 20;
+    [SerializeField, Min(1f)] private float armyUpgradeCostMultiplier = 2f;
+    [SerializeField, Min(0f)] private float armyDamageIncreasePerLevel = 0.1f;
+    [SerializeField, Min(0)] private int armyUpgradeMaximumLevel = 5;
 
     public string Id => id;
     public string DisplayName => displayName;
@@ -23,6 +28,10 @@ public sealed class TowerConfig : ScriptableObject
     public float HeroDamageMultiplier => heroDamageMultiplier;
     public float UpgradeDamagePercent => upgradeDamagePercent;
     public int MaximumUpgradeLevel => maximumUpgradeLevel;
+    public int ArmyUpgradeBaseCost => armyUpgradeBaseCost;
+    public float ArmyUpgradeCostMultiplier => armyUpgradeCostMultiplier;
+    public float ArmyDamageIncreasePerLevel => armyDamageIncreasePerLevel;
+    public int ArmyUpgradeMaximumLevel => armyUpgradeMaximumLevel;
 
     public float GetBaseDamage() => hero != null ? hero.Damage * heroDamageMultiplier : 0f;
 
@@ -41,4 +50,13 @@ public sealed class TowerConfig : ScriptableObject
 
     public bool CanUpgrade(int currentLevel) =>
         maximumUpgradeLevel <= 0 || currentLevel < maximumUpgradeLevel;
+
+    public float GetArmyDamageMultiplier(int level) =>
+        Mathf.Pow(1f + armyDamageIncreasePerLevel, Mathf.Clamp(level, 0, armyUpgradeMaximumLevel));
+
+    public float GetDamageAtLevels(int individualLevel, int armyLevel) =>
+        GetDamageAtUpgradeLevel(individualLevel) * GetArmyDamageMultiplier(armyLevel);
+
+    public int GetArmyUpgradeCost(int currentLevel) =>
+        Mathf.CeilToInt(armyUpgradeBaseCost * Mathf.Pow(armyUpgradeCostMultiplier, Mathf.Max(0, currentLevel)));
 }

@@ -12,8 +12,10 @@ public sealed class DefenseTower : MonoBehaviour
 
     private TriunviratoGame game;
     private float attackTimer;
+    private int individualUpgradeLevel;
+    private int armyUpgradeLevel;
 
-    internal void Configure(TriunviratoGame owner, TowerConfig config)
+    internal void Configure(TriunviratoGame owner, TowerConfig config, int individualLevel, int globalArmyLevel)
     {
         game = owner;
         Config = config;
@@ -21,7 +23,9 @@ public sealed class DefenseTower : MonoBehaviour
             return;
 
         Range = config.Hero.Range;
-        Damage = config.GetDamageAtUpgradeLevel(0);
+        individualUpgradeLevel = Mathf.Max(0, individualLevel);
+        armyUpgradeLevel = Mathf.Max(0, globalArmyLevel);
+        RefreshDamage();
         Cooldown = config.Hero.AttackCooldown;
         SplashRadius = config.Hero.SplashRadius;
         attackTimer = 0f;
@@ -29,8 +33,20 @@ public sealed class DefenseTower : MonoBehaviour
 
     internal void SetUpgradeLevel(int level)
     {
+        individualUpgradeLevel = Mathf.Max(0, level);
+        RefreshDamage();
+    }
+
+    internal void SetArmyUpgradeLevel(int level)
+    {
+        armyUpgradeLevel = Mathf.Max(0, level);
+        RefreshDamage();
+    }
+
+    private void RefreshDamage()
+    {
         if (Config != null)
-            Damage = Config.GetDamageAtUpgradeLevel(level);
+            Damage = Config.GetDamageAtLevels(individualUpgradeLevel, armyUpgradeLevel);
     }
 
     private void Update()

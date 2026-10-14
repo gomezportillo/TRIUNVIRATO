@@ -20,9 +20,31 @@ public sealed class TowerShop : MonoBehaviour
 
     private readonly DefenseTower[] towers = new DefenseTower[3];
     private readonly int[] upgradeLevels = new int[3];
+    private readonly int[] armyUpgradeLevels = new int[3];
     private readonly int[] nextCosts = new int[3];
 
     public int StateRevision { get; private set; }
+    public bool CanPurchase => game != null && game.CanCombat;
+
+    public TowerConfig GetConfig(ArmyType army) => army == ArmyType.Tierra ? groundConfig :
+        army == ArmyType.Aire ? airConfig : army == ArmyType.Mar ? seaConfig : null;
+
+    public int GetArmyUpgradeLevel(ArmyType army)
+    {
+        int index = (int)army;
+        return index >= 0 && index < armyUpgradeLevels.Length ? armyUpgradeLevels[index] : 0;
+    }
+
+    public void SetArmyUpgradeLevel(ArmyType army, int level)
+    {
+        int index = (int)army;
+        if (index < 0 || index >= armyUpgradeLevels.Length)
+            return;
+        armyUpgradeLevels[index] = Mathf.Max(0, level);
+        if (towers[index] != null)
+            towers[index].SetArmyUpgradeLevel(armyUpgradeLevels[index]);
+        StateRevision++;
+    }
 
     public bool HasTower(ArmyType army)
     {
@@ -53,7 +75,9 @@ public sealed class TowerShop : MonoBehaviour
             return 0f;
 
         TowerConfig config = GetConfig(army);
-        return HasTower(army) ? towers[index].Damage : config != null ? config.GetBaseDamage() : 0f;
+        return HasTower(army)
+            ? towers[index].Damage
+            : config != null ? config.GetDamageAtLevels(0, GetArmyUpgradeLevel(army)) : 0f;
     }
 
     public float GetUpgradeDamagePercent(ArmyType army)
@@ -152,7 +176,7 @@ public sealed class TowerShop : MonoBehaviour
                 (1.2f * GetSizeMultiplier(army) / Mathf.Max(0.01f, spriteHeight));
             AddOutline(towerObject.transform, renderer, sprite);
             DefenseTower behavior = towerObject.AddComponent<DefenseTower>();
-            game.ConfigureTower(behavior, config);
+            game.ConfigureTower(behavior, config, upgradeLevels[index], armyUpgradeLevels[index]);
             towers[index] = behavior;
             upgradeLevels[index] = 0;
             nextCosts[index] = config.GetNextUpgradeCost(cost);
@@ -212,9 +236,6 @@ public sealed class TowerShop : MonoBehaviour
     private Transform GetAnchor(ArmyType army) => army == ArmyType.Tierra ? groundTower :
         army == ArmyType.Aire ? airTower : seaTower;
 
-    private TowerConfig GetConfig(ArmyType army) => army == ArmyType.Tierra ? groundConfig :
-        army == ArmyType.Aire ? airConfig : seaConfig;
-
     private Sprite GetSprite(ArmyType army) => army == ArmyType.Tierra ? groundSprite :
         army == ArmyType.Aire ? airSprite : seaSprite;
 
@@ -229,6 +250,7 @@ public sealed class TowerShop : MonoBehaviour
                 Destroy(towers[i].gameObject);
             towers[i] = null;
             upgradeLevels[i] = 0;
+            armyUpgradeLevels[i] = 0;
             ArmyType army = (ArmyType)i;
             TowerConfig config = GetConfig(army);
             nextCosts[i] = config != null ? config.PurchaseCost : 0;

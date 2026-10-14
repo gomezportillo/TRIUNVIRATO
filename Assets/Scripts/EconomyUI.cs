@@ -40,7 +40,7 @@ public sealed class EconomyUI : MonoBehaviour
         for (int i = 0; i < Armies.Length; i++)
         {
             ArmyType army = Armies[i];
-            GUI.enabled = shop.CanUpgrade(army);
+            GUI.enabled = shop.CanPurchase && shop.CanUpgrade(army);
             if (GUILayout.Button(shop.GetButtonLabel(army), GUILayout.Height(64f)))
             {
                 bool wasOwned = shop.HasTower(army);

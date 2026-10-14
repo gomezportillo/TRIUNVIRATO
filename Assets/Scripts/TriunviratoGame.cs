@@ -5,6 +5,7 @@ using UnityEngine.InputSystem;
 /// <summary>Runs the first playable TRIUNVIRATO prototype using scene-authored objects.</summary>
 public sealed class TriunviratoGame : MonoBehaviour
 {
+    public enum MatchStatus { WaitingForPlayers, InProgress, Finished }
     private const int FinalWave = 3;
     private const float CastleStartHealth = 100f;
     [SerializeField] private Transform tierraHero;
@@ -33,6 +34,12 @@ public sealed class TriunviratoGame : MonoBehaviour
     private bool paused;
     private bool finished;
     private bool victory;
+    private MatchStatus matchStatus = MatchStatus.WaitingForPlayers;
+    private readonly int[] heroUpgradeLevels = new int[3];
+
+    public MatchStatus Status => matchStatus;
+    public int StateRevision { get; private set; }
+    public bool IsMatchInProgress => matchStatus == MatchStatus.InProgress;
 
     private sealed class Enemy
     {
@@ -81,7 +88,7 @@ public sealed class TriunviratoGame : MonoBehaviour
         damageFont.RequestCharactersInTexture("-0123456789", 48, FontStyle.Normal);
         if (economy == null)
             economy = FindAnyObjectByType<ArmyEconomy>();
-        ResetMatch();
+        ResetMatch(false);
     }
 
     private void Update()
@@ -91,15 +98,18 @@ public sealed class TriunviratoGame : MonoBehaviour
         {
             if (keyboard.rKey.wasPressedThisFrame)
             {
-                ResetMatch();
+                ResetMatch(matchStatus != MatchStatus.WaitingForPlayers);
                 return;
             }
 
             if (keyboard.pKey.wasPressedThisFrame && !finished)
+            {
                 paused = !paused;
+                StateRevision++;
+            }
         }
 
-        if (paused || finished)
+        if (matchStatus != MatchStatus.InProgress || paused || finished)
             return;
 
         UpdateWaveFlow();
@@ -115,7 +125,7 @@ public sealed class TriunviratoGame : MonoBehaviour
             EndMatch(true);
     }
 
-    private void ResetMatch()
+    private void ResetMatch(bool resumeMatch)
     {
         foreach (Enemy enemy in enemies)
         {
@@ -145,11 +155,16 @@ public sealed class TriunviratoGame : MonoBehaviour
         paused = false;
         finished = false;
         victory = false;
+        matchStatus = resumeMatch ? MatchStatus.InProgress : MatchStatus.WaitingForPlayers;
+        StateRevision++;
         if (economy != null)
             economy.ResetEconomy();
         TowerShop towerShop = FindAnyObjectByType<TowerShop>();
         if (towerShop != null)
             towerShop.ResetPurchasedTowers();
+        ArmyUpgradeManager upgrades = FindAnyObjectByType<ArmyUpgradeManager>();
+        if (upgrades != null)
+            upgrades.ResetRunLevels();
         if (defenders == null)
         {
             defenders = new[]
@@ -164,6 +179,8 @@ public sealed class TriunviratoGame : MonoBehaviour
             if (defender != null)
                 defender.AttackTimer = 0f;
         }
+        for (int i = 0; i < heroUpgradeLevels.Length; i++)
+            heroUpgradeLevels[i] = 0;
     }
 
     private Defender CreateDefender(Transform hero, HeroConfig config, ArmyType expectedArmy)
@@ -217,6 +234,47 @@ public sealed class TriunviratoGame : MonoBehaviour
                 spawnTimer = 0f;
             }
         }
+    }
+
+    public bool TryStartMatch()
+    {
+        if (matchStatus != MatchStatus.WaitingForPlayers)
+            return false;
+        matchStatus = MatchStatus.InProgress;
+        intermissionTimer = 1.5f;
+        paused = false;
+        finished = false;
+        StateRevision++;
+        Debug.Log("Partida iniciada.", this);
+        return true;
+    }
+
+    public HeroConfig GetHeroConfig(ArmyType army)
+    {
+        switch (army)
+        {
+            case ArmyType.Tierra: return tierraConfig;
+            case ArmyType.Aire: return aireConfig;
+            case ArmyType.Mar: return marConfig;
+            default: return null;
+        }
+    }
+
+    public int GetHeroUpgradeLevel(ArmyType army) =>
+        IsValidArmy(army) ? heroUpgradeLevels[(int)army] : 0;
+
+    public float GetHeroDamage(ArmyType army)
+    {
+        HeroConfig config = GetHeroConfig(army);
+        return config != null ? config.GetDamageAtUpgradeLevel(GetHeroUpgradeLevel(army)) : 0f;
+    }
+
+    internal void SetHeroUpgradeLevel(ArmyType army, int level)
+    {
+        if (!IsValidArmy(army))
+            return;
+        heroUpgradeLevels[(int)army] = Mathf.Max(0, level);
+        StateRevision++;
     }
 
     private void SpawnEnemy(bool isBoss)
@@ -287,7 +345,7 @@ public sealed class TriunviratoGame : MonoBehaviour
             return;
 
         FireProjectile(defender.View, defender.Config.DisplayName, defender.Config,
-            defender.Config.Damage, defender.Config.SplashRadius, target);
+            GetHeroDamage(defender.Config.Army), defender.Config.SplashRadius, target);
     }
 
     private void FireProjectile(GameObject source, string sourceName, HeroConfig config, float damage,
@@ -483,14 +541,14 @@ public sealed class TriunviratoGame : MonoBehaviour
         return best;
     }
 
-    internal bool CanCombat => !paused && !finished;
+    internal bool CanCombat => matchStatus == MatchStatus.InProgress && !paused && !finished;
 
-    internal void ConfigureTower(DefenseTower tower, TowerConfig config)
+    internal void ConfigureTower(DefenseTower tower, TowerConfig config, int individualLevel, int armyLevel)
     {
         if (tower == null || config == null || config.Hero == null)
             return;
 
-        tower.Configure(this, config);
+        tower.Configure(this, config, individualLevel, armyLevel);
     }
 
     internal bool TryTowerAttack(DefenseTower tower)
@@ -529,12 +587,17 @@ public sealed class TriunviratoGame : MonoBehaviour
     {
         finished = true;
         victory = didWin;
+        matchStatus = MatchStatus.Finished;
+        StateRevision++;
+        Debug.Log(didWin ? "Partida finalizada: victoria." : "Partida finalizada: derrota.", this);
     }
 
     private void OnGUI()
     {
         GUILayout.BeginArea(new Rect(18f, 175f, 360f, 165f), GUI.skin.box);
         GUILayout.Label("TRIUNVIRATO  |  Defensa cooperativa");
+        GUILayout.Label(matchStatus == MatchStatus.WaitingForPlayers ? "Sala de espera: elige ejército desde el móvil." :
+            "Partida: " + matchStatus);
         GUILayout.Label("Oleada: " + Mathf.Max(1, wave) + " / " + FinalWave);
         GUILayout.Label("Castillo: " + Mathf.CeilToInt(Mathf.Max(0f, castleHealth)) + " / " + (int)CastleStartHealth);
         GUILayout.Label("Enemigos: " + enemies.Count + (remainingToSpawn > 0 ? "  (" + remainingToSpawn + " por aparecer)" : ""));
@@ -556,4 +619,6 @@ public sealed class TriunviratoGame : MonoBehaviour
         if (projectileSprite != null)
             Destroy(projectileSprite);
     }
+
+    private static bool IsValidArmy(ArmyType army) => (int)army >= 0 && (int)army < 3;
 }
