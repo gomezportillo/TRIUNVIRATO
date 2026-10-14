@@ -11,16 +11,16 @@ public sealed class TowerShop : MonoBehaviour
     [SerializeField] private Sprite groundSprite;
     [SerializeField] private Sprite airSprite;
     [SerializeField] private Sprite seaSprite;
+    [SerializeField] private TowerConfig groundConfig;
+    [SerializeField] private TowerConfig airConfig;
+    [SerializeField] private TowerConfig seaConfig;
     [SerializeField, Min(0.01f)] private float groundTowerSizeMultiplier = 1f;
     [SerializeField, Min(0.01f)] private float airTowerSizeMultiplier = 1f;
     [SerializeField, Min(0.01f)] private float seaTowerSizeMultiplier = 1f;
 
-    private static readonly int[] BaseCosts = { 10, 15, 20 };
-    private const float UpgradePercent = 0.01f;
-
     private readonly DefenseTower[] towers = new DefenseTower[3];
     private readonly int[] upgradeLevels = new int[3];
-    private readonly int[] nextCosts = { 10, 15, 20 };
+    private readonly int[] nextCosts = new int[3];
 
     public int StateRevision { get; private set; }
 
@@ -39,27 +39,56 @@ public sealed class TowerShop : MonoBehaviour
     public int GetNextCost(ArmyType army)
     {
         int index = (int)army;
-        if (index < 0 || index >= BaseCosts.Length)
+        if (index < 0 || index >= towers.Length)
             return 0;
 
-        return nextCosts[index];
+        TowerConfig config = GetConfig(army);
+        return HasTower(army) ? nextCosts[index] : config != null ? config.PurchaseCost : 0;
     }
 
     public float GetCurrentDamage(ArmyType army)
     {
         int index = (int)army;
-        if (index < 0 || index >= towers.Length || game == null)
+        if (index < 0 || index >= towers.Length)
             return 0f;
 
-        return HasTower(army) ? towers[index].Damage : game.GetBaseTowerDamage(army);
+        TowerConfig config = GetConfig(army);
+        return HasTower(army) ? towers[index].Damage : config != null ? config.GetBaseDamage() : 0f;
+    }
+
+    public float GetUpgradeDamagePercent(ArmyType army)
+    {
+        TowerConfig config = GetConfig(army);
+        return config != null ? config.UpgradeDamagePercent : 0f;
+    }
+
+    public string GetUpgradeDamageLabel(ArmyType army) =>
+        "+" + (GetUpgradeDamagePercent(army) * 100f).ToString("0.##") + "%";
+
+    public string GetTowerDisplayName(ArmyType army)
+    {
+        TowerConfig config = GetConfig(army);
+        return config != null ? config.DisplayName : GetArmyName(army);
+    }
+
+    public bool CanUpgrade(ArmyType army)
+    {
+        TowerConfig config = GetConfig(army);
+        return config != null && (!HasTower(army) || config.CanUpgrade(GetUpgradeLevel(army)));
     }
 
     public string GetButtonLabel(ArmyType army)
     {
-        string name = GetArmyName(army);
+        TowerConfig config = GetConfig(army);
+        string name = GetTowerDisplayName(army);
         bool owned = HasTower(army);
-        string damage = GetCurrentDamage(army).ToString("0.##") + (owned ? " +1%" : "");
-        return (owned ? "Mejorar torre de " : "Comprar torre de ") + name +
+        if (owned && !CanUpgrade(army))
+            return "Torre de " + name + "\nNivel máximo\nDaño:  " + GetCurrentDamage(army).ToString("0.##");
+
+        string damage = GetCurrentDamage(army).ToString("0.##") +
+            (owned && config != null ? " " + GetUpgradeDamageLabel(army) : "");
+        string action = owned ? CanUpgrade(army) ? "Mejorar torre de " : "Torre de " : "Comprar torre de ";
+        return action + name +
                "\nDaño:  " + damage +
                "\nCoste: " + GetNextCost(army) + " " + GetCoinIcon(army);
     }
@@ -70,7 +99,7 @@ public sealed class TowerShop : MonoBehaviour
     {
         failureReason = null;
         int index = (int)army;
-        if (index < 0 || index >= BaseCosts.Length)
+        if (index < 0 || index >= towers.Length)
         {
             failureReason = "Tipo de torre desconocido.";
             return false;
@@ -83,6 +112,19 @@ public sealed class TowerShop : MonoBehaviour
         }
 
         bool isUpgrade = HasTower(army);
+        TowerConfig config = GetConfig(army);
+        if (config == null || config.Army != army || config.Hero == null || config.Hero.Army != army)
+        {
+            failureReason = "La configuración de la torre no está asignada o no coincide con su ejército.";
+            return false;
+        }
+
+        if (isUpgrade && !config.CanUpgrade(upgradeLevels[index]))
+        {
+            failureReason = "La torre ya alcanzó su nivel máximo.";
+            return false;
+        }
+
         int cost = GetNextCost(army);
         if (!isUpgrade)
         {
@@ -110,10 +152,10 @@ public sealed class TowerShop : MonoBehaviour
                 (1.2f * GetSizeMultiplier(army) / Mathf.Max(0.01f, spriteHeight));
             AddOutline(towerObject.transform, renderer, sprite);
             DefenseTower behavior = towerObject.AddComponent<DefenseTower>();
-            game.ConfigureTower(behavior, army);
+            game.ConfigureTower(behavior, config);
             towers[index] = behavior;
             upgradeLevels[index] = 0;
-            nextCosts[index] = IncreaseCost(cost);
+            nextCosts[index] = config.GetNextUpgradeCost(cost);
         }
         else
         {
@@ -124,18 +166,12 @@ public sealed class TowerShop : MonoBehaviour
             }
 
             upgradeLevels[index]++;
-            towers[index].SetDamageMultiplier(Mathf.Pow(1f + UpgradePercent, upgradeLevels[index]));
-            nextCosts[index] = IncreaseCost(cost);
+            towers[index].SetUpgradeLevel(upgradeLevels[index]);
+            nextCosts[index] = config.GetNextUpgradeCost(cost);
         }
 
         StateRevision++;
         return true;
-    }
-
-    private static int IncreaseCost(int currentCost)
-    {
-        int roundedIncrease = Mathf.CeilToInt(currentCost * UpgradePercent);
-        return currentCost + Mathf.Max(1, roundedIncrease);
     }
 
     private static string GetCoinIcon(ArmyType army) => army == ArmyType.Tierra ? "🟢" :
@@ -176,6 +212,9 @@ public sealed class TowerShop : MonoBehaviour
     private Transform GetAnchor(ArmyType army) => army == ArmyType.Tierra ? groundTower :
         army == ArmyType.Aire ? airTower : seaTower;
 
+    private TowerConfig GetConfig(ArmyType army) => army == ArmyType.Tierra ? groundConfig :
+        army == ArmyType.Aire ? airConfig : seaConfig;
+
     private Sprite GetSprite(ArmyType army) => army == ArmyType.Tierra ? groundSprite :
         army == ArmyType.Aire ? airSprite : seaSprite;
 
@@ -190,7 +229,9 @@ public sealed class TowerShop : MonoBehaviour
                 Destroy(towers[i].gameObject);
             towers[i] = null;
             upgradeLevels[i] = 0;
-            nextCosts[i] = BaseCosts[i];
+            ArmyType army = (ArmyType)i;
+            TowerConfig config = GetConfig(army);
+            nextCosts[i] = config != null ? config.PurchaseCost : 0;
         }
         StateRevision++;
     }

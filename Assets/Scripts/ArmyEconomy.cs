@@ -4,29 +4,45 @@ using UnityEngine;
 public sealed class ArmyEconomy : MonoBehaviour
 {
     [SerializeField] private TriunviratoGame game;
-    [SerializeField, Min(0f)] private float coinsPerSecond = 1f;
+    [SerializeField] private EconomyConfig config;
 
     private readonly int[] balances = new int[3];
-    private float generationRemainder;
+    private readonly float[] generationRemainders = new float[3];
+
+    public int StateRevision { get; private set; }
+
+    public float GetPassiveIncomePerSecond(ArmyType army) =>
+        IsValidArmy(army) && config != null ? config.GetPassiveIncomePerSecond(army) : 0f;
 
     private void Update()
     {
-        if (game == null || game.CanCombat)
+        if (config == null || (game != null && !game.CanCombat))
+            return;
+
+        bool balanceChanged = false;
+        for (int i = 0; i < balances.Length; i++)
         {
-            generationRemainder += coinsPerSecond * Time.deltaTime;
-            int coinsEarned = Mathf.FloorToInt(generationRemainder);
+            ArmyType army = (ArmyType)i;
+            generationRemainders[i] += config.GetPassiveIncomePerSecond(army) * Time.deltaTime;
+            int coinsEarned = Mathf.FloorToInt(generationRemainders[i]);
             if (coinsEarned > 0)
             {
-                for (int i = 0; i < balances.Length; i++)
-                    balances[i] += coinsEarned;
-                generationRemainder -= coinsEarned;
+                balances[i] += coinsEarned;
+                generationRemainders[i] -= coinsEarned;
+                balanceChanged = true;
             }
         }
+
+        if (balanceChanged)
+            StateRevision++;
     }
 
-    public int GetCoins(ArmyType army) => balances[(int)army];
+    public int GetCoins(ArmyType army) => IsValidArmy(army) ? balances[(int)army] : 0;
 
     public int GetWholeCoins(ArmyType army) => GetCoins(army);
+
+    public float GetFractionalCoins(ArmyType army) =>
+        IsValidArmy(army) ? generationRemainders[(int)army] : 0f;
 
     public bool TrySpend(ArmyType army, int amount)
     {
@@ -35,6 +51,7 @@ public sealed class ArmyEconomy : MonoBehaviour
             return false;
 
         balances[index] -= amount;
+        StateRevision++;
         return true;
     }
 
@@ -42,13 +59,48 @@ public sealed class ArmyEconomy : MonoBehaviour
     {
         int index = (int)army;
         if (amount > 0 && index >= 0 && index < balances.Length)
+        {
             balances[index] += amount;
+            StateRevision++;
+        }
+    }
+
+    public void RewardEnemyDefeated(bool isBoss)
+    {
+        if (config == null)
+            return;
+
+        AddCoins(ArmyType.Aire, config.GetEnemyKillReward(ArmyType.Aire));
+        if (isBoss)
+            AddCoins(ArmyType.Mar, config.GetBossReward(ArmyType.Mar));
+    }
+
+    public void RewardWaveCompleted()
+    {
+        if (config != null)
+            AddCoins(ArmyType.Mar, config.GetWaveReward(ArmyType.Mar));
+    }
+
+    private void AddCoins(ArmyType army, int amount)
+    {
+        int index = (int)army;
+        if (amount <= 0 || index < 0 || index >= balances.Length)
+            return;
+
+        balances[index] += amount;
+        StateRevision++;
     }
 
     public void ResetEconomy()
     {
         for (int i = 0; i < balances.Length; i++)
-            balances[i] = 0;
-        generationRemainder = 0f;
+        {
+            ArmyType army = (ArmyType)i;
+            balances[i] = config != null ? config.GetInitialBalance(army) : 0;
+            generationRemainders[i] = 0f;
+        }
+        StateRevision++;
     }
+
+    private static bool IsValidArmy(ArmyType army) => (int)army >= 0 && (int)army < 3;
 }

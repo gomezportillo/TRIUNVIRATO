@@ -21,6 +21,7 @@ public sealed class LocalControlServer : MonoBehaviour
 
     [SerializeField, Min(1)] private int port = 2468;
     [SerializeField] private TowerShop shop;
+    [SerializeField] private ArmyEconomy economy;
 
     private readonly ConcurrentQueue<PendingMessage> pendingMessages = new ConcurrentQueue<PendingMessage>();
     private readonly ConcurrentQueue<string> backgroundErrors = new ConcurrentQueue<string>();
@@ -35,6 +36,8 @@ public sealed class LocalControlServer : MonoBehaviour
     private string serializedShopState;
     private int nextClientId;
     private int observedShopRevision = -1;
+    private int observedEconomyRevision = -1;
+    private int outgoingStateRevision;
 
     [Serializable]
     private sealed class PurchaseCommand
@@ -71,6 +74,10 @@ public sealed class LocalControlServer : MonoBehaviour
         public int upgradeLevel;
         public float currentDamage;
         public int nextCost;
+        public float upgradeDamagePercent;
+        public bool canUpgrade;
+        public int coins;
+        public float passiveIncomePerSecond;
     }
 
     private sealed class WebSocketClient
@@ -97,9 +104,12 @@ public sealed class LocalControlServer : MonoBehaviour
         while (pendingMessages.TryDequeue(out PendingMessage pending))
             ProcessPurchase(pending);
 
-        if (shop != null && shop.StateRevision != observedShopRevision)
+        int economyRevision = economy != null ? economy.StateRevision : -1;
+        if (shop != null && (shop.StateRevision != observedShopRevision || economyRevision != observedEconomyRevision))
         {
             observedShopRevision = shop.StateRevision;
+            observedEconomyRevision = economyRevision;
+            outgoingStateRevision++;
             Volatile.Write(ref serializedShopState, BuildShopStateJson());
             BroadcastShopState();
         }
@@ -109,6 +119,8 @@ public sealed class LocalControlServer : MonoBehaviour
     {
         if (shop == null)
             shop = FindAnyObjectByType<TowerShop>();
+        if (economy == null)
+            economy = FindAnyObjectByType<ArmyEconomy>();
 
         if (shop == null)
         {
@@ -137,6 +149,8 @@ public sealed class LocalControlServer : MonoBehaviour
 
             shutdown = new CancellationTokenSource();
             observedShopRevision = shop.StateRevision;
+            observedEconomyRevision = economy != null ? economy.StateRevision : -1;
+            outgoingStateRevision = 0;
             serializedShopState = BuildShopStateJson();
             listener = new TcpListener(IPAddress.Parse(lanAddress), port);
             listener.Start();
@@ -342,8 +356,9 @@ public sealed class LocalControlServer : MonoBehaviour
                 response.success = shop.TryPurchase(army, out string failureReason);
                 response.message = response.success
                     ? wasOwned
-                        ? "Torre de " + command.army + " mejorada: +1% daño."
-                        : "Torre de " + command.army + " comprada."
+                        ? "Torre de " + shop.GetTowerDisplayName(army) + " mejorada: " +
+                          shop.GetUpgradeDamageLabel(army) + " daño."
+                        : "Torre de " + shop.GetTowerDisplayName(army) + " comprada."
                     : failureReason;
             }
         }
@@ -468,7 +483,7 @@ public sealed class LocalControlServer : MonoBehaviour
     {
         ShopStateMessage state = new ShopStateMessage
         {
-            revision = shop.StateRevision,
+            revision = outgoingStateRevision,
             armies = new[]
             {
                 CreateArmyShopState(ArmyType.Tierra, "tierra"),
@@ -487,7 +502,11 @@ public sealed class LocalControlServer : MonoBehaviour
             owned = shop.HasTower(army),
             upgradeLevel = shop.GetUpgradeLevel(army),
             currentDamage = shop.GetCurrentDamage(army),
-            nextCost = shop.GetNextCost(army)
+            nextCost = shop.GetNextCost(army),
+            upgradeDamagePercent = shop.GetUpgradeDamagePercent(army) * 100f,
+            canUpgrade = shop.CanUpgrade(army),
+            coins = economy != null ? economy.GetCoins(army) : 0,
+            passiveIncomePerSecond = economy != null ? economy.GetPassiveIncomePerSecond(army) : 0f
         };
     }
 

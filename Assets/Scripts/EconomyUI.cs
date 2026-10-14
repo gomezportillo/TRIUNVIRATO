@@ -31,7 +31,8 @@ public sealed class EconomyUI : MonoBehaviour
             GUI.contentColor = Colors[i];
             GUILayout.Label("● " + Names[i], GUILayout.Width(90f));
             GUI.contentColor = Color.white;
-            GUILayout.Label(economy.GetWholeCoins(Armies[i]) + "  (1/s)", GUILayout.Width(90f));
+            GUILayout.Label(economy.GetCoins(Armies[i]) + "  (" +
+                economy.GetPassiveIncomePerSecond(Armies[i]).ToString("0.##") + "/s)", GUILayout.Width(90f));
         }
         GUILayout.EndHorizontal();
 
@@ -39,6 +40,7 @@ public sealed class EconomyUI : MonoBehaviour
         for (int i = 0; i < Armies.Length; i++)
         {
             ArmyType army = Armies[i];
+            GUI.enabled = shop.CanUpgrade(army);
             if (GUILayout.Button(shop.GetButtonLabel(army), GUILayout.Height(64f)))
             {
                 bool wasOwned = shop.HasTower(army);
@@ -50,11 +52,13 @@ public sealed class EconomyUI : MonoBehaviour
                 else
                 {
                     feedback = wasOwned
-                        ? "Torre de " + Names[i] + " mejorada: +1% daño."
-                        : "Torre de " + Names[i] + " comprada.";
+                        ? "Torre de " + shop.GetTowerDisplayName(army) + " mejorada: " +
+                          shop.GetUpgradeDamageLabel(army) + " daño."
+                        : "Torre de " + shop.GetTowerDisplayName(army) + " comprada.";
                     feedbackTime = 1.5f;
                 }
             }
+            GUI.enabled = true;
         }
         GUILayout.EndHorizontal();
 

@@ -7,10 +7,13 @@ public sealed class TriunviratoGame : MonoBehaviour
 {
     private const int FinalWave = 3;
     private const float CastleStartHealth = 100f;
-    private const float ProjectileSpeed = 10f;
     [SerializeField] private Transform tierraHero;
     [SerializeField] private Transform aireHero;
     [SerializeField] private Transform marHero;
+    [SerializeField] private ArmyEconomy economy;
+    [SerializeField] private HeroConfig tierraConfig;
+    [SerializeField] private HeroConfig aireConfig;
+    [SerializeField] private HeroConfig marConfig;
     [SerializeField] private Transform enemySpawner;
     [SerializeField] private Transform castleTarget;
     [SerializeField] private Sprite enemySprite;
@@ -24,6 +27,7 @@ public sealed class TriunviratoGame : MonoBehaviour
     private float spawnTimer;
     private float intermissionTimer;
     private int wave;
+    private int lastRewardedWave;
     private int remainingToSpawn;
     private bool waveInProgress;
     private bool paused;
@@ -36,17 +40,13 @@ public sealed class TriunviratoGame : MonoBehaviour
         public float Health;
         public float Speed;
         public bool IsBoss;
+        public bool RewardGranted;
     }
 
     private sealed class Defender
     {
         public GameObject View;
-        public string Name;
-        public Color ProjectileColor;
-        public float Range;
-        public float Damage;
-        public float Cooldown;
-        public float SplashRadius;
+        public HeroConfig Config;
         public float AttackTimer;
     }
 
@@ -58,6 +58,7 @@ public sealed class TriunviratoGame : MonoBehaviour
         public float Damage;
         public Color DamageColor;
         public float SplashRadius;
+        public float Speed;
         public float RemainingLifetime;
     }
 
@@ -69,13 +70,17 @@ public sealed class TriunviratoGame : MonoBehaviour
 
     private void Start()
     {
-        if (tierraHero == null || aireHero == null || marHero == null || enemySpawner == null || castleTarget == null || enemySprite == null || damageFont == null)
+        if (tierraHero == null || aireHero == null || marHero == null ||
+            tierraConfig == null || aireConfig == null || marConfig == null ||
+            enemySpawner == null || castleTarget == null || enemySprite == null || damageFont == null)
         {
-            Debug.LogError("Asigna los tres héroes, EnemySpawner, CastleTarget, el sprite Assets/Enemies/orc.png y la fuente en el Inspector.", this);
+            Debug.LogError("Asigna los tres héroes y sus configuraciones, EnemySpawner, CastleTarget, el sprite del enemigo y la fuente en el Inspector.", this);
             enabled = false;
             return;
         }
         damageFont.RequestCharactersInTexture("-0123456789", 48, FontStyle.Normal);
+        if (economy == null)
+            economy = FindAnyObjectByType<ArmyEconomy>();
         ResetMatch();
     }
 
@@ -134,12 +139,12 @@ public sealed class TriunviratoGame : MonoBehaviour
         spawnTimer = 1.5f;
         intermissionTimer = 0f;
         wave = 0;
+        lastRewardedWave = 0;
         remainingToSpawn = 0;
         waveInProgress = false;
         paused = false;
         finished = false;
         victory = false;
-        ArmyEconomy economy = FindAnyObjectByType<ArmyEconomy>();
         if (economy != null)
             economy.ResetEconomy();
         TowerShop towerShop = FindAnyObjectByType<TowerShop>();
@@ -149,9 +154,9 @@ public sealed class TriunviratoGame : MonoBehaviour
         {
             defenders = new[]
             {
-                CreateDefender("Tierra", tierraHero, new Color(0.25f, 0.72f, 0.3f), 5.3f, 11f, 0.9f, 0f),
-                CreateDefender("Aire", aireHero, new Color(1f, 0.78f, 0.18f), 7.5f, 6f, 0.75f, 1.8f),
-                CreateDefender("Mar", marHero, new Color(0.2f, 0.65f, 1f), 9f, 22f, 1.5f, 0f)
+                CreateDefender(tierraHero, tierraConfig, ArmyType.Tierra),
+                CreateDefender(aireHero, aireConfig, ArmyType.Aire),
+                CreateDefender(marHero, marConfig, ArmyType.Mar)
             };
         }
         foreach (Defender defender in defenders)
@@ -161,22 +166,17 @@ public sealed class TriunviratoGame : MonoBehaviour
         }
     }
 
-    private Defender CreateDefender(string name, Transform hero, Color color, float range, float damage, float cooldown, float splashRadius)
+    private Defender CreateDefender(Transform hero, HeroConfig config, ArmyType expectedArmy)
     {
-        if (hero == null)
+        if (hero == null || config == null || config.Army != expectedArmy)
         {
-            Debug.LogError("Falta asignar el héroe de " + name + " en la escena.", this);
+            Debug.LogError("Falta el héroe de " + expectedArmy + " o su HeroConfig no coincide con el ejército.", this);
             return null;
         }
         return new Defender
         {
             View = hero.gameObject,
-            Name = name,
-            ProjectileColor = color,
-            Range = range,
-            Damage = damage,
-            Cooldown = cooldown,
-            SplashRadius = splashRadius
+            Config = config
         };
     }
 
@@ -197,6 +197,12 @@ public sealed class TriunviratoGame : MonoBehaviour
             else if (enemies.Count == 0)
             {
                 waveInProgress = false;
+                if (wave > 0 && lastRewardedWave != wave)
+                {
+                    if (economy != null)
+                        economy.RewardWaveCompleted();
+                    lastRewardedWave = wave;
+                }
                 intermissionTimer = 3f;
             }
         }
@@ -270,7 +276,7 @@ public sealed class TriunviratoGame : MonoBehaviour
             if (target == null)
                 continue;
 
-            defender.AttackTimer = defender.Cooldown;
+            defender.AttackTimer = defender.Config.AttackCooldown;
             FireProjectile(defender, target);
         }
     }
@@ -280,14 +286,14 @@ public sealed class TriunviratoGame : MonoBehaviour
         if (target.View == null)
             return;
 
-        FireProjectile(defender.View, defender.Name, defender.ProjectileColor, defender.Damage,
-            defender.SplashRadius, target);
+        FireProjectile(defender.View, defender.Config.DisplayName, defender.Config,
+            defender.Config.Damage, defender.Config.SplashRadius, target);
     }
 
-    private void FireProjectile(GameObject source, string sourceName, Color projectileColor, float damage,
+    private void FireProjectile(GameObject source, string sourceName, HeroConfig config, float damage,
         float splashRadius, Enemy target)
     {
-        if (source == null || target == null || target.View == null)
+        if (source == null || config == null || target == null || target.View == null)
             return;
 
         if (projectileSprite == null)
@@ -301,7 +307,7 @@ public sealed class TriunviratoGame : MonoBehaviour
 
         SpriteRenderer renderer = view.AddComponent<SpriteRenderer>();
         renderer.sprite = projectileSprite;
-        renderer.color = projectileColor;
+        renderer.color = config.ProjectileColor;
         renderer.sortingOrder = 5;
 
         projectiles.Add(new Projectile
@@ -310,9 +316,10 @@ public sealed class TriunviratoGame : MonoBehaviour
             Destination = destination,
             Target = target,
             Damage = damage,
-            DamageColor = projectileColor,
+            DamageColor = config.ProjectileColor,
             SplashRadius = splashRadius,
-            RemainingLifetime = 1.5f
+            Speed = config.ProjectileSpeed,
+            RemainingLifetime = config.ProjectileLifetime
         });
     }
 
@@ -332,7 +339,7 @@ public sealed class TriunviratoGame : MonoBehaviour
                 projectile.Destination = projectile.Target.View.transform.position;
 
             Vector3 previousPosition = view.position;
-            view.position = Vector3.MoveTowards(view.position, projectile.Destination, ProjectileSpeed * Time.deltaTime);
+            view.position = Vector3.MoveTowards(view.position, projectile.Destination, projectile.Speed * Time.deltaTime);
             projectile.RemainingLifetime -= Time.deltaTime;
             Enemy hit = FindProjectileImpact(previousPosition, view.position);
             if (hit != null)
@@ -454,7 +461,8 @@ public sealed class TriunviratoGame : MonoBehaviour
 
     private Enemy FindTarget(Defender defender)
     {
-        return defender == null || defender.View == null ? null : FindTarget(defender.View.transform.position, defender.Range);
+        return defender == null || defender.View == null || defender.Config == null
+            ? null : FindTarget(defender.View.transform.position, defender.Config.Range);
     }
 
     private Enemy FindTarget(Vector3 origin, float range)
@@ -477,27 +485,12 @@ public sealed class TriunviratoGame : MonoBehaviour
 
     internal bool CanCombat => !paused && !finished;
 
-    internal void ConfigureTower(DefenseTower tower, ArmyType army)
+    internal void ConfigureTower(DefenseTower tower, TowerConfig config)
     {
-        if (tower == null || defenders == null)
+        if (tower == null || config == null || config.Hero == null)
             return;
 
-        int index = (int)army;
-        if (index < 0 || index >= defenders.Length || defenders[index] == null)
-            return;
-
-        Defender hero = defenders[index];
-        tower.Configure(this, army, hero.Range, hero.Damage * 0.2f, hero.Cooldown, hero.SplashRadius,
-            hero.ProjectileColor);
-    }
-
-    internal float GetBaseTowerDamage(ArmyType army)
-    {
-        int index = (int)army;
-        if (defenders == null || index < 0 || index >= defenders.Length || defenders[index] == null)
-            return 0f;
-
-        return defenders[index].Damage * 0.2f;
+        tower.Configure(this, config);
     }
 
     internal bool TryTowerAttack(DefenseTower tower)
@@ -509,7 +502,7 @@ public sealed class TriunviratoGame : MonoBehaviour
         if (target == null)
             return false;
 
-        FireProjectile(tower.gameObject, tower.Army.ToString(), tower.ProjectileColor,
+        FireProjectile(tower.gameObject, tower.Config.DisplayName, tower.Config.Hero,
             tower.Damage, tower.SplashRadius, target);
         return true;
     }
@@ -520,6 +513,12 @@ public sealed class TriunviratoGame : MonoBehaviour
         {
             if (enemies[i].Health <= 0f)
             {
+                if (!enemies[i].RewardGranted)
+                {
+                    enemies[i].RewardGranted = true;
+                    if (economy != null)
+                        economy.RewardEnemyDefeated(enemies[i].IsBoss);
+                }
                 Destroy(enemies[i].View);
                 enemies.RemoveAt(i);
             }

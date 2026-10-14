@@ -15,6 +15,8 @@
     #connection { padding: 12px 14px; border-radius: 12px; background: #374151; margin: 18px 0 12px; }
     #connection[data-state="connected"] { background: #14532d; }
     #connection[data-state="disconnected"] { background: #7f1d1d; }
+    #resources { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 10px 0; }
+    .resource { padding: 10px 8px; border-radius: 10px; background: #1f2937; text-align: center; font-size: .88rem; white-space: pre-line; }
     button { width: 100%; min-height: 84px; margin: 8px 0; padding: 12px 18px; border: 0; border-radius: 14px; color: #07111f; font-size: 1.05rem; font-weight: 750; line-height: 1.35; white-space: pre-line; touch-action: manipulation; }
     button:disabled { opacity: .45; }
     .green { background: #4ade80; }
@@ -29,6 +31,14 @@
     <h1>TRIUNVIRATO</h1>
     <p>Compra y mejora las torres de cada ejército</p>
     <div id="connection" data-state="disconnected" role="status">Desconectado</div>
+    <div id="resources" aria-label="Recursos de los ejércitos">
+      <div class="resource" id="coins-tierra">Tierra 🟢
+Conectando…</div>
+      <div class="resource" id="coins-aire">Aire 🔴
+Conectando…</div>
+      <div class="resource" id="coins-mar">Mar 🔵
+Conectando…</div>
+    </div>
     <button class="green" data-army="tierra" disabled>Comprar torre de Tierra</button>
     <button class="red" data-army="aire" disabled>Comprar torre de Aire</button>
     <button class="blue" data-army="mar" disabled>Comprar torre de Mar</button>
@@ -45,6 +55,7 @@
       const numberFormat = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 2 });
       let socket;
       let shopRevision = -1;
+      let connected = false;
 
       function updateShopState(state) {
         if (!Array.isArray(state.armies)) return;
@@ -54,16 +65,23 @@
           const button = buttons.find(item => item.dataset.army === army.army);
           if (!button) return;
           const damage = numberFormat.format(army.currentDamage);
+          const upgrade = numberFormat.format(army.upgradeDamagePercent);
           button.textContent = army.owned
-            ? `Mejorar torre de ${armyLabels[army.army]}\nDaño:  ${damage} +1%\nCoste: ${army.nextCost} ${coinIcons[army.army]}`
+            ? army.canUpgrade
+              ? `Mejorar torre de ${armyLabels[army.army]}\nDaño:  ${damage} +${upgrade}%\nCoste: ${army.nextCost} ${coinIcons[army.army]}`
+              : `Torre de ${armyLabels[army.army]}\nNivel máximo\nDaño: ${damage}`
             : `Comprar torre de ${armyLabels[army.army]}\nDaño:  ${damage}\nCoste: ${army.nextCost} ${coinIcons[army.army]}`;
+          button.disabled = !connected || (army.owned && !army.canUpgrade);
+          const resource = document.getElementById(`coins-${army.army}`);
+          if (resource) resource.textContent = `${armyLabels[army.army]} ${coinIcons[army.army]}\n${army.coins} (${numberFormat.format(army.passiveIncomePerSecond)}/s)`;
         });
       }
 
-      function setConnected(connected) {
-        connection.dataset.state = connected ? 'connected' : 'disconnected';
-        connection.textContent = connected ? 'Conectado a Unity' : 'Desconectado de Unity';
-        buttons.forEach(button => button.disabled = !connected);
+      function setConnected(isConnected) {
+        connected = isConnected;
+        connection.dataset.state = isConnected ? 'connected' : 'disconnected';
+        connection.textContent = isConnected ? 'Conectado a Unity' : 'Desconectado de Unity';
+        if (!isConnected) buttons.forEach(button => button.disabled = true);
       }
 
       function connect() {
@@ -73,7 +91,10 @@
         }
         result.textContent = 'Conectando…';
         socket = new WebSocket(`ws://${location.host}/ws`);
-        socket.addEventListener('open', () => setConnected(true));
+        socket.addEventListener('open', () => {
+          shopRevision = -1;
+          setConnected(true);
+        });
         socket.addEventListener('close', () => setConnected(false));
         socket.addEventListener('error', () => {
           setConnected(false);

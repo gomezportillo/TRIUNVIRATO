@@ -303,6 +303,10 @@ MonoBehaviour:
   tierraHero: {fileID: 1000000012}
   aireHero: {fileID: 1000000022}
   marHero: {fileID: 1000000032}
+  economy: {fileID: 910000012}
+  tierraConfig: {fileID: 11400000, guid: a71d004d37b344738f574713f5240021, type: 2}
+  aireConfig: {fileID: 11400000, guid: a71d004d37b344738f574713f5240022, type: 2}
+  marConfig: {fileID: 11400000, guid: a71d004d37b344738f574713f5240023, type: 2}
   enemySpawner: {fileID: 1000000041}
   castleTarget: {fileID: 1000000051}
   enemySprite: {fileID: 21300000, guid: dbf8ad8768e250f41953f546f7beace9, type: 3}
@@ -598,7 +602,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   game: {fileID: 365032918}
-  coinsPerSecond: 10
+  config: {fileID: 11400000, guid: a71d004d37b344738f574713f5240041, type: 2}
 --- !u!1 &910000020
 GameObject:
   m_ObjectHideFlags: 0
@@ -700,6 +704,9 @@ MonoBehaviour:
   groundTowerSizeMultiplier: 1.3
   airTowerSizeMultiplier: 1.7
   seaTowerSizeMultiplier: 1.8
+  groundConfig: {fileID: 11400000, guid: a71d004d37b344738f574713f5240031, type: 2}
+  airConfig: {fileID: 11400000, guid: a71d004d37b344738f574713f5240032, type: 2}
+  seaConfig: {fileID: 11400000, guid: a71d004d37b344738f574713f5240033, type: 2}
 --- !u!1 &910000040
 GameObject:
   m_ObjectHideFlags: 0
@@ -839,6 +846,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   port: 2468
   shop: {fileID: 910000032}
+  economy: {fileID: 910000012}
 --- !u!1 &986627381
 GameObject:
   m_ObjectHideFlags: 0
