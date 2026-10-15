@@ -12,4 +12,4 @@ Work together to defend your kingdom, build towers, and fight increasingly dange
 
 Built with Unity. Currently in early prototype development.
 
-![TRIUNVIRATO map](Assets/map.png)
+![TRIUNVIRATO map](Assets/Sprites/map.png)

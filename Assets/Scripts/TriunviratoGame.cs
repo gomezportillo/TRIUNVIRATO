@@ -61,6 +61,7 @@ public sealed class TriunviratoGame : MonoBehaviour
         public bool ShotPending;
         public float PendingShotTimer;
         public SkeletonEnemy PendingTarget;
+        public Vector3 PendingTargetPosition;
     }
 
     private sealed class Projectile
@@ -197,6 +198,7 @@ public sealed class TriunviratoGame : MonoBehaviour
                 defender.AttackTimer = 0f;
                 defender.ShotPending = false;
                 defender.PendingTarget = null;
+                defender.PendingTargetPosition = Vector3.zero;
                 defender.PendingShotTimer = 0f;
             }
         }
@@ -398,10 +400,17 @@ public sealed class TriunviratoGame : MonoBehaviour
                 if (defender.PendingShotTimer <= 0f)
                 {
                     SkeletonEnemy pendingTarget = defender.PendingTarget;
+                    Vector3 pendingTargetPosition = defender.PendingTargetPosition;
                     defender.ShotPending = false;
                     defender.PendingTarget = null;
-                    if (IsValidPendingHeroShot(defender, pendingTarget))
-                        FireProjectile(defender, pendingTarget);
+                    defender.PendingTargetPosition = Vector3.zero;
+                    if (IsValidPendingHeroShot(defender))
+                    {
+                        if (pendingTarget != null && !pendingTarget.IsDead)
+                            FireProjectile(defender, pendingTarget);
+                        else
+                            FireProjectile(defender, pendingTargetPosition);
+                    }
                 }
                 continue;
             }
@@ -419,15 +428,16 @@ public sealed class TriunviratoGame : MonoBehaviour
                 defender.Animator.Play("Attack", 0, 0f);
             defender.ShotPending = true;
             defender.PendingTarget = target;
+            defender.PendingTargetPosition = target.transform.position;
             defender.PendingShotTimer = defender.Config.ProjectileDelay;
         }
     }
 
-    private bool IsValidPendingHeroShot(Defender defender, SkeletonEnemy target)
+    private bool IsValidPendingHeroShot(Defender defender)
     {
-        // Range is checked when the attack begins. Once the animation has started, do not
-        // discard its shot merely because the moving target crossed the range boundary.
-        return CanCombat && defender != null && defender.View != null && target != null && !target.IsDead;
+        // The target may die during the animation delay; the committed shot still fires at
+        // the position captured when the attack began. Only cancel if combat itself is invalid.
+        return CanCombat && defender != null && defender.View != null && defender.Config != null;
     }
 
     private void FireProjectile(Defender defender, SkeletonEnemy target)
@@ -436,13 +446,32 @@ public sealed class TriunviratoGame : MonoBehaviour
             return;
 
         FireProjectile(defender.View, defender.Config.DisplayName, defender.Config,
-            GetHeroDamage(defender.Config.Army), GetHeroSplashRadius(defender.Config.Army), target);
+            GetHeroDamage(defender.Config.Army), GetHeroSplashRadius(defender.Config.Army),
+            target.transform.position, target);
+    }
+
+    private void FireProjectile(Defender defender, Vector3 destination)
+    {
+        if (defender == null || defender.View == null || defender.Config == null)
+            return;
+
+        FireProjectile(defender.View, defender.Config.DisplayName, defender.Config,
+            GetHeroDamage(defender.Config.Army), GetHeroSplashRadius(defender.Config.Army), destination, null);
     }
 
     private void FireProjectile(GameObject source, string sourceName, HeroConfig config, float damage,
         float splashRadius, SkeletonEnemy target)
     {
-        if (source == null || config == null || target == null || target.IsDead)
+        if (target == null || target.IsDead)
+            return;
+
+        FireProjectile(source, sourceName, config, damage, splashRadius, target.transform.position, target);
+    }
+
+    private void FireProjectile(GameObject source, string sourceName, HeroConfig config, float damage,
+        float splashRadius, Vector3 destination, SkeletonEnemy target)
+    {
+        if (source == null || config == null)
             return;
 
         GameSoundManager.Instance?.PlayAttack(config.Army);
@@ -451,7 +480,6 @@ public sealed class TriunviratoGame : MonoBehaviour
             projectileSprite = Sprite.Create(Texture2D.whiteTexture, new Rect(0f, 0f, 1f, 1f), new Vector2(0.5f, 0.5f), 1f);
 
         Vector3 origin = source.transform.position + Vector3.right * 0.2f;
-        Vector3 destination = target.transform.position;
         GameObject view = new GameObject("Proyectil - " + sourceName);
         view.transform.position = origin;
         view.transform.localScale = Vector3.one * 0.14f;
