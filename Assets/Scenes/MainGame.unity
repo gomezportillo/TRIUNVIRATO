@@ -1745,6 +1745,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 910000002}
+  - component: {fileID: 910000090}
   m_Layer: 0
   m_Name: Scripts
   m_TagString: Untagged
@@ -1773,6 +1774,38 @@ Transform:
   - {fileID: 910000081}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &910000090
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 910000001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b5038fb0e0c44b788dc795842f2e8a01, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  themeTracks:
+  - {fileID: 8300000, guid: c77b1c73ecc607e48861b6d45c19af49, type: 3}
+  - {fileID: 8300000, guid: 85d118a07066e304786ba1d3dcbb288a, type: 3}
+  - {fileID: 8300000, guid: a6de1088e91bd374e9e3fd8ce9fbad09, type: 3}
+  themeVolume: 0.45
+  effectsVolume: 1
+  airAttack: {fileID: 8300000, guid: 718b909b18ee2464eb412f562014e9aa, type: 3}
+  airAttackVolume: 0.2
+  seaAttack: {fileID: 8300000, guid: d90089250b0a19445a07d29c7aa7ad48, type: 3}
+  seaAttackVolume: 0.2
+  groundAttack: {fileID: 8300000, guid: b9a8c1c514778284797f43534b6a1f07, type: 3}
+  groundAttackVolume: 0.2
+  skeletonDeath: {fileID: 8300000, guid: ec593acee6d4ec2459b33a157ff80767, type: 3}
+  skeletonDeathVolume: 0.3
+  defeat: {fileID: 8300000, guid: 0225e9ddc95d6544b8015c83ee8eb509, type: 3}
+  defeatVolume: 0.3
+  matchStart: {fileID: 8300000, guid: 09f8a4276f3451548a72237e008b62f5, type: 3}
+  matchStartVolume: 0.3
+  towerBuilt: {fileID: 8300000, guid: 2ebf9b38baa94391a5e6ee8eeffa4853, type: 3}
+  towerBuiltVolume: 0.3
 --- !u!1 &910000010
 GameObject:
   m_ObjectHideFlags: 0

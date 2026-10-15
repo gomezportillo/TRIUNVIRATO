@@ -171,6 +171,8 @@ public sealed class TriunviratoGame : MonoBehaviour
         victory = false;
         matchStatus = resumeMatch ? MatchStatus.InProgress : MatchStatus.WaitingForPlayers;
         StateRevision++;
+        if (resumeMatch)
+            GameSoundManager.Instance?.PlayMatchStart();
         if (economy != null)
             economy.ResetEconomy();
         TowerShop towerShop = FindAnyObjectByType<TowerShop>();
@@ -301,6 +303,7 @@ public sealed class TriunviratoGame : MonoBehaviour
         finished = false;
         StateRevision++;
         Debug.Log("Partida iniciada.", this);
+        GameSoundManager.Instance?.PlayMatchStart();
         return true;
     }
 
@@ -441,6 +444,8 @@ public sealed class TriunviratoGame : MonoBehaviour
     {
         if (source == null || config == null || target == null || target.IsDead)
             return;
+
+        GameSoundManager.Instance?.PlayAttack(config.Army);
 
         if (projectileSprite == null)
             projectileSprite = Sprite.Create(Texture2D.whiteTexture, new Rect(0f, 0f, 1f, 1f), new Vector2(0.5f, 0.5f), 1f);
@@ -703,6 +708,8 @@ public sealed class TriunviratoGame : MonoBehaviour
         matchStatus = MatchStatus.Finished;
         StateRevision++;
         Debug.Log(didWin ? "Partida finalizada: victoria." : "Partida finalizada: derrota.", this);
+        if (!didWin)
+            GameSoundManager.Instance?.PlayDefeat();
     }
 
     private void OnDestroy()

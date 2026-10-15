@@ -208,6 +208,8 @@ public sealed class TowerShop : MonoBehaviour
         }
 
         StateRevision++;
+        if (!isUpgrade)
+            GameSoundManager.Instance?.PlayTowerBuilt();
         return true;
     }
 

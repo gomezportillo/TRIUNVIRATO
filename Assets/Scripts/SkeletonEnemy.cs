@@ -61,6 +61,7 @@ public sealed class SkeletonEnemy : MonoBehaviour
             isTakingHit = false;
             PlayState(DeathState, 1f);
             deathFallbackTimer = config.DeathAnimationFallbackSeconds;
+            GameSoundManager.Instance?.PlaySkeletonDeath();
             return true;
         }
 
