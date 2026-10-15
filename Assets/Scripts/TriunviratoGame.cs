@@ -18,7 +18,6 @@ public sealed class TriunviratoGame : MonoBehaviour
     [SerializeField] private Transform castleTarget;
     [SerializeField] private EnemyConfig enemyConfig;
     [SerializeField] private Font damageFont;
-    [SerializeField, Min(0f)] private float heroProjectileDelay = 0.5f;
     private readonly List<SkeletonEnemy> enemies = new List<SkeletonEnemy>();
     private readonly List<Projectile> projectiles = new List<Projectile>();
     private readonly List<FloatingDamage> floatingDamage = new List<FloatingDamage>();
@@ -121,7 +120,11 @@ public sealed class TriunviratoGame : MonoBehaviour
             return;
 
         UpdateWaveFlow();
+        if (finished)
+            return;
         UpdateEnemies();
+        if (finished)
+            return;
         UpdateDefenders();
         UpdateProjectiles();
         UpdateFloatingDamage();
@@ -391,7 +394,7 @@ public sealed class TriunviratoGame : MonoBehaviour
                 defender.Animator.Play("Attack", 0, 0f);
             defender.ShotPending = true;
             defender.PendingTarget = target;
-            defender.PendingShotTimer = heroProjectileDelay;
+            defender.PendingShotTimer = defender.Config.ProjectileDelay;
         }
     }
 
@@ -620,6 +623,16 @@ public sealed class TriunviratoGame : MonoBehaviour
             return;
         castleHealth = Mathf.Max(0f, castleHealth - amount);
         StateRevision++;
+        if (castleHealth <= 0f)
+            EndMatch(false);
+    }
+
+    public void RestartFinishedMatch()
+    {
+        if (matchStatus != MatchStatus.Finished)
+            return;
+
+        ResetMatch(true);
     }
 
     internal void ConfigureTower(DefenseTower tower, TowerConfig config, int individualLevel, int armyLevel)
@@ -657,6 +670,9 @@ public sealed class TriunviratoGame : MonoBehaviour
 
     private void EndMatch(bool didWin)
     {
+        if (finished)
+            return;
+
         finished = true;
         victory = didWin;
         matchStatus = MatchStatus.Finished;

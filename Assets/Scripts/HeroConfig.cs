@@ -14,6 +14,7 @@ public sealed class HeroConfig : ScriptableObject
     [SerializeField] private Color projectileColor = Color.white;
     [SerializeField, Min(0.01f)] private float projectileSpeed = 10f;
     [SerializeField, Min(0.01f)] private float projectileLifetime = 1.5f;
+    [SerializeField, Min(0f)] private float projectileDelay = 0.5f;
     [Header("Mejora del héroe")]
     [SerializeField, Min(0)] private int heroUpgradeBaseCost = 15;
     [SerializeField, Min(1f)] private float heroUpgradeCostMultiplier = 2f;
@@ -30,6 +31,7 @@ public sealed class HeroConfig : ScriptableObject
     public Color ProjectileColor => projectileColor;
     public float ProjectileSpeed => projectileSpeed;
     public float ProjectileLifetime => projectileLifetime;
+    public float ProjectileDelay => projectileDelay;
     public int HeroUpgradeBaseCost => heroUpgradeBaseCost;
     public float HeroUpgradeCostMultiplier => heroUpgradeCostMultiplier;
     public float HeroDamageIncreasePerLevel => heroDamageIncreasePerLevel;

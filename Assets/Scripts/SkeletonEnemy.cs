@@ -20,6 +20,8 @@ public sealed class SkeletonEnemy : MonoBehaviour
     private float currentHealth;
     private float movementSpeed;
     private float attackAnimationSpeed = 1f;
+    private float castleAttackImpactDelay;
+    private float castleAttackTimer;
     private float idleRemaining;
     private float deathFallbackTimer;
 
@@ -40,6 +42,7 @@ public sealed class SkeletonEnemy : MonoBehaviour
 
         float attackClipLength = GetClipLength(AttackState, 1f);
         attackAnimationSpeed = attackClipLength / Mathf.Max(0.1f, config.CastleAttackInterval);
+        castleAttackImpactDelay = GetCastleAttackImpactDelay();
         idleRemaining = config.InitialIdleDuration;
         deathFallbackTimer = config.DeathAnimationFallbackSeconds;
         PlayState(IdleState, 1f);
@@ -83,6 +86,15 @@ public sealed class SkeletonEnemy : MonoBehaviour
                    deathFallbackTimer <= 0f;
         }
 
+        // Castle damage is driven by a timer as well as the animation event. The timer
+        // keeps attacks working if Take Hit (or another state) interrupts the Attack clip.
+        if (hasReachedCastle)
+        {
+            castleAttackTimer -= deltaTime;
+            if (castleAttackTimer <= 0f)
+                ApplyCastleAttackDamage();
+        }
+
         if (isTakingHit)
         {
             AnimatorStateInfo hitInfo = animator != null ? animator.GetCurrentAnimatorStateInfo(0) : default;
@@ -111,6 +123,7 @@ public sealed class SkeletonEnemy : MonoBehaviour
         if (Vector2.Distance(transform.position, castlePosition) <= 0.2f)
         {
             hasReachedCastle = true;
+            castleAttackTimer = castleAttackImpactDelay;
             PlayState(AttackState, attackAnimationSpeed);
         }
         else if (animator != null && animator.GetCurrentAnimatorStateInfo(0).shortNameHash != WalkState)
@@ -121,11 +134,12 @@ public sealed class SkeletonEnemy : MonoBehaviour
         return false;
     }
 
-    /// <summary>Animation Event on the weapon impact frame; ignored for dead or moving enemies.</summary>
+    /// <summary>Animation Event on the weapon impact frame; timer is a fallback if the clip is interrupted.</summary>
     public void OnCastleAttackImpact()
     {
-        if (!isDead && hasReachedCastle && game != null)
-            game.ApplyCastleDamage(config.GetCastleDamage(isBoss));
+        if (!isDead && hasReachedCastle && game != null &&
+            castleAttackTimer <= Mathf.Max(0.02f, Time.deltaTime * 1.5f))
+            ApplyCastleAttackDamage();
     }
 
     internal void MarkRewardGranted() => rewardGranted = true;
@@ -151,5 +165,35 @@ public sealed class SkeletonEnemy : MonoBehaviour
                 return clip.length;
         }
         return fallback;
+    }
+
+    private float GetCastleAttackImpactDelay()
+    {
+        float interval = config.CastleAttackInterval;
+        if (animator != null && animator.runtimeAnimatorController != null)
+        {
+            foreach (AnimationClip clip in animator.runtimeAnimatorController.animationClips)
+            {
+                if (Animator.StringToHash(clip.name) != AttackState || clip.length <= 0f)
+                    continue;
+
+                foreach (AnimationEvent animationEvent in clip.events)
+                {
+                    if (animationEvent.functionName == nameof(OnCastleAttackImpact))
+                        return Mathf.Clamp(animationEvent.time / clip.length, 0f, 1f) * interval;
+                }
+            }
+        }
+
+        return interval * 0.75f;
+    }
+
+    private void ApplyCastleAttackDamage()
+    {
+        if (isDead || !hasReachedCastle || game == null)
+            return;
+
+        game.ApplyCastleDamage(config.GetCastleDamage(isBoss));
+        castleAttackTimer = config.CastleAttackInterval;
     }
 }
