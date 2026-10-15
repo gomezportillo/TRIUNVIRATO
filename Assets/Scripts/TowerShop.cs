@@ -80,6 +80,17 @@ public sealed class TowerShop : MonoBehaviour
             : config != null ? config.GetDamageAtLevels(0, GetArmyUpgradeLevel(army)) : 0f;
     }
 
+    public float GetNextDamage(ArmyType army)
+    {
+        int index = (int)army;
+        TowerConfig config = GetConfig(army);
+        if (index < 0 || index >= towers.Length || config == null)
+            return 0f;
+        if (!HasTower(army) || !config.CanUpgrade(upgradeLevels[index]))
+            return GetCurrentDamage(army);
+        return config.GetDamageAtLevels(upgradeLevels[index] + 1, armyUpgradeLevels[index]);
+    }
+
     public float GetUpgradeDamagePercent(ArmyType army)
     {
         TowerConfig config = GetConfig(army);
@@ -111,7 +122,7 @@ public sealed class TowerShop : MonoBehaviour
 
         string damage = GetCurrentDamage(army).ToString("0.##") +
             (owned && config != null ? " " + GetUpgradeDamageLabel(army) : "");
-        string action = owned ? CanUpgrade(army) ? "Mejorar torre de " : "Torre de " : "Comprar torre de ";
+        string action = owned ? CanUpgrade(army) ? "Mejorar torre de " : "Torre de " : "Desbloquear torre de ";
         return action + name +
                "\nDaño:  " + damage +
                "\nCoste: " + GetNextCost(army) + " " + GetCoinIcon(army);

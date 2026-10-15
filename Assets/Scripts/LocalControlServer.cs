@@ -111,6 +111,8 @@ public sealed class LocalControlServer : MonoBehaviour
         public bool owned;
         public int upgradeLevel;
         public float currentDamage;
+        public float nextDamage;
+        public int towerMaximumLevel;
         public int nextCost;
         public float upgradeDamagePercent;
         public bool canUpgrade;
@@ -472,11 +474,11 @@ public sealed class LocalControlServer : MonoBehaviour
                         response.message = "Ejército desconocido.";
                     else if (!CanControl(session, army))
                         response.message = "Solo puedes dar órdenes a tu ejército.";
-                    else if (!TryParseUpgrade(command.upgrade, out ArmyUpgradeKind kind) || upgrades == null)
+                    else if (string.IsNullOrWhiteSpace(command.upgrade) || upgrades == null)
                         response.message = "Mejora desconocida o no configurada.";
                     else
                     {
-                        response.success = upgrades.TryPurchase(army, kind, out response.message);
+                        response.success = upgrades.TryPurchase(army, command.upgrade, out response.message);
                         stateChanged = response.success;
                     }
                 }
@@ -699,15 +701,6 @@ public sealed class LocalControlServer : MonoBehaviour
         return true;
     }
 
-    private static bool TryParseUpgrade(string value, out ArmyUpgradeKind kind)
-    {
-        if (string.Equals(value, "hero", StringComparison.OrdinalIgnoreCase)) kind = ArmyUpgradeKind.Hero;
-        else if (string.Equals(value, "towers", StringComparison.OrdinalIgnoreCase)) kind = ArmyUpgradeKind.Towers;
-        else if (string.Equals(value, "income", StringComparison.OrdinalIgnoreCase)) kind = ArmyUpgradeKind.Income;
-        else { kind = default; return false; }
-        return true;
-    }
-
     private static string GetArmyName(int index) => index >= 0 && index < 3
         ? ((ArmyType)index).ToString() : string.Empty;
 
@@ -887,29 +880,27 @@ public sealed class LocalControlServer : MonoBehaviour
             owned = shop.HasTower(army),
             upgradeLevel = shop.GetUpgradeLevel(army),
             currentDamage = shop.GetCurrentDamage(army),
+            nextDamage = shop.GetNextDamage(army),
+            towerMaximumLevel = towerConfig != null ? towerConfig.MaximumUpgradeLevel : 0,
             nextCost = shop.GetNextCost(army),
             upgradeDamagePercent = shop.GetUpgradeDamagePercent(army) * 100f,
             canUpgrade = shop.CanUpgrade(army),
             canControl = canControl,
-            canPurchaseTower = canControl && shop.CanPurchase,
+            canPurchaseTower = canControl && shop.CanPurchase && economy != null &&
+                               economy.GetCoins(army) >= shop.GetNextCost(army),
             coins = economy != null ? economy.GetCoins(army) : 0,
             passiveIncomePerSecond = economy != null ? economy.GetPassiveIncomePerSecond(army) : 0f,
             incomeSummary = upgrades != null ? upgrades.GetIncomeSummary(army) : string.Empty,
             heroLevel = game != null ? game.GetHeroUpgradeLevel(army) : 0,
             heroDamage = game != null ? game.GetHeroDamage(army) : 0f,
             heroBaseDamage = hero != null ? hero.Damage : 0f,
-            heroRange = hero != null ? hero.Range : 0f,
-            heroAttackCooldown = hero != null ? hero.AttackCooldown : 0f,
-            heroSplashRadius = hero != null ? hero.SplashRadius : 0f,
+            heroRange = game != null ? game.GetHeroRange(army) : hero != null ? hero.Range : 0f,
+            heroAttackCooldown = game != null ? game.GetHeroAttackCooldown(army) : hero != null ? hero.AttackCooldown : 0f,
+            heroSplashRadius = game != null ? game.GetHeroSplashRadius(army) : hero != null ? hero.SplashRadius : 0f,
             armyTowerLevel = shop.GetArmyUpgradeLevel(army),
             armyTowerMultiplier = towerConfig != null
                 ? towerConfig.GetArmyDamageMultiplier(shop.GetArmyUpgradeLevel(army)) : 1f,
-            upgrades = upgrades != null ? new[]
-            {
-                upgrades.GetOption(army, ArmyUpgradeKind.Hero),
-                upgrades.GetOption(army, ArmyUpgradeKind.Towers),
-                upgrades.GetOption(army, ArmyUpgradeKind.Income)
-            } : Array.Empty<ArmyUpgradeManager.UpgradeOption>()
+            upgrades = upgrades != null ? upgrades.GetOptions(army) : Array.Empty<ArmyUpgradeManager.UpgradeOption>()
         };
     }
 

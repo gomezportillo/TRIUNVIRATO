@@ -24,6 +24,7 @@ MonoBehaviour:
   projectileLifetime: 1.5
   projectileDelay: 0.5
   heroUpgradeBaseCost: 15
-  heroUpgradeCostMultiplier: 2
-  heroDamageIncreasePerLevel: 0.15
+  heroUpgradeCostGrowthRate: 0.1
+  minimumHeroUpgradeCostIncrease: 1
+  heroDamageIncreasePerLevel: 0.1
   heroUpgradeMaximumLevel: 5

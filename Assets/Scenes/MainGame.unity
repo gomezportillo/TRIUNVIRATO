@@ -311,6 +311,7 @@ MonoBehaviour:
   castleTarget: {fileID: 1000000051}
   enemyConfig: {fileID: 11400000, guid: b15f0c26e01943f59de2e35d817a0005, type: 2}
   damageFont: {fileID: 12800000, guid: 3516ce2d6a7e55f4eb648f57f6f5f47e, type: 3}
+  upgrades: {fileID: 910000082}
 --- !u!1 &410087039
 GameObject:
   m_ObjectHideFlags: 0
@@ -1818,6 +1819,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   game: {fileID: 365032918}
   config: {fileID: 11400000, guid: a71d004d37b344738f574713f5240041, type: 2}
+  upgrades: {fileID: 910000082}
 --- !u!1 &910000020
 GameObject:
   m_ObjectHideFlags: 0
@@ -2280,6 +2282,7 @@ MonoBehaviour:
   game: {fileID: 365032918}
   towerShop: {fileID: 910000032}
   economy: {fileID: 910000012}
+  catalog: {fileID: 11400000, guid: 8241508a0062488a823304101aab0001, type: 2}
 --- !u!1 &986627381
 GameObject:
   m_ObjectHideFlags: 0

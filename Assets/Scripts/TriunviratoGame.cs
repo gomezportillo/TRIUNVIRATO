@@ -18,6 +18,7 @@ public sealed class TriunviratoGame : MonoBehaviour
     [SerializeField] private Transform castleTarget;
     [SerializeField] private EnemyConfig enemyConfig;
     [SerializeField] private Font damageFont;
+    [SerializeField] private ArmyUpgradeManager upgrades;
     private readonly List<SkeletonEnemy> enemies = new List<SkeletonEnemy>();
     private readonly List<Projectile> projectiles = new List<Projectile>();
     private readonly List<FloatingDamage> floatingDamage = new List<FloatingDamage>();
@@ -37,7 +38,6 @@ public sealed class TriunviratoGame : MonoBehaviour
     private bool finished;
     private bool victory;
     private MatchStatus matchStatus = MatchStatus.WaitingForPlayers;
-    private readonly int[] heroUpgradeLevels = new int[3];
 
     public MatchStatus Status => matchStatus;
     public float CastleHealth => Mathf.Max(0f, castleHealth);
@@ -95,6 +95,8 @@ public sealed class TriunviratoGame : MonoBehaviour
         damageFont.RequestCharactersInTexture("-0123456789", 48, FontStyle.Normal);
         if (economy == null)
             economy = FindAnyObjectByType<ArmyEconomy>();
+        if (upgrades == null)
+            upgrades = FindAnyObjectByType<ArmyUpgradeManager>();
         ResetMatch(false);
     }
 
@@ -196,8 +198,6 @@ public sealed class TriunviratoGame : MonoBehaviour
                 defender.PendingShotTimer = 0f;
             }
         }
-        for (int i = 0; i < heroUpgradeLevels.Length; i++)
-            heroUpgradeLevels[i] = 0;
     }
 
     private Defender CreateDefender(Transform hero, HeroConfig config, ArmyType expectedArmy)
@@ -316,20 +316,42 @@ public sealed class TriunviratoGame : MonoBehaviour
     }
 
     public int GetHeroUpgradeLevel(ArmyType army) =>
-        IsValidArmy(army) ? heroUpgradeLevels[(int)army] : 0;
+        IsValidArmy(army) && upgrades != null ? upgrades.GetLevel(army, ArmyUpgradeKind.Hero) : 0;
 
     public float GetHeroDamage(ArmyType army)
     {
         HeroConfig config = GetHeroConfig(army);
-        return config != null ? config.GetDamageAtUpgradeLevel(GetHeroUpgradeLevel(army)) : 0f;
+        return config != null
+            ? config.GetDamageAtUpgradeLevel(GetHeroUpgradeLevel(army)) *
+              (upgrades != null ? upgrades.GetTeamHeroDamageMultiplier() : 1f)
+            : 0f;
     }
 
-    internal void SetHeroUpgradeLevel(ArmyType army, int level)
+    public float GetHeroAttackCooldown(ArmyType army)
     {
-        if (!IsValidArmy(army))
-            return;
-        heroUpgradeLevels[(int)army] = Mathf.Max(0, level);
-        StateRevision++;
+        HeroConfig config = GetHeroConfig(army);
+        if (config == null) return 0f;
+        float multiplier = army == ArmyType.Mar && upgrades != null
+            ? upgrades.GetSpecialMultiplier("earth_mar_attack_speed") : 1f;
+        return config.AttackCooldown / Mathf.Max(0.01f, multiplier);
+    }
+
+    public float GetHeroRange(ArmyType army)
+    {
+        HeroConfig config = GetHeroConfig(army);
+        if (config == null) return 0f;
+        float multiplier = army == ArmyType.Mar && upgrades != null
+            ? upgrades.GetSpecialMultiplier("mar_range") : 1f;
+        return config.Range * multiplier;
+    }
+
+    public float GetHeroSplashRadius(ArmyType army)
+    {
+        HeroConfig config = GetHeroConfig(army);
+        if (config == null) return 0f;
+        float multiplier = army == ArmyType.Aire && upgrades != null
+            ? upgrades.GetSpecialMultiplier("air_area") : 1f;
+        return config.SplashRadius * multiplier;
     }
 
     private void SpawnEnemy(bool isBoss)
@@ -389,7 +411,7 @@ public sealed class TriunviratoGame : MonoBehaviour
             if (target == null)
                 continue;
 
-            defender.AttackTimer = defender.Config.AttackCooldown;
+            defender.AttackTimer = GetHeroAttackCooldown(defender.Config.Army);
             if (defender.Animator != null && defender.Animator.runtimeAnimatorController != null)
                 defender.Animator.Play("Attack", 0, 0f);
             defender.ShotPending = true;
@@ -411,7 +433,7 @@ public sealed class TriunviratoGame : MonoBehaviour
             return;
 
         FireProjectile(defender.View, defender.Config.DisplayName, defender.Config,
-            GetHeroDamage(defender.Config.Army), defender.Config.SplashRadius, target);
+            GetHeroDamage(defender.Config.Army), GetHeroSplashRadius(defender.Config.Army), target);
     }
 
     private void FireProjectile(GameObject source, string sourceName, HeroConfig config, float damage,
@@ -594,7 +616,7 @@ public sealed class TriunviratoGame : MonoBehaviour
     private SkeletonEnemy FindTarget(Defender defender)
     {
         return defender == null || defender.View == null || defender.Config == null
-            ? null : FindTarget(defender.View.transform.position, defender.Config.Range);
+            ? null : FindTarget(defender.View.transform.position, GetHeroRange(defender.Config.Army));
     }
 
     private SkeletonEnemy FindTarget(Vector3 origin, float range)
@@ -621,8 +643,11 @@ public sealed class TriunviratoGame : MonoBehaviour
     {
         if (!CanCombat || amount <= 0f)
             return;
-        castleHealth = Mathf.Max(0f, castleHealth - amount);
+        float actualDamage = Mathf.Min(castleHealth, amount);
+        castleHealth = Mathf.Max(0f, castleHealth - actualDamage);
         StateRevision++;
+        if (economy != null)
+            economy.RewardCastleDamaged(actualDamage);
         if (castleHealth <= 0f)
             EndMatch(false);
     }

@@ -17,7 +17,8 @@ public sealed class EconomyConfig : ScriptableObject
         [Min(0)] public int additionalRewardPerBossDefeated;
         [Header("Mejora de ingresos")]
         [Min(0)] public int incomeUpgradeBaseCost;
-        [Min(1f)] public float incomeUpgradeCostMultiplier = 2f;
+        [Min(0f)] public float incomeUpgradeCostGrowthRate = 0.1f;
+        [Min(1)] public int minimumIncomeUpgradeCostIncrease = 1;
         [Min(0)] public int incomeUpgradeMaximumLevel = 5;
         [Min(0f)] public float passiveIncomeIncreasePerLevel;
         [Min(0)] public int enemyKillRewardIncreasePerLevel;
@@ -34,7 +35,8 @@ public sealed class EconomyConfig : ScriptableObject
     public int GetWaveReward(ArmyType army) => GetSettings(army)?.rewardPerWaveCompleted ?? 0;
     public int GetBossReward(ArmyType army) => GetSettings(army)?.additionalRewardPerBossDefeated ?? 0;
     public int GetIncomeUpgradeBaseCost(ArmyType army) => GetSettings(army)?.incomeUpgradeBaseCost ?? 0;
-    public float GetIncomeUpgradeCostMultiplier(ArmyType army) => GetSettings(army)?.incomeUpgradeCostMultiplier ?? 2f;
+    public float GetIncomeUpgradeCostGrowthRate(ArmyType army) => GetSettings(army)?.incomeUpgradeCostGrowthRate ?? 0.1f;
+    public int GetMinimumIncomeUpgradeCostIncrease(ArmyType army) => GetSettings(army)?.minimumIncomeUpgradeCostIncrease ?? 1;
     public int GetIncomeUpgradeMaximumLevel(ArmyType army) => GetSettings(army)?.incomeUpgradeMaximumLevel ?? 0;
     public float GetPassiveIncomeIncreasePerLevel(ArmyType army) => GetSettings(army)?.passiveIncomeIncreasePerLevel ?? 0f;
     public int GetEnemyKillRewardIncreasePerLevel(ArmyType army) => GetSettings(army)?.enemyKillRewardIncreasePerLevel ?? 0;
@@ -42,8 +44,8 @@ public sealed class EconomyConfig : ScriptableObject
     public int GetBossRewardIncreasePerLevel(ArmyType army) => GetSettings(army)?.bossRewardIncreasePerLevel ?? 0;
 
     public int GetIncomeUpgradeCost(ArmyType army, int currentLevel) =>
-        Mathf.CeilToInt(GetIncomeUpgradeBaseCost(army) *
-                        Mathf.Pow(GetIncomeUpgradeCostMultiplier(army), Mathf.Max(0, currentLevel)));
+        UpgradePrice.GetCost(GetIncomeUpgradeBaseCost(army), GetIncomeUpgradeCostGrowthRate(army),
+            GetMinimumIncomeUpgradeCostIncrease(army), currentLevel);
 
     private ArmySettings GetSettings(ArmyType army)
     {

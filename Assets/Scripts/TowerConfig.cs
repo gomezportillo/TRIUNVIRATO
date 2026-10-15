@@ -43,9 +43,7 @@ public sealed class TowerConfig : ScriptableObject
 
     public int GetNextUpgradeCost(int currentCost)
     {
-        int increase = Mathf.Max(minimumUpgradeCostIncrease,
-            Mathf.CeilToInt(currentCost * upgradeCostGrowthRate));
-        return currentCost + increase;
+        return UpgradePrice.GetCost(currentCost, upgradeCostGrowthRate, minimumUpgradeCostIncrease, 1);
     }
 
     public bool CanUpgrade(int currentLevel) =>
