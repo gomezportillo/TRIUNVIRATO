@@ -18,6 +18,7 @@ public sealed class TriunviratoGame : MonoBehaviour
     [SerializeField] private Transform castleTarget;
     [SerializeField] private EnemyConfig enemyConfig;
     [SerializeField] private Font damageFont;
+    [SerializeField, Min(0f)] private float heroProjectileDelay = 0.5f;
     private readonly List<SkeletonEnemy> enemies = new List<SkeletonEnemy>();
     private readonly List<Projectile> projectiles = new List<Projectile>();
     private readonly List<FloatingDamage> floatingDamage = new List<FloatingDamage>();
@@ -46,6 +47,8 @@ public sealed class TriunviratoGame : MonoBehaviour
     public bool IsMatchInProgress => matchStatus == MatchStatus.InProgress;
     public int CurrentWave => wave;
     public bool IsWaveInProgress => waveInProgress;
+    public bool IsPaused => paused;
+    public int EnemiesRemainingInWave => enemies.Count + remainingToSpawn;
     public bool IsEarlyWaveCallPending => earlyWaveCallPending;
     public int NextEarlyCallAvailableWave => lastEarlyCallWave + 2;
     public bool CanCallNextWaveEarly => CanCombat && !earlyWaveCallPending && wave >= lastEarlyCallWave + 2;
@@ -56,6 +59,9 @@ public sealed class TriunviratoGame : MonoBehaviour
         public HeroConfig Config;
         public Animator Animator;
         public float AttackTimer;
+        public bool ShotPending;
+        public float PendingShotTimer;
+        public SkeletonEnemy PendingTarget;
     }
 
     private sealed class Projectile
@@ -180,7 +186,12 @@ public sealed class TriunviratoGame : MonoBehaviour
         foreach (Defender defender in defenders)
         {
             if (defender != null)
+            {
                 defender.AttackTimer = 0f;
+                defender.ShotPending = false;
+                defender.PendingTarget = null;
+                defender.PendingShotTimer = 0f;
+            }
         }
         for (int i = 0; i < heroUpgradeLevels.Length; i++)
             heroUpgradeLevels[i] = 0;
@@ -352,6 +363,21 @@ public sealed class TriunviratoGame : MonoBehaviour
         {
             if (defender == null || defender.View == null)
                 continue;
+
+            if (defender.ShotPending)
+            {
+                defender.PendingShotTimer -= Time.deltaTime;
+                if (defender.PendingShotTimer <= 0f)
+                {
+                    SkeletonEnemy pendingTarget = defender.PendingTarget;
+                    defender.ShotPending = false;
+                    defender.PendingTarget = null;
+                    if (IsValidPendingHeroShot(defender, pendingTarget))
+                        FireProjectile(defender, pendingTarget);
+                }
+                continue;
+            }
+
             defender.AttackTimer -= Time.deltaTime;
             if (defender.AttackTimer > 0f)
                 continue;
@@ -363,8 +389,17 @@ public sealed class TriunviratoGame : MonoBehaviour
             defender.AttackTimer = defender.Config.AttackCooldown;
             if (defender.Animator != null && defender.Animator.runtimeAnimatorController != null)
                 defender.Animator.Play("Attack", 0, 0f);
-            FireProjectile(defender, target);
+            defender.ShotPending = true;
+            defender.PendingTarget = target;
+            defender.PendingShotTimer = heroProjectileDelay;
         }
+    }
+
+    private bool IsValidPendingHeroShot(Defender defender, SkeletonEnemy target)
+    {
+        // Range is checked when the attack begins. Once the animation has started, do not
+        // discard its shot merely because the moving target crossed the range boundary.
+        return CanCombat && defender != null && defender.View != null && target != null && !target.IsDead;
     }
 
     private void FireProjectile(Defender defender, SkeletonEnemy target)
@@ -627,30 +662,6 @@ public sealed class TriunviratoGame : MonoBehaviour
         matchStatus = MatchStatus.Finished;
         StateRevision++;
         Debug.Log(didWin ? "Partida finalizada: victoria." : "Partida finalizada: derrota.", this);
-    }
-
-    private void OnGUI()
-    {
-        GUILayout.BeginArea(new Rect(18f, 175f, 420f, 205f), GUI.skin.box);
-        GUILayout.Label("TRIUNVIRATO  |  Defensa cooperativa");
-        GUILayout.Label(matchStatus == MatchStatus.WaitingForPlayers ? "Sala de espera: elige ejército desde el móvil." :
-            "Partida: " + matchStatus);
-        GUILayout.Label("🌊 Oleada: " + Mathf.Max(1, wave) + " / ∞");
-        GUILayout.Label("❤️ Castillo: " + Mathf.CeilToInt(Mathf.Max(0f, castleHealth)) + " / " + (int)CastleStartHealth);
-        GUILayout.Label("👾 Enemigos: " + enemies.Count + (remainingToSpawn > 0 ? "  (" + remainingToSpawn + " por aparecer)" : ""));
-        GUILayout.Label("🟢 Tierra (línea)  |  🔴 Aire (área)  |  🔵 Mar (objetivo prioritario)");
-
-        if (finished)
-            GUILayout.Label(victory ? "¡Victoria! El reino está a salvo." : "Derrota: el castillo ha caído.");
-        else if (paused)
-            GUILayout.Label("Pausa");
-        else if (!waveInProgress && wave > 0)
-            GUILayout.Label("Oleada despejada. Siguiente ataque en " + Mathf.CeilToInt(intermissionTimer) + " s.");
-
-        if (earlyWaveCallPending)
-            GUILayout.Label("Mar ha llamado antes a la siguiente oleada.");
-        GUILayout.Label("P: pausa  |  R: reiniciar");
-        GUILayout.EndArea();
     }
 
     private void OnDestroy()

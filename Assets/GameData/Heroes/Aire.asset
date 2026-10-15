@@ -19,7 +19,7 @@ MonoBehaviour:
   attackCooldown: 0.75
   range: 7.5
   splashRadius: 1.8
-  projectileColor: {r: 1, g: 0.78, b: 0.18, a: 1}
+  projectileColor: {r: 1, g: 0.3997736, b: 0.18039215, a: 1}
   projectileSpeed: 10
   projectileLifetime: 1.5
   heroUpgradeBaseCost: 15

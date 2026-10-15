@@ -153,12 +153,21 @@ public sealed class TowerShop : MonoBehaviour
         if (!isUpgrade)
         {
             Transform anchor = GetAnchor(army);
-            DefenseTower behavior = anchor != null ? anchor.GetComponent<DefenseTower>() : null;
-            SpriteRenderer renderer = anchor != null ? anchor.GetComponent<SpriteRenderer>() : null;
-            if (anchor == null || behavior == null || renderer == null || renderer.sprite == null)
+            SpriteRenderer renderer = anchor != null ? anchor.GetComponentInChildren<SpriteRenderer>(true) : null;
+            if (anchor == null || renderer == null || renderer.sprite == null)
             {
-                failureReason = "La torre no está configurada en la escena.";
+                failureReason = "La torre de " + GetArmyName(army) +
+                    " no tiene posición o SpriteRenderer con sprite asignado en la escena.";
                 return false;
+            }
+
+            // The reusable component is serialized on each scene anchor. Recover gracefully if
+            // Unity dropped that component during a scene/import change so purchases still work.
+            DefenseTower behavior = anchor.GetComponent<DefenseTower>();
+            if (behavior == null)
+            {
+                behavior = anchor.gameObject.AddComponent<DefenseTower>();
+                Debug.LogWarning("Faltaba DefenseTower en " + anchor.name + "; se añadió al comprar.", anchor);
             }
 
             if (!economy.TrySpend(army, cost))

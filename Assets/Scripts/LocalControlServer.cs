@@ -49,6 +49,9 @@ public sealed class LocalControlServer : MonoBehaviour
     private int outgoingStateRevision;
 
     public bool IsDeveloperMode => developerToken != null;
+    public string StatusText => status;
+    public string AccessUrlText => accessUrl;
+    public string RoomStatusText => game != null ? "Sala: " + game.Status + " · " + SeatSummary() : "Sala: no disponible";
 
     [Serializable]
     private sealed class ClientCommand
@@ -994,16 +997,6 @@ public sealed class LocalControlServer : MonoBehaviour
         if (adapter.NetworkInterfaceType == NetworkInterfaceType.Ethernet)
             return 1;
         return 2;
-    }
-
-    private void OnGUI()
-    {
-        GUILayout.BeginArea(new Rect(18f, 350f, 700f, 76f), GUI.skin.box);
-        GUILayout.Label("Control remoto: " + status);
-        GUILayout.Label("Abre desde el móvil: " + accessUrl);
-        if (game != null)
-            GUILayout.Label("Sala: " + game.Status + " | Plazas: " + SeatSummary());
-        GUILayout.EndArea();
     }
 
     private string SeatSummary()
