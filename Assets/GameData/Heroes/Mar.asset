@@ -20,7 +20,7 @@ MonoBehaviour:
   range: 9
   splashRadius: 0
   projectileColor: {r: 0.2, g: 0.65, b: 1, a: 1}
-  projectileSpeed: 10
+  projectileSpeed: 8
   projectileLifetime: 1.5
   projectileDelay: 0.5
   heroUpgradeBaseCost: 15

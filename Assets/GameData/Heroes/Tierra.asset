@@ -19,7 +19,7 @@ MonoBehaviour:
   attackCooldown: 0.9
   range: 5.3
   splashRadius: 0
-  projectileColor: {r: 0.25, g: 0.72, b: 0.3, a: 1}
+  projectileColor: {r: 0.09849052, g: 0.5999999, b: 0.14864144, a: 1}
   projectileSpeed: 10
   projectileLifetime: 1.5
   projectileDelay: 0.5

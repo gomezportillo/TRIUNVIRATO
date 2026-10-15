@@ -18,14 +18,14 @@ MonoBehaviour:
   maximumHealth: 25
   additionalHealthPerWave: 7
   healthGrowthPerWave: 0.05
-  movementSpeed: 1
-  speedGrowthPerWave: 0.05
+  movementSpeed: 0.5
+  speedGrowthPerWave: 0.1
   bossHealthMultiplier: 5
   bossSpeedMultiplier: 0.579
-  castleDamagePerAttack: 12
+  castleDamagePerAttack: 10
   bossCastleDamagePerAttack: 35
   castleAttackInterval: 2
   initialIdleDuration: 0.15
   normalScale: 1
-  bossScale: 1.5
+  bossScale: 1.75
   deathAnimationFallbackSeconds: 1.1

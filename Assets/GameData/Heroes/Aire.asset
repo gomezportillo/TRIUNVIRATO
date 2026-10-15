@@ -18,7 +18,7 @@ MonoBehaviour:
   damage: 6
   attackCooldown: 0.75
   range: 7.5
-  splashRadius: 1.8
+  splashRadius: 0.8
   projectileColor: {r: 1, g: 0.3997736, b: 0.18039215, a: 1}
   projectileSpeed: 10
   projectileLifetime: 1.5
