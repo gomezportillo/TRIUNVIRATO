@@ -1,6 +1,6 @@
 using UnityEngine;
 
-/// <summary>Creates one tower per army and routes later purchases into tower upgrades.</summary>
+/// <summary>Activates the scene-authored tower for each army and routes later purchases into upgrades.</summary>
 public sealed class TowerShop : MonoBehaviour
 {
     [SerializeField] private ArmyEconomy economy;
@@ -8,15 +8,9 @@ public sealed class TowerShop : MonoBehaviour
     [SerializeField] private Transform groundTower;
     [SerializeField] private Transform airTower;
     [SerializeField] private Transform seaTower;
-    [SerializeField] private Sprite groundSprite;
-    [SerializeField] private Sprite airSprite;
-    [SerializeField] private Sprite seaSprite;
     [SerializeField] private TowerConfig groundConfig;
     [SerializeField] private TowerConfig airConfig;
     [SerializeField] private TowerConfig seaConfig;
-    [SerializeField, Min(0.01f)] private float groundTowerSizeMultiplier = 1f;
-    [SerializeField, Min(0.01f)] private float airTowerSizeMultiplier = 1f;
-    [SerializeField, Min(0.01f)] private float seaTowerSizeMultiplier = 1f;
 
     private readonly DefenseTower[] towers = new DefenseTower[3];
     private readonly int[] upgradeLevels = new int[3];
@@ -25,6 +19,12 @@ public sealed class TowerShop : MonoBehaviour
 
     public int StateRevision { get; private set; }
     public bool CanPurchase => game != null && game.CanCombat;
+
+    private void Awake()
+    {
+        for (int i = 0; i < towers.Length; i++)
+            SetTowerVisible((ArmyType)i, false);
+    }
 
     public TowerConfig GetConfig(ArmyType army) => army == ArmyType.Tierra ? groundConfig :
         army == ArmyType.Aire ? airConfig : army == ArmyType.Mar ? seaConfig : null;
@@ -153,8 +153,9 @@ public sealed class TowerShop : MonoBehaviour
         if (!isUpgrade)
         {
             Transform anchor = GetAnchor(army);
-            Sprite sprite = GetSprite(army);
-            if (anchor == null || sprite == null)
+            DefenseTower behavior = anchor != null ? anchor.GetComponent<DefenseTower>() : null;
+            SpriteRenderer renderer = anchor != null ? anchor.GetComponent<SpriteRenderer>() : null;
+            if (anchor == null || behavior == null || renderer == null || renderer.sprite == null)
             {
                 failureReason = "La torre no está configurada en la escena.";
                 return false;
@@ -166,17 +167,9 @@ public sealed class TowerShop : MonoBehaviour
                 return false;
             }
 
-            GameObject towerObject = new GameObject("Torre - " + army);
-            towerObject.transform.position = anchor.position;
-            SpriteRenderer renderer = towerObject.AddComponent<SpriteRenderer>();
-            renderer.sprite = sprite;
-            renderer.sortingOrder = 3;
-            float spriteHeight = Mathf.Max(sprite.bounds.size.x, sprite.bounds.size.y);
-            towerObject.transform.localScale = Vector3.one *
-                (1.2f * GetSizeMultiplier(army) / Mathf.Max(0.01f, spriteHeight));
-            AddOutline(towerObject.transform, renderer, sprite);
-            DefenseTower behavior = towerObject.AddComponent<DefenseTower>();
+            SetTowerVisible(army, true);
             game.ConfigureTower(behavior, config, upgradeLevels[index], armyUpgradeLevels[index]);
+            behavior.enabled = true;
             towers[index] = behavior;
             upgradeLevels[index] = 0;
             nextCosts[index] = config.GetNextUpgradeCost(cost);
@@ -201,57 +194,33 @@ public sealed class TowerShop : MonoBehaviour
     private static string GetCoinIcon(ArmyType army) => army == ArmyType.Tierra ? "🟢" :
         army == ArmyType.Aire ? "🔴" : "🔵";
 
-    private static void AddOutline(Transform tower, SpriteRenderer towerRenderer, Sprite sprite)
+    private void SetTowerVisible(ArmyType army, bool visible)
     {
-        Vector2[] directions =
-        {
-            Vector2.right,
-            (Vector2.right + Vector2.up).normalized,
-            Vector2.up,
-            (Vector2.left + Vector2.up).normalized,
-            Vector2.left,
-            (Vector2.left + Vector2.down).normalized,
-            Vector2.down,
-            (Vector2.right + Vector2.down).normalized
-        };
-        float localPixelSize = Mathf.Min(
-            sprite.bounds.size.x / sprite.rect.width,
-            sprite.bounds.size.y / sprite.rect.height);
-        float outlineOffset = localPixelSize * 1.1f;
+        Transform anchor = GetAnchor(army);
+        if (anchor == null)
+            return;
 
-        for (int i = 0; i < directions.Length; i++)
-        {
-            GameObject outline = new GameObject("Outline " + i);
-            outline.transform.SetParent(tower, false);
-            outline.transform.localPosition = directions[i] * outlineOffset;
-            SpriteRenderer outlineRenderer = outline.AddComponent<SpriteRenderer>();
-            outlineRenderer.sprite = sprite;
-            outlineRenderer.color = Color.black;
-            outlineRenderer.sortingLayerID = towerRenderer.sortingLayerID;
-            outlineRenderer.sortingOrder = towerRenderer.sortingOrder - 1;
-            outlineRenderer.maskInteraction = towerRenderer.maskInteraction;
-        }
+        foreach (SpriteRenderer renderer in anchor.GetComponentsInChildren<SpriteRenderer>(true))
+            renderer.enabled = visible;
+        DefenseTower behavior = anchor.GetComponent<DefenseTower>();
+        if (behavior != null)
+            behavior.enabled = visible;
     }
 
     private Transform GetAnchor(ArmyType army) => army == ArmyType.Tierra ? groundTower :
         army == ArmyType.Aire ? airTower : seaTower;
-
-    private Sprite GetSprite(ArmyType army) => army == ArmyType.Tierra ? groundSprite :
-        army == ArmyType.Aire ? airSprite : seaSprite;
-
-    private float GetSizeMultiplier(ArmyType army) => army == ArmyType.Tierra ? groundTowerSizeMultiplier :
-        army == ArmyType.Aire ? airTowerSizeMultiplier : seaTowerSizeMultiplier;
 
     public void ResetPurchasedTowers()
     {
         for (int i = 0; i < towers.Length; i++)
         {
             if (towers[i] != null)
-                Destroy(towers[i].gameObject);
+                towers[i].enabled = false;
             towers[i] = null;
             upgradeLevels[i] = 0;
             armyUpgradeLevels[i] = 0;
             ArmyType army = (ArmyType)i;
+            SetTowerVisible(army, false);
             TowerConfig config = GetConfig(army);
             nextCosts[i] = config != null ? config.PurchaseCost : 0;
         }

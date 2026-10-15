@@ -16,9 +16,9 @@ public sealed class TriunviratoGame : MonoBehaviour
     [SerializeField] private HeroConfig marConfig;
     [SerializeField] private Transform enemySpawner;
     [SerializeField] private Transform castleTarget;
-    [SerializeField] private Sprite enemySprite;
+    [SerializeField] private EnemyConfig enemyConfig;
     [SerializeField] private Font damageFont;
-    private readonly List<Enemy> enemies = new List<Enemy>();
+    private readonly List<SkeletonEnemy> enemies = new List<SkeletonEnemy>();
     private readonly List<Projectile> projectiles = new List<Projectile>();
     private readonly List<FloatingDamage> floatingDamage = new List<FloatingDamage>();
     private Defender[] defenders;
@@ -40,6 +40,8 @@ public sealed class TriunviratoGame : MonoBehaviour
     private readonly int[] heroUpgradeLevels = new int[3];
 
     public MatchStatus Status => matchStatus;
+    public float CastleHealth => Mathf.Max(0f, castleHealth);
+    public float CastleMaximumHealth => CastleStartHealth;
     public int StateRevision { get; private set; }
     public bool IsMatchInProgress => matchStatus == MatchStatus.InProgress;
     public int CurrentWave => wave;
@@ -48,19 +50,11 @@ public sealed class TriunviratoGame : MonoBehaviour
     public int NextEarlyCallAvailableWave => lastEarlyCallWave + 2;
     public bool CanCallNextWaveEarly => CanCombat && !earlyWaveCallPending && wave >= lastEarlyCallWave + 2;
 
-    private sealed class Enemy
-    {
-        public GameObject View;
-        public float Health;
-        public float Speed;
-        public bool IsBoss;
-        public bool RewardGranted;
-    }
-
     private sealed class Defender
     {
         public GameObject View;
         public HeroConfig Config;
+        public Animator Animator;
         public float AttackTimer;
     }
 
@@ -68,7 +62,7 @@ public sealed class TriunviratoGame : MonoBehaviour
     {
         public GameObject View;
         public Vector3 Destination;
-        public Enemy Target;
+        public SkeletonEnemy Target;
         public float Damage;
         public Color DamageColor;
         public float SplashRadius;
@@ -86,9 +80,10 @@ public sealed class TriunviratoGame : MonoBehaviour
     {
         if (tierraHero == null || aireHero == null || marHero == null ||
             tierraConfig == null || aireConfig == null || marConfig == null ||
-            enemySpawner == null || castleTarget == null || enemySprite == null || damageFont == null)
+            enemySpawner == null || castleTarget == null || enemyConfig == null ||
+            enemyConfig.Prefab == null || damageFont == null)
         {
-            Debug.LogError("Asigna los tres héroes y sus configuraciones, EnemySpawner, CastleTarget, el sprite del enemigo y la fuente en el Inspector.", this);
+            Debug.LogError("Asigna los tres héroes y sus configuraciones, EnemySpawner, CastleTarget, EnemyConfig y la fuente en el Inspector.", this);
             enabled = false;
             return;
         }
@@ -124,7 +119,7 @@ public sealed class TriunviratoGame : MonoBehaviour
         UpdateDefenders();
         UpdateProjectiles();
         UpdateFloatingDamage();
-        RemoveDefeatedEnemies();
+        RemoveFinishedEnemyDeaths();
 
         if (castleHealth <= 0f)
             EndMatch(false);
@@ -132,10 +127,10 @@ public sealed class TriunviratoGame : MonoBehaviour
 
     private void ResetMatch(bool resumeMatch)
     {
-        foreach (Enemy enemy in enemies)
+        foreach (SkeletonEnemy enemy in enemies)
         {
-            if (enemy.View != null)
-                Destroy(enemy.View);
+            if (enemy != null)
+                Destroy(enemy.gameObject);
         }
         enemies.Clear();
         foreach (Projectile projectile in projectiles)
@@ -198,10 +193,13 @@ public sealed class TriunviratoGame : MonoBehaviour
             Debug.LogError("Falta el héroe de " + expectedArmy + " o su HeroConfig no coincide con el ejército.", this);
             return null;
         }
+        Animator animator = hero.GetComponent<Animator>();
+
         return new Defender
         {
             View = hero.gameObject,
-            Config = config
+            Config = config,
+            Animator = animator
         };
     }
 
@@ -322,44 +320,27 @@ public sealed class TriunviratoGame : MonoBehaviour
 
     private void SpawnEnemy(bool isBoss)
     {
-        GameObject view = new GameObject(isBoss ? "Jefe" : "Enemigo");
-        view.transform.position = enemySpawner.position;
-        view.transform.localScale = isBoss ? Vector3.one * 0.09f : Vector3.one * 0.05f;
-        SpriteRenderer renderer = view.AddComponent<SpriteRenderer>();
-        renderer.sprite = enemySprite;
-        renderer.color = Color.white;
-        renderer.sortingOrder = 10;
-        float health = (18f + wave * 7f) * Mathf.Pow(1.05f, wave - 1) * (isBoss ? 5f : 1f);
-        float waveOneSpeed = isBoss ? 1.1f : 1.9f;
-        float speed = waveOneSpeed * 0.5f * Mathf.Pow(1.05f, wave - 1);
-        enemies.Add(new Enemy
-        {
-            View = view,
-            Health = health,
-            Speed = speed,
-            IsBoss = isBoss
-        });
+        SkeletonEnemy enemy = Instantiate(enemyConfig.Prefab, enemySpawner.position, Quaternion.identity);
+        enemy.name = isBoss ? "Skeleton Boss" : "Skeleton";
+        enemy.transform.localScale = Vector3.one * (isBoss ? enemyConfig.BossScale : enemyConfig.NormalScale);
+        enemy.Initialize(enemyConfig, this, wave, isBoss);
+        enemies.Add(enemy);
     }
 
     private void UpdateEnemies()
     {
         for (int i = enemies.Count - 1; i >= 0; i--)
         {
-            Enemy enemy = enemies[i];
-            if (enemy.View == null)
+            SkeletonEnemy enemy = enemies[i];
+            if (enemy == null)
             {
                 enemies.RemoveAt(i);
                 continue;
             }
 
-            enemy.View.transform.position = Vector3.MoveTowards(
-                enemy.View.transform.position,
-                castleTarget.position,
-                enemy.Speed * Time.deltaTime);
-            if (Vector2.Distance(enemy.View.transform.position, castleTarget.position) <= 0.2f)
+            if (enemy.Tick(Time.deltaTime, castleTarget.position))
             {
-                castleHealth -= enemy.IsBoss ? 35f : 12f;
-                Destroy(enemy.View);
+                Destroy(enemy.gameObject);
                 enemies.RemoveAt(i);
             }
         }
@@ -375,18 +356,20 @@ public sealed class TriunviratoGame : MonoBehaviour
             if (defender.AttackTimer > 0f)
                 continue;
 
-            Enemy target = FindTarget(defender);
+            SkeletonEnemy target = FindTarget(defender);
             if (target == null)
                 continue;
 
             defender.AttackTimer = defender.Config.AttackCooldown;
+            if (defender.Animator != null && defender.Animator.runtimeAnimatorController != null)
+                defender.Animator.Play("Attack", 0, 0f);
             FireProjectile(defender, target);
         }
     }
 
-    private void FireProjectile(Defender defender, Enemy target)
+    private void FireProjectile(Defender defender, SkeletonEnemy target)
     {
-        if (target.View == null)
+        if (target == null || target.IsDead)
             return;
 
         FireProjectile(defender.View, defender.Config.DisplayName, defender.Config,
@@ -394,16 +377,16 @@ public sealed class TriunviratoGame : MonoBehaviour
     }
 
     private void FireProjectile(GameObject source, string sourceName, HeroConfig config, float damage,
-        float splashRadius, Enemy target)
+        float splashRadius, SkeletonEnemy target)
     {
-        if (source == null || config == null || target == null || target.View == null)
+        if (source == null || config == null || target == null || target.IsDead)
             return;
 
         if (projectileSprite == null)
             projectileSprite = Sprite.Create(Texture2D.whiteTexture, new Rect(0f, 0f, 1f, 1f), new Vector2(0.5f, 0.5f), 1f);
 
         Vector3 origin = source.transform.position + Vector3.right * 0.2f;
-        Vector3 destination = target.View.transform.position;
+        Vector3 destination = target.transform.position;
         GameObject view = new GameObject("Proyectil - " + sourceName);
         view.transform.position = origin;
         view.transform.localScale = Vector3.one * 0.14f;
@@ -438,13 +421,13 @@ public sealed class TriunviratoGame : MonoBehaviour
             }
 
             Transform view = projectile.View.transform;
-            if (projectile.Target != null && projectile.Target.View != null)
-                projectile.Destination = projectile.Target.View.transform.position;
+            if (projectile.Target != null)
+                projectile.Destination = projectile.Target.transform.position;
 
             Vector3 previousPosition = view.position;
             view.position = Vector3.MoveTowards(view.position, projectile.Destination, projectile.Speed * Time.deltaTime);
             projectile.RemainingLifetime -= Time.deltaTime;
-            Enemy hit = FindProjectileImpact(previousPosition, view.position);
+            SkeletonEnemy hit = FindProjectileImpact(previousPosition, view.position);
             if (hit != null)
             {
                 ApplyProjectileDamage(projectile, hit);
@@ -459,25 +442,25 @@ public sealed class TriunviratoGame : MonoBehaviour
         }
     }
 
-    private Enemy FindProjectileImpact(Vector3 start, Vector3 end)
+    private SkeletonEnemy FindProjectileImpact(Vector3 start, Vector3 end)
     {
         Vector2 start2D = start;
         Vector2 segment = (Vector2)end - start2D;
         float segmentLengthSquared = segment.sqrMagnitude;
         float firstImpact = float.MaxValue;
-        Enemy hit = null;
+        SkeletonEnemy hit = null;
 
-        foreach (Enemy enemy in enemies)
+        foreach (SkeletonEnemy enemy in enemies)
         {
-            if (enemy.View == null)
+            if (enemy == null || enemy.IsDead)
                 continue;
 
-            Vector2 enemyPosition = enemy.View.transform.position;
+            Vector2 enemyPosition = enemy.transform.position;
             float alongSegment = segmentLengthSquared > 0f
                 ? Mathf.Clamp01(Vector2.Dot(enemyPosition - start2D, segment) / segmentLengthSquared)
                 : 0f;
             Vector2 closestPoint = start2D + segment * alongSegment;
-            SpriteRenderer renderer = enemy.View.GetComponent<SpriteRenderer>();
+            SpriteRenderer renderer = enemy.GetComponent<SpriteRenderer>();
             float enemyRadius = renderer != null
                 ? Mathf.Max(renderer.bounds.extents.x, renderer.bounds.extents.y)
                 : 0.2f;
@@ -493,17 +476,17 @@ public sealed class TriunviratoGame : MonoBehaviour
         return hit;
     }
 
-    private void ApplyProjectileDamage(Projectile projectile, Enemy impactTarget)
+    private void ApplyProjectileDamage(Projectile projectile, SkeletonEnemy impactTarget)
     {
-        if (impactTarget.View == null)
+        if (impactTarget == null || impactTarget.IsDead)
             return;
 
         if (projectile.SplashRadius > 0f)
         {
-            Vector3 impactPosition = impactTarget.View.transform.position;
-            foreach (Enemy enemy in enemies)
+            Vector3 impactPosition = impactTarget.transform.position;
+            foreach (SkeletonEnemy enemy in enemies)
             {
-                if (enemy.View != null && Vector2.Distance(impactPosition, enemy.View.transform.position) <= projectile.SplashRadius)
+                if (enemy != null && !enemy.IsDead && Vector2.Distance(impactPosition, enemy.transform.position) <= projectile.SplashRadius)
                     ApplyDamage(enemy, projectile.Damage, projectile.DamageColor);
             }
         }
@@ -513,19 +496,27 @@ public sealed class TriunviratoGame : MonoBehaviour
         }
     }
 
-    private void ApplyDamage(Enemy enemy, float amount, Color damageColor)
+    private void ApplyDamage(SkeletonEnemy enemy, float amount, Color damageColor)
     {
-        enemy.Health -= amount;
+        if (enemy == null || enemy.IsDead)
+            return;
+
         ShowDamage(enemy, amount, damageColor);
+        if (enemy.ApplyDamage(amount) && !enemy.RewardGranted)
+        {
+            enemy.MarkRewardGranted();
+            if (economy != null)
+                economy.RewardEnemyDefeated(enemy.IsBoss);
+        }
     }
 
-    private void ShowDamage(Enemy enemy, float amount, Color damageColor)
+    private void ShowDamage(SkeletonEnemy enemy, float amount, Color damageColor)
     {
-        if (enemy.View == null)
+        if (enemy == null)
             return;
 
         GameObject view = new GameObject("Daño - " + Mathf.RoundToInt(amount));
-        view.transform.position = enemy.View.transform.position + Vector3.up * (enemy.IsBoss ? 0.75f : 0.55f);
+        view.transform.position = enemy.transform.position + Vector3.up * (enemy.IsBoss ? 0.75f : 0.55f);
         TextMesh text = view.AddComponent<TextMesh>();
         text.font = damageFont;
         text.fontSize = 30;
@@ -562,21 +553,21 @@ public sealed class TriunviratoGame : MonoBehaviour
         }
     }
 
-    private Enemy FindTarget(Defender defender)
+    private SkeletonEnemy FindTarget(Defender defender)
     {
         return defender == null || defender.View == null || defender.Config == null
             ? null : FindTarget(defender.View.transform.position, defender.Config.Range);
     }
 
-    private Enemy FindTarget(Vector3 origin, float range)
+    private SkeletonEnemy FindTarget(Vector3 origin, float range)
     {
-        Enemy best = null;
+        SkeletonEnemy best = null;
         float bestDistance = range;
-        foreach (Enemy enemy in enemies)
+        foreach (SkeletonEnemy enemy in enemies)
         {
-            if (enemy.View == null)
+            if (enemy == null || enemy.IsDead)
                 continue;
-            float distance = Vector2.Distance(origin, enemy.View.transform.position);
+            float distance = Vector2.Distance(origin, enemy.transform.position);
             if (distance < bestDistance)
             {
                 best = enemy;
@@ -587,6 +578,14 @@ public sealed class TriunviratoGame : MonoBehaviour
     }
 
     internal bool CanCombat => matchStatus == MatchStatus.InProgress && !paused && !finished;
+
+    internal void ApplyCastleDamage(float amount)
+    {
+        if (!CanCombat || amount <= 0f)
+            return;
+        castleHealth = Mathf.Max(0f, castleHealth - amount);
+        StateRevision++;
+    }
 
     internal void ConfigureTower(DefenseTower tower, TowerConfig config, int individualLevel, int armyLevel)
     {
@@ -601,7 +600,7 @@ public sealed class TriunviratoGame : MonoBehaviour
         if (!CanCombat || tower == null)
             return false;
 
-        Enemy target = FindTarget(tower.transform.position, tower.Range);
+        SkeletonEnemy target = FindTarget(tower.transform.position, tower.Range);
         if (target == null)
             return false;
 
@@ -610,19 +609,12 @@ public sealed class TriunviratoGame : MonoBehaviour
         return true;
     }
 
-    private void RemoveDefeatedEnemies()
+    private void RemoveFinishedEnemyDeaths()
     {
         for (int i = enemies.Count - 1; i >= 0; i--)
         {
-            if (enemies[i].Health <= 0f)
+            if (enemies[i] == null)
             {
-                if (!enemies[i].RewardGranted)
-                {
-                    enemies[i].RewardGranted = true;
-                    if (economy != null)
-                        economy.RewardEnemyDefeated(enemies[i].IsBoss);
-                }
-                Destroy(enemies[i].View);
                 enemies.RemoveAt(i);
             }
         }
