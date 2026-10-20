@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -7,6 +8,20 @@ public sealed class TriunviratoGame : MonoBehaviour
 {
     public enum MatchStatus { WaitingForPlayers, InProgress, Finished }
     private const float CastleStartHealth = 100f;
+    public const float PurchasePhaseDuration = 20f;
+    public const float UpgradePriceGrowthPerWave = 0.10f;
+    public const int ResourceChoiceReward = 15;
+    private static readonly string[] IntermissionUpgradeIds = { "economy_boost", "tower_boost", "hero_boost" };
+    private static readonly string[] IntermissionUpgradeNames = { "Reserva eficiente", "Torres reforzadas", "Golpe heroico" };
+    private static readonly string[] IntermissionUpgradeDescriptions = {
+        "+25 % de ingreso pasivo para tu ejército.", "+20 % de daño para las torres de tu ejército.", "+20 % de daño para tu héroe." };
+    // Each row is an offer and columns follow ArmyType (green, red, blue).
+    private static readonly int[,] IntermissionUpgradeBaseCosts =
+    {
+        { 30, 0, 0 },
+        { 0, 35, 0 },
+        { 0, 0, 30 }
+    };
     [SerializeField] private Transform tierraHero;
     [SerializeField] private Transform aireHero;
     [SerializeField] private Transform marHero;
@@ -30,6 +45,7 @@ public sealed class TriunviratoGame : MonoBehaviour
     private int wave;
     private int lastRewardedWave;
     private int lastEarlyCallWave = -2;
+    private int lastPurchaseTimerSecond = -1;
     private int remainingToSpawn;
     private float currentWaveRewardMultiplier = 1f;
     private bool waveInProgress;
@@ -37,6 +53,13 @@ public sealed class TriunviratoGame : MonoBehaviour
     private bool paused;
     private bool finished;
     private bool victory;
+    private bool purchasePhase;
+    private float purchasePhaseTimer;
+    private readonly bool[] purchaseChoices = new bool[3];
+    private readonly string[] purchaseResults = new string[3];
+    private readonly int[] economyUpgradeLevels = new int[3];
+    private readonly int[] towerUpgradeLevels = new int[3];
+    private readonly int[] heroUpgradeLevels = new int[3];
     private MatchStatus matchStatus = MatchStatus.WaitingForPlayers;
 
     public MatchStatus Status => matchStatus;
@@ -46,6 +69,34 @@ public sealed class TriunviratoGame : MonoBehaviour
     public bool IsMatchInProgress => matchStatus == MatchStatus.InProgress;
     public int CurrentWave => wave;
     public bool IsWaveInProgress => waveInProgress;
+    public bool IsPurchasePhase => purchasePhase;
+    public float PurchasePhaseSecondsRemaining => Mathf.Max(0f, purchasePhaseTimer);
+    public bool IsPurchaseChoiceMade(ArmyType army) => IsValidArmy(army) && purchaseChoices[(int)army];
+    public string GetPurchaseResult(ArmyType army) => IsValidArmy(army) ? purchaseResults[(int)army] : string.Empty;
+    public int GetPurchasePrice(string id) {
+        int index = Array.IndexOf(IntermissionUpgradeIds, id);
+        if (index < 0) return 0;
+        int[] costs = GetPurchaseCosts(id);
+        return costs[0] + costs[1] + costs[2];
+    }
+    public int[] GetPurchaseCosts(string id)
+    {
+        int index = Array.IndexOf(IntermissionUpgradeIds, id);
+        int[] costs = new int[3];
+        if (index < 0) return costs;
+        float waveMultiplier = Mathf.Pow(1f + UpgradePriceGrowthPerWave, Mathf.Max(0, wave - 1));
+        for (int currency = 0; currency < costs.Length; currency++)
+        {
+            int baseCost = IntermissionUpgradeBaseCosts[index, currency];
+            if (baseCost > 0)
+                costs[currency] = Mathf.Max(1, Mathf.RoundToInt(baseCost * waveMultiplier));
+        }
+        return costs;
+    }
+    public string[] GetPurchaseUpgradeIds() => (string[])IntermissionUpgradeIds.Clone();
+    public string GetPurchaseUpgradeName(string id) { int i = Array.IndexOf(IntermissionUpgradeIds, id); return i < 0 ? string.Empty : IntermissionUpgradeNames[i]; }
+    public string GetPurchaseUpgradeDescription(string id) { int i = Array.IndexOf(IntermissionUpgradeIds, id); return i < 0 ? string.Empty : IntermissionUpgradeDescriptions[i]; }
+    public bool CanCombatNow => CanCombat;
     public bool IsPaused => paused;
     public int EnemiesRemainingInWave => enemies.Count + remainingToSpawn;
     public bool IsEarlyWaveCallPending => earlyWaveCallPending;
@@ -123,7 +174,7 @@ public sealed class TriunviratoGame : MonoBehaviour
             return;
 
         UpdateWaveFlow();
-        if (finished)
+        if (finished || purchasePhase)
             return;
         UpdateEnemies();
         if (finished)
@@ -174,6 +225,13 @@ public sealed class TriunviratoGame : MonoBehaviour
         StateRevision++;
         if (resumeMatch)
             GameSoundManager.Instance?.PlayMatchStart();
+        purchasePhase = false;
+        purchasePhaseTimer = 0f;
+        Array.Clear(purchaseChoices, 0, purchaseChoices.Length);
+        Array.Clear(purchaseResults, 0, purchaseResults.Length);
+        Array.Clear(economyUpgradeLevels, 0, economyUpgradeLevels.Length);
+        Array.Clear(towerUpgradeLevels, 0, towerUpgradeLevels.Length);
+        Array.Clear(heroUpgradeLevels, 0, heroUpgradeLevels.Length);
         if (economy != null)
             economy.ResetEconomy();
         TowerShop towerShop = FindAnyObjectByType<TowerShop>();
@@ -244,8 +302,24 @@ public sealed class TriunviratoGame : MonoBehaviour
                         economy.RewardWaveCompleted(currentWaveRewardMultiplier);
                     lastRewardedWave = wave;
                 }
-                intermissionTimer = 3f;
+                BeginPurchasePhase();
                 currentWaveRewardMultiplier = 1f;
+            }
+        }
+        else if (purchasePhase)
+        {
+            purchasePhaseTimer -= Time.deltaTime;
+            int timerSecond = Mathf.CeilToInt(Mathf.Max(0f, purchasePhaseTimer));
+            if (timerSecond != lastPurchaseTimerSecond)
+            {
+                lastPurchaseTimerSecond = timerSecond;
+                StateRevision++;
+            }
+            if (purchasePhaseTimer <= 0f)
+            {
+                for (int i = 0; i < purchaseChoices.Length; i++)
+                    if (!purchaseChoices[i]) GrantResourceChoice((ArmyType)i);
+                FinishPurchasePhase();
             }
         }
         else if (earlyWaveCallPending)
@@ -259,6 +333,91 @@ public sealed class TriunviratoGame : MonoBehaviour
                 StartNextWave();
         }
     }
+
+    private void BeginPurchasePhase()
+    {
+        if (purchasePhase) return;
+        purchasePhase = true;
+        purchasePhaseTimer = PurchasePhaseDuration;
+        lastPurchaseTimerSecond = Mathf.CeilToInt(PurchasePhaseDuration);
+        Array.Clear(purchaseChoices, 0, purchaseChoices.Length);
+        Array.Clear(purchaseResults, 0, purchaseResults.Length);
+        StateRevision++;
+    }
+
+    private void FinishPurchasePhase()
+    {
+        if (!purchasePhase) return;
+        purchasePhase = false;
+        purchasePhaseTimer = 0f;
+        StateRevision++;
+        if (earlyWaveCallPending) StartNextWave();
+        else intermissionTimer = 0f;
+    }
+
+    public bool TryChooseIntermissionOption(ArmyType army, string id, out string message)
+    {
+        message = "La fase de compras no está activa.";
+        if (!purchasePhase || purchasePhaseTimer <= 0f || !IsValidArmy(army)) return false;
+        int armyIndex = (int)army;
+        if (purchaseChoices[armyIndex]) { message = "Ya has elegido en esta fase."; return false; }
+        if (economy == null) { message = "La economía no está disponible."; return false; }
+        if (id == "resources")
+        {
+            GrantResourceChoice(army);
+            message = purchaseResults[armyIndex];
+            return true;
+        }
+        int optionIndex = Array.IndexOf(IntermissionUpgradeIds, id);
+        if (optionIndex < 0) { message = "Mejora desconocida para esta fase."; return false; }
+        int[] costs = GetPurchaseCosts(id);
+        if (!economy.TrySpendIntermissionResources(costs[0], costs[1], costs[2]))
+        {
+            message = BuildInsufficientPurchaseResources(costs);
+            return false;
+        }
+        if (optionIndex == 0) economyUpgradeLevels[armyIndex]++;
+        else if (optionIndex == 1) { towerUpgradeLevels[armyIndex]++; FindAnyObjectByType<TowerShop>()?.RefreshArmyIntermissionUpgrade(army); }
+        else heroUpgradeLevels[armyIndex]++;
+        purchaseChoices[armyIndex] = true;
+        purchaseResults[armyIndex] = IntermissionUpgradeNames[optionIndex];
+        StateRevision++;
+        message = "Comprada: " + IntermissionUpgradeNames[optionIndex] + ".";
+        FinishIfAllChosen();
+        return true;
+    }
+
+    private string BuildInsufficientPurchaseResources(int[] costs)
+    {
+        string[] icons = { "🟢", "🔴", "🔵" };
+        List<string> missing = new List<string>();
+        for (int i = 0; i < costs.Length; i++)
+        {
+            int balance = economy != null ? economy.GetCoins((ArmyType)i) : 0;
+            if (balance < costs[i]) missing.Add((costs[i] - balance) + " " + icons[i] + " más");
+        }
+        return "Recursos insuficientes: necesitas " + string.Join(" y ", missing) + ".";
+    }
+
+    private void GrantResourceChoice(ArmyType army)
+    {
+        if (!purchasePhase || !IsValidArmy(army) || purchaseChoices[(int)army]) return;
+        economy?.GrantIntermissionResources(army, ResourceChoiceReward);
+        purchaseChoices[(int)army] = true;
+        purchaseResults[(int)army] = "+" + ResourceChoiceReward + " recursos";
+        StateRevision++;
+        FinishIfAllChosen();
+    }
+
+    private void FinishIfAllChosen()
+    {
+        foreach (bool chosen in purchaseChoices) if (!chosen) return;
+        FinishPurchasePhase();
+    }
+
+    public float GetEconomyIntermissionMultiplier(ArmyType army) => IsValidArmy(army) ? Mathf.Pow(1.25f, economyUpgradeLevels[(int)army]) : 1f;
+    public float GetTowerIntermissionMultiplier(ArmyType army) => IsValidArmy(army) ? Mathf.Pow(1.2f, towerUpgradeLevels[(int)army]) : 1f;
+    public float GetHeroIntermissionMultiplier(ArmyType army) => IsValidArmy(army) ? Mathf.Pow(1.2f, heroUpgradeLevels[(int)army]) : 1f;
 
     private void StartNextWave()
     {
@@ -328,7 +487,7 @@ public sealed class TriunviratoGame : MonoBehaviour
         HeroConfig config = GetHeroConfig(army);
         return config != null
             ? config.GetDamageAtUpgradeLevel(GetHeroUpgradeLevel(army)) *
-              (upgrades != null ? upgrades.GetTeamHeroDamageMultiplier() : 1f)
+              (upgrades != null ? upgrades.GetTeamHeroDamageMultiplier() : 1f) * GetHeroIntermissionMultiplier(army)
             : 0f;
     }
 
@@ -670,7 +829,7 @@ public sealed class TriunviratoGame : MonoBehaviour
         return best;
     }
 
-    internal bool CanCombat => matchStatus == MatchStatus.InProgress && !paused && !finished;
+    internal bool CanCombat => matchStatus == MatchStatus.InProgress && waveInProgress && !paused && !finished && !purchasePhase;
 
     internal void ApplyCastleDamage(float amount)
     {

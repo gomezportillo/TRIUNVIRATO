@@ -18,7 +18,7 @@ public sealed class TowerShop : MonoBehaviour
     private readonly int[] nextCosts = new int[3];
 
     public int StateRevision { get; private set; }
-    public bool CanPurchase => game != null && game.CanCombat;
+    public bool CanPurchase => game != null && game.IsPurchasePhase;
 
     private void Awake()
     {
@@ -77,7 +77,8 @@ public sealed class TowerShop : MonoBehaviour
         TowerConfig config = GetConfig(army);
         return HasTower(army)
             ? towers[index].Damage
-            : config != null ? config.GetDamageAtLevels(0, GetArmyUpgradeLevel(army)) : 0f;
+            : config != null ? config.GetDamageAtLevels(0, GetArmyUpgradeLevel(army)) *
+                (game != null ? game.GetTowerIntermissionMultiplier(army) : 1f) : 0f;
     }
 
     public float GetNextDamage(ArmyType army)
@@ -88,7 +89,8 @@ public sealed class TowerShop : MonoBehaviour
             return 0f;
         if (!HasTower(army) || !config.CanUpgrade(upgradeLevels[index]))
             return GetCurrentDamage(army);
-        return config.GetDamageAtLevels(upgradeLevels[index] + 1, armyUpgradeLevels[index]);
+        return config.GetDamageAtLevels(upgradeLevels[index] + 1, armyUpgradeLevels[index]) *
+               (game != null ? game.GetTowerIntermissionMultiplier(army) : 1f);
     }
 
     public float GetUpgradeDamagePercent(ArmyType army)
@@ -140,9 +142,9 @@ public sealed class TowerShop : MonoBehaviour
             return false;
         }
 
-        if (economy == null || game == null || !game.CanCombat)
+        if (economy == null || game == null || !game.IsPurchasePhase)
         {
-            failureReason = "La partida no está disponible para comprar.";
+            failureReason = "Las torres solo se pueden comprar durante la fase de compras.";
             return false;
         }
 
@@ -246,6 +248,14 @@ public sealed class TowerShop : MonoBehaviour
             TowerConfig config = GetConfig(army);
             nextCosts[i] = config != null ? config.PurchaseCost : 0;
         }
+        StateRevision++;
+    }
+
+    public void RefreshArmyIntermissionUpgrade(ArmyType army)
+    {
+        int index = (int)army;
+        if (index < 0 || index >= towers.Length) return;
+        if (towers[index] != null) towers[index].RefreshIntermissionDamage();
         StateRevision++;
     }
 

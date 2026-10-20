@@ -15,9 +15,9 @@ MonoBehaviour:
   id: hero-tierra
   displayName: Tierra
   army: 0
-  damage: 11
-  attackCooldown: 0.9
-  range: 5.3
+  damage: 12
+  attackCooldown: 0.75
+  range: 5.5
   splashRadius: 0
   projectileColor: {r: 0.09849052, g: 0.5999999, b: 0.14864144, a: 1}
   projectileSpeed: 10

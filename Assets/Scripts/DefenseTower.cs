@@ -43,10 +43,13 @@ public sealed class DefenseTower : MonoBehaviour
         RefreshDamage();
     }
 
+    internal void RefreshIntermissionDamage() => RefreshDamage();
+
     private void RefreshDamage()
     {
         if (Config != null)
-            Damage = Config.GetDamageAtLevels(individualUpgradeLevel, armyUpgradeLevel);
+            Damage = Config.GetDamageAtLevels(individualUpgradeLevel, armyUpgradeLevel) *
+                     (game != null ? game.GetTowerIntermissionMultiplier(Config.Army) : 1f);
     }
 
     private void Update()

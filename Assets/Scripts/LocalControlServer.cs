@@ -60,6 +60,7 @@ public sealed class LocalControlServer : MonoBehaviour
         public string type;
         public string army;
         public string upgrade;
+        public string choice;
         public string clientToken;
         public string requestId;
 #pragma warning restore 0649
@@ -91,6 +92,10 @@ public sealed class LocalControlServer : MonoBehaviour
         public bool waveInProgress;
         public bool earlyWaveCallPending;
         public bool canCallNextWaveEarly;
+        public bool purchasePhase;
+        public float purchaseSecondsRemaining;
+        public int resourceChoiceReward;
+        public PurchaseUpgradeOption[] purchaseOptions;
         public SeatState[] seats;
         public ArmyShopState[] armies;
     }
@@ -111,6 +116,8 @@ public sealed class LocalControlServer : MonoBehaviour
         public bool owned;
         public int upgradeLevel;
         public float currentDamage;
+        public float towerRange;
+        public float towerAttackCooldown;
         public float nextDamage;
         public int towerMaximumLevel;
         public int nextCost;
@@ -130,6 +137,8 @@ public sealed class LocalControlServer : MonoBehaviour
         public int armyTowerLevel;
         public float armyTowerMultiplier;
         public ArmyUpgradeManager.UpgradeOption[] upgrades;
+        public bool purchaseChoiceMade;
+        public string purchaseResult;
     }
 
     private sealed class WebSocketClient
@@ -454,6 +463,8 @@ public sealed class LocalControlServer : MonoBehaviour
                         response.message = "Ejército desconocido.";
                     else if (!CanControl(session, army))
                         response.message = "Solo puedes dar órdenes a tu ejército.";
+                    else if (game == null || !game.IsPurchasePhase)
+                        response.message = "Las torres solo se pueden comprar durante la fase de compras.";
                     else
                     {
                         bool wasOwned = shop.HasTower(army);
@@ -474,11 +485,28 @@ public sealed class LocalControlServer : MonoBehaviour
                         response.message = "Ejército desconocido.";
                     else if (!CanControl(session, army))
                         response.message = "Solo puedes dar órdenes a tu ejército.";
+                    else if (game == null || !game.IsPurchasePhase)
+                        response.message = "Las mejoras solo se pueden comprar durante la fase de compras.";
                     else if (string.IsNullOrWhiteSpace(command.upgrade) || upgrades == null)
                         response.message = "Mejora desconocida o no configurada.";
                     else
                     {
                         response.success = upgrades.TryPurchase(army, command.upgrade, out response.message);
+                        stateChanged = response.success;
+                    }
+                }
+                else if (command.type == "buyIntermissionUpgrade")
+                {
+                    response.type = "purchaseResult";
+                    if (!TryParseArmy(command.army, out ArmyType army))
+                        response.message = "Ejército desconocido.";
+                    else if (!CanControl(session, army))
+                        response.message = "Solo puedes dar órdenes a tu ejército.";
+                    else if (game == null)
+                        response.message = "La partida no está disponible.";
+                    else
+                    {
+                        response.success = game.TryChooseIntermissionOption(army, command.choice, out response.message);
                         stateChanged = response.success;
                     }
                 }
@@ -838,6 +866,10 @@ public sealed class LocalControlServer : MonoBehaviour
             waveInProgress = game != null && game.IsWaveInProgress,
             earlyWaveCallPending = game != null && game.IsEarlyWaveCallPending,
             canCallNextWaveEarly = game != null && game.CanCallNextWaveEarly && CanControl(session, ArmyType.Mar),
+            purchasePhase = game != null && game.IsPurchasePhase,
+            purchaseSecondsRemaining = game != null ? game.PurchasePhaseSecondsRemaining : 0f,
+            resourceChoiceReward = TriunviratoGame.ResourceChoiceReward,
+            purchaseOptions = CreatePurchaseOptions(),
             seats = new[]
             {
                 CreateSeatState(ArmyType.Tierra, session),
@@ -880,6 +912,8 @@ public sealed class LocalControlServer : MonoBehaviour
             owned = shop.HasTower(army),
             upgradeLevel = shop.GetUpgradeLevel(army),
             currentDamage = shop.GetCurrentDamage(army),
+            towerRange = towerConfig != null && towerConfig.Hero != null ? towerConfig.Hero.Range : 0f,
+            towerAttackCooldown = towerConfig != null && towerConfig.Hero != null ? towerConfig.Hero.AttackCooldown : 0f,
             nextDamage = shop.GetNextDamage(army),
             towerMaximumLevel = towerConfig != null ? towerConfig.MaximumUpgradeLevel : 0,
             nextCost = shop.GetNextCost(army),
@@ -900,8 +934,35 @@ public sealed class LocalControlServer : MonoBehaviour
             armyTowerLevel = shop.GetArmyUpgradeLevel(army),
             armyTowerMultiplier = towerConfig != null
                 ? towerConfig.GetArmyDamageMultiplier(shop.GetArmyUpgradeLevel(army)) : 1f,
-            upgrades = upgrades != null ? upgrades.GetOptions(army) : Array.Empty<ArmyUpgradeManager.UpgradeOption>()
+            upgrades = upgrades != null ? upgrades.GetOptions(army) : Array.Empty<ArmyUpgradeManager.UpgradeOption>(),
+            purchaseChoiceMade = game != null && game.IsPurchaseChoiceMade(army),
+            purchaseResult = game != null ? game.GetPurchaseResult(army) : string.Empty
         };
+    }
+
+    [Serializable]
+    private sealed class PurchaseUpgradeOption
+    {
+        public string id;
+        public string category;
+        public string name;
+        public string description;
+        public int price;
+        public int[] resourceCosts;
+    }
+
+    private PurchaseUpgradeOption[] CreatePurchaseOptions()
+    {
+        if (game == null) return Array.Empty<PurchaseUpgradeOption>();
+        string[] ids = game.GetPurchaseUpgradeIds();
+        PurchaseUpgradeOption[] options = new PurchaseUpgradeOption[ids.Length];
+        string[] categories = { "economy", "towers", "hero" };
+        for (int i = 0; i < ids.Length; i++)
+            options[i] = new PurchaseUpgradeOption { id = ids[i], category = categories[i],
+                name = game.GetPurchaseUpgradeName(ids[i]), description = game.GetPurchaseUpgradeDescription(ids[i]),
+                price = game.GetPurchasePrice(ids[i]),
+                resourceCosts = game.GetPurchaseCosts(ids[i]) };
+        return options;
     }
 
     private static Task SendMessageAsync(WebSocketClient client, object message, CancellationToken token)

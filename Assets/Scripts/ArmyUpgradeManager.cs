@@ -144,9 +144,9 @@ public sealed class ArmyUpgradeManager : MonoBehaviour
             blockedReason = "Nivel máximo alcanzado.";
             status = "max";
         }
-        else if (game == null || !game.CanCombat)
+        else if (game == null || !game.IsPurchasePhase)
         {
-            blockedReason = "Disponible durante la partida.";
+            blockedReason = "Disponible durante la fase de compras.";
             status = "waiting";
         }
         else if (coins < cost || secondaryCoins < secondaryCost)

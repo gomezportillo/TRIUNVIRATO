@@ -26,7 +26,7 @@ public sealed class EconomyUI : MonoBehaviour
 
         if (controlServer == null)
             controlServer = FindAnyObjectByType<LocalControlServer>();
-        bool showLocalPurchaseButtons = controlServer != null && controlServer.IsDeveloperMode;
+        bool showLocalPurchaseButtons = controlServer != null && controlServer.IsDeveloperMode && shop.CanPurchase;
 
         GUILayout.BeginArea(new Rect(18f, 18f, 580f, showLocalPurchaseButtons ? 155f : 85f), GUI.skin.box);
         GUILayout.Label("💰 RECURSOS DE LOS EJÉRCITOS");

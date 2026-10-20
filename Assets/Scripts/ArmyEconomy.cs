@@ -23,7 +23,7 @@ public sealed class ArmyEconomy : MonoBehaviour
             rate *= 2f;
         if (army == ArmyType.Mar && upgrades != null)
             rate += upgrades.GetSpecialEffectLevel("earth_mar_passive_unlock");
-        return rate;
+        return rate * (game != null ? game.GetEconomyIntermissionMultiplier(army) : 1f);
     }
 
     public int GetIncomeUpgradeLevel(ArmyType army) =>
@@ -71,6 +71,12 @@ public sealed class ArmyEconomy : MonoBehaviour
 
     public int GetWholeCoins(ArmyType army) => GetCoins(army);
 
+    public void GrantIntermissionResources(ArmyType army, int amount)
+    {
+        if (game == null || !game.IsPurchasePhase || !IsValidArmy(army) || amount <= 0) return;
+        AddCoins(army, amount, "elección de recursos entre oleadas");
+    }
+
     public float GetFractionalCoins(ArmyType army) =>
         IsValidArmy(army) ? generationRemainders[(int)army] : 0f;
 
@@ -78,7 +84,7 @@ public sealed class ArmyEconomy : MonoBehaviour
     {
         int index = (int)army;
         if (amount < 0 || index < 0 || index >= balances.Length || balances[index] < amount ||
-            (game != null && !game.CanCombat))
+            game == null || !game.IsPurchasePhase)
             return false;
 
         balances[index] -= amount;
@@ -91,7 +97,7 @@ public sealed class ArmyEconomy : MonoBehaviour
     {
         int first = (int)firstArmy;
         int second = (int)secondArmy;
-        if (game == null || !game.CanCombat || first < 0 || first >= balances.Length ||
+        if (game == null || !game.IsPurchasePhase || first < 0 || first >= balances.Length ||
             second < 0 || second >= balances.Length || firstAmount < 0 || secondAmount < 0)
             return false;
 
@@ -108,6 +114,24 @@ public sealed class ArmyEconomy : MonoBehaviour
         StateRevision++;
         Debug.Log("Economía " + firstArmy + ": -" + firstAmount + "; " + secondArmy + ": -" + secondAmount +
                   ". Saldos: " + balances[first] + " / " + balances[second] + ".", this);
+        return true;
+    }
+
+    /// <summary>Atomically spends a planning purchase across green, red, and blue balances.</summary>
+    public bool TrySpendIntermissionResources(int greenCost, int redCost, int blueCost)
+    {
+        if (game == null || !game.IsPurchasePhase || greenCost < 0 || redCost < 0 || blueCost < 0 ||
+            balances[(int)ArmyType.Tierra] < greenCost || balances[(int)ArmyType.Aire] < redCost ||
+            balances[(int)ArmyType.Mar] < blueCost)
+            return false;
+
+        balances[(int)ArmyType.Tierra] -= greenCost;
+        balances[(int)ArmyType.Aire] -= redCost;
+        balances[(int)ArmyType.Mar] -= blueCost;
+        StateRevision++;
+        Debug.Log("Compra entre oleadas: -" + greenCost + " verde, -" + redCost + " rojo, -" + blueCost +
+                  " azul. Saldos: " + balances[(int)ArmyType.Tierra] + " / " + balances[(int)ArmyType.Aire] +
+                  " / " + balances[(int)ArmyType.Mar] + ".", this);
         return true;
     }
 

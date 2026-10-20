@@ -20,9 +20,9 @@ MonoBehaviour:
     rewardPerWaveCompleted: 0
     additionalRewardPerBossDefeated: 0
     incomeUpgradeBaseCost: 20
-    incomeUpgradeCostGrowthRate: 0.1
+    incomeUpgradeCostGrowthRate: 0.2
     minimumIncomeUpgradeCostIncrease: 1
-    incomeUpgradeMaximumLevel: 5
+    incomeUpgradeMaximumLevel: 10
     passiveIncomeIncreasePerLevel: 0.5
     enemyKillRewardIncreasePerLevel: 0
     waveRewardIncreasePerLevel: 0
@@ -34,9 +34,9 @@ MonoBehaviour:
     rewardPerWaveCompleted: 0
     additionalRewardPerBossDefeated: 0
     incomeUpgradeBaseCost: 15
-    incomeUpgradeCostGrowthRate: 0.1
+    incomeUpgradeCostGrowthRate: 0.2
     minimumIncomeUpgradeCostIncrease: 1
-    incomeUpgradeMaximumLevel: 5
+    incomeUpgradeMaximumLevel: 10
     passiveIncomeIncreasePerLevel: 0
     enemyKillRewardIncreasePerLevel: 1
     waveRewardIncreasePerLevel: 0
@@ -48,9 +48,9 @@ MonoBehaviour:
     rewardPerWaveCompleted: 10
     additionalRewardPerBossDefeated: 10
     incomeUpgradeBaseCost: 20
-    incomeUpgradeCostGrowthRate: 0.1
+    incomeUpgradeCostGrowthRate: 0.2
     minimumIncomeUpgradeCostIncrease: 1
-    incomeUpgradeMaximumLevel: 5
+    incomeUpgradeMaximumLevel: 10
     passiveIncomeIncreasePerLevel: 0
     enemyKillRewardIncreasePerLevel: 0
     waveRewardIncreasePerLevel: 5

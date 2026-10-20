@@ -16,9 +16,9 @@ MonoBehaviour:
   displayName: Aire
   army: 1
   damage: 6
-  attackCooldown: 0.75
-  range: 7.5
-  splashRadius: 0.8
+  attackCooldown: 0.8
+  range: 7
+  splashRadius: 0.5
   projectileColor: {r: 1, g: 0.3997736, b: 0.18039215, a: 1}
   projectileSpeed: 10
   projectileLifetime: 1.5

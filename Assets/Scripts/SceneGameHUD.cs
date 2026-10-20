@@ -20,6 +20,10 @@ public sealed class SceneGameHUD : MonoBehaviour
     [SerializeField] private Text serverStatus;
     [SerializeField] private Text connectionAddress;
     [SerializeField] private Text roomStatus;
+    [Header("Fase de compras")]
+    [SerializeField] private GameObject purchaseOverlay;
+    [SerializeField] private Text purchaseTimer;
+    [SerializeField] private Text purchasePlayerStates;
 
     [SerializeField, Min(0.05f)] private float refreshInterval = 0.2f;
     private float refreshTimer;
@@ -50,6 +54,13 @@ public sealed class SceneGameHUD : MonoBehaviour
             Set(wave, "🌊  Oleada " + Mathf.Max(1, game.CurrentWave) + " / ∞");
             Set(enemies, "👾  Enemigos restantes: " + game.EnemiesRemainingInWave);
             Set(castleHealth, "❤️  Castillo: " + Mathf.CeilToInt(game.CastleHealth) + " / " + Mathf.CeilToInt(game.CastleMaximumHealth));
+            if (purchaseOverlay != null && purchaseOverlay.activeSelf != game.IsPurchasePhase)
+                purchaseOverlay.SetActive(game.IsPurchasePhase);
+            if (game.IsPurchasePhase)
+            {
+                Set(purchaseTimer, Mathf.CeilToInt(game.PurchasePhaseSecondsRemaining) + " s");
+                Set(purchasePlayerStates, BuildPurchasePlayerStates());
+            }
         }
 
         if (controlServer != null)
@@ -58,6 +69,18 @@ public sealed class SceneGameHUD : MonoBehaviour
             Set(connectionAddress, controlServer.AccessUrlText);
             Set(roomStatus, controlServer.RoomStatusText);
         }
+    }
+
+    private string BuildPurchasePlayerStates()
+    {
+        string[] lines = new string[3];
+        for (int i = 0; i < 3; i++)
+        {
+            ArmyType army = (ArmyType)i;
+            string name = army == ArmyType.Tierra ? "Tierra" : army == ArmyType.Aire ? "Aire" : "Mar";
+            lines[i] = name + ": " + (game.IsPurchaseChoiceMade(army) ? game.GetPurchaseResult(army) : "pendiente");
+        }
+        return string.Join("\n", lines);
     }
 
     private static void Set(Text target, string value)

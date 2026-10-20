@@ -68,6 +68,11 @@
     .upgrade button[data-status="max"] { color: #d1d5db; background: #334155; }
     .tower-artifact { border: 1px dashed #475569; }
     .tower-damage { margin: 4px 0; font-size: 1.25rem; font-weight: 800; }
+    .purchase-card { padding: 14px; border: 2px solid #475569; border-radius: 15px; margin: 10px 0; background: #121c2c; }
+    .purchase-card[data-category="economy"] { border-color: #4ade80; }
+    .purchase-card[data-category="towers"] { border-color: #f87171; }
+    .purchase-card[data-category="hero"] { border-color: #60a5fa; }
+    .purchase-timer { font-size: 1.15rem; font-weight: 800; }
     .lobby-actions { display: grid; gap: 2px; }
     [hidden] { display: none !important; }
     @media (max-width: 360px) { body { padding-left: 10px; padding-right: 10px; } .section-tabs button { font-size: .8rem; } .wallet-value { font-size: 1.2rem; } }
@@ -261,6 +266,23 @@
         }
         return card;
       }
+      function createCombatStatistics(army) {
+        const stats = document.createElement('article'); stats.className = 'hero-summary';
+        const values = [
+          [`${numberFormat.format(army.heroDamage)} / golpe`, 'Daño del héroe'],
+          [`${numberFormat.format(army.currentDamage)} / golpe`, 'Daño de torre'],
+          [`${numberFormat.format(1 / Math.max(.01, army.towerAttackCooldown))}/s`, 'Ataques de torre'],
+          [`${numberFormat.format(army.towerRange)} m`, 'Alcance de torre'],
+          [`${numberFormat.format(army.passiveIncomePerSecond)} ${icons[army.army]}/s`, 'Ingreso pasivo']
+        ];
+        for (const [value, label] of values) {
+          const item = document.createElement('div'); item.className = 'hero-stat';
+          const strong = document.createElement('strong'); strong.textContent = value;
+          const caption = document.createElement('span'); caption.textContent = label;
+          item.append(strong, caption); stats.append(item);
+        }
+        return stats;
+      }
       function renderPanel() {
         if (!state || !sessionReady) return;
         const inMatch = state.status === 'InProgress' || state.status === 'Finished';
@@ -284,39 +306,60 @@
         document.getElementById('wave-label').textContent = `Oleada ${state.currentWave || 0}`;
         document.getElementById('dev-tabs').hidden = !developerMode;
         tabs.forEach(tab => tab.classList.toggle('active', tab.dataset.tab === selectedPanel));
-        sectionButtons.forEach(button => button.classList.toggle('active', button.dataset.section === activeSection));
+        sectionButtons.forEach(button => { button.hidden = true; });
         wallet.replaceChildren();
         const balance = document.createElement('span'); balance.className = 'wallet-value'; balance.textContent = `${icons[selectedPanel]} ${army.coins}`;
-        const income = document.createElement('span'); income.className = 'wallet-income'; income.textContent = army.incomeSummary || `${numberFormat.format(army.passiveIncomePerSecond)} ${icons[selectedPanel]}/s`;
+        const income = document.createElement('span'); income.className = 'wallet-income';
+        income.textContent = state.purchasePhase
+          ? `⏸ Pausado · ${numberFormat.format(army.passiveIncomePerSecond)} ${icons[selectedPanel]}/s en combate`
+          : army.incomeSummary || `${numberFormat.format(army.passiveIncomePerSecond)} ${icons[selectedPanel]}/s`;
         wallet.append(balance, income);
 
-        const fragment = document.createDocumentFragment();
-        const upgrades = army.upgrades || [];
-        if (activeSection === 'hero') {
-          fragment.append(createHeroSummary(army));
-          upgrades.filter(option => option.section === 'hero').forEach(option => fragment.append(makeUpgradeCard(selectedPanel, option)));
-        } else if (activeSection === 'tower') {
-          fragment.append(createTowerCard(selectedPanel, army));
-        } else {
-          upgrades.filter(option => option.section === 'resources').forEach(option => fragment.append(makeUpgradeCard(selectedPanel, option)));
-          if (selectedPanel === 'mar') {
-            const waveCard = document.createElement('article'); waveCard.className = 'upgrade';
-            const heading = document.createElement('h3'); heading.textContent = 'Llamada anticipada';
-            const desc = document.createElement('p'); desc.className = 'description'; desc.textContent = '+50% de recompensa al completar la siguiente oleada. Disponible cada dos oleadas.';
-            const button = document.createElement('button'); button.className = 'blue';
-            button.textContent = state.earlyWaveCallPending ? 'Llamada enviada' : 'Llamar siguiente oleada';
-            button.disabled = !connected || !army.canControl || !state.canCallNextWaveEarly || state.earlyWaveCallPending || state.status === 'Finished';
-            button.addEventListener('click', () => request({ type: 'callNextWaveEarly', army: 'mar' }, 'early-wave'));
-            waveCard.append(heading, desc, button);
-            if (!state.canCallNextWaveEarly && !state.earlyWaveCallPending) {
-              const reason = document.createElement('p'); reason.className = 'blocked'; reason.textContent = `Disponible a partir de la oleada ${state.nextEarlyCallAvailableWave}.`; waveCard.append(reason);
-            }
-            fragment.append(waveCard);
+        if (state.purchasePhase) {
+          sectionButtons.forEach(button => button.hidden = true);
+          const summary = createHeroSummary(army);
+          content.replaceChildren(summary);
+          const title = document.createElement('h2'); title.textContent = `Preparad la siguiente oleada · ${Math.ceil(state.purchaseSecondsRemaining)} s`;
+          content.append(title);
+          if (army.purchaseChoiceMade) {
+            const wait = document.createElement('p'); wait.className = 'muted'; wait.textContent = `Elección realizada: ${army.purchaseResult}. Esperando a los demás…`; content.append(wait);
           }
+          for (const option of (state.purchaseOptions || [])) {
+            const card = document.createElement('article'); card.className = 'purchase-card'; card.dataset.category = option.category;
+            const currencies = ['tierra', 'aire', 'mar'];
+            const requirements = (option.resourceCosts || []).map((amount, index) => {
+              const resourceArmy = state.armies.find(item => item.army === currencies[index]);
+              return { amount, army: currencies[index], balance: resourceArmy ? resourceArmy.coins : 0 };
+            }).filter(cost => cost.amount > 0);
+            const affordable = requirements.every(cost => cost.balance >= cost.amount);
+            const costLabel = requirements.map(cost => `${cost.amount} ${icons[cost.army]}`).join(' + ');
+            const balanceLabel = requirements.map(cost => `${cost.balance} ${icons[cost.army]}`).join(' + ');
+            const heading = document.createElement('h3'); heading.textContent = `${option.category === 'economy' ? '🟢 Economía' : option.category === 'towers' ? '🔴 Torres' : '🔵 Héroe'} · ${option.name}`;
+            const desc = document.createElement('p'); desc.className = 'description'; desc.textContent = option.description;
+            const cost = document.createElement('p'); cost.className = 'costline'; cost.textContent = `Precio: ${costLabel} · Disponible: ${balanceLabel}`;
+            const button = document.createElement('button'); button.className = option.category === 'economy' ? 'green' : option.category === 'towers' ? 'red' : 'blue';
+            button.textContent = `Comprar · ${costLabel}`;
+            const actionKey = `intermission:${selectedPanel}`; const pending = pendingActions.has(actionKey);
+            button.disabled = pending || army.purchaseChoiceMade || !connected || !army.canControl || !affordable;
+            button.addEventListener('click', () => request({ type: 'buyIntermissionUpgrade', army: selectedPanel, choice: option.id }, actionKey));
+            card.append(heading, desc, cost, button);
+            if (!affordable && !army.purchaseChoiceMade) { const reason = document.createElement('p'); reason.className = 'blocked'; reason.textContent = `Saldo insuficiente para ${costLabel}.`; card.append(reason); }
+            content.append(card);
+          }
+          const resources = document.createElement('article'); resources.className = 'purchase-card';
+          const resourceTitle = document.createElement('h3'); resourceTitle.textContent = '📦 Guardar para después';
+          const resourceDesc = document.createElement('p'); resourceDesc.className = 'description'; resourceDesc.textContent = `Recibe ${state.resourceChoiceReward} ${icons[selectedPanel]} ahora.`;
+          const resourceButton = document.createElement('button'); resourceButton.className = 'neutral'; resourceButton.textContent = `Conseguir ${state.resourceChoiceReward} recursos`;
+          const resourceKey = `intermission:${selectedPanel}`; const resourcePending = pendingActions.has(resourceKey);
+          resourceButton.disabled = resourcePending || army.purchaseChoiceMade || !connected || !army.canControl;
+          resourceButton.addEventListener('click', () => request({ type: 'buyIntermissionUpgrade', army: selectedPanel, choice: 'resources' }, resourceKey));
+          resources.append(resourceTitle, resourceDesc, resourceButton); content.append(resources);
+          return;
         }
-        if (!fragment.childNodes.length) {
-          const empty = document.createElement('p'); empty.className = 'muted'; empty.textContent = 'No hay mejoras configuradas en esta sección.'; fragment.append(empty);
-        }
+        sectionButtons.forEach(button => button.hidden = true);
+
+        const fragment = document.createDocumentFragment();
+        fragment.append(createCombatStatistics(army));
         if (state.status === 'Finished') {
           const finished = document.createElement('p'); finished.className = 'blocked'; finished.textContent = 'Partida finalizada. Las órdenes están bloqueadas.'; fragment.prepend(finished);
         }
