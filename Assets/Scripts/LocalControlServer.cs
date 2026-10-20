@@ -51,6 +51,21 @@ public sealed class LocalControlServer : MonoBehaviour
     public string AccessUrlText => accessUrl;
     public string RoomStatusText => game != null ? "Sala: " + game.Status + " · " + SeatSummary() : "Sala: no disponible";
 
+    /// <summary>Reads a live lobby seat directly from the authoritative session table.</summary>
+    public bool TryGetLobbySeatState(int seatIndex, out bool occupied, out bool connected)
+    {
+        occupied = false;
+        connected = false;
+        if (seatIndex < 0 || seatIndex >= armySeats.Length)
+            return false;
+
+        string owner = armySeats[seatIndex];
+        occupied = owner != null;
+        if (occupied && sessionsByToken.TryGetValue(owner, out PlayerSession ownerSession))
+            connected = ownerSession.Connected;
+        return true;
+    }
+
     [Serializable]
     private sealed class ClientCommand
     {
@@ -118,11 +133,37 @@ public sealed class LocalControlServer : MonoBehaviour
         public int coins;
         public float passiveIncomePerSecond;
         public string incomeSummary;
+        public float rewardPerKill;
+        public int rewardPerWave;
+        public int rewardPerBoss;
+        public float waveRewardMultiplier;
         public float heroDamage;
         public float heroBaseDamage;
         public float heroRange;
         public float heroAttackCooldown;
         public float heroSplashRadius;
+        public float heroBaseCooldown;
+        public float heroBaseRange;
+        public float heroDamageMultiplier;
+        public float heroAttackSpeedMultiplier;
+        public float heroRangeMultiplier;
+        public float heroSplashMultiplier;
+        public float towerBaseDamage;
+        public float towerDamageMultiplier;
+        public float towerDamageFixedBonus;
+        public float towerSplashRadius;
+        public float towerBaseCooldown;
+        public float towerBaseRange;
+        public float towerAttackSpeedMultiplier;
+        public float towerRangeMultiplier;
+        public float heroDamageFixedBonus;
+        public float heroRangeFixedBonus;
+        public float heroSplashFixedBonus;
+        public float heroAttackRateFixedBonus;
+        public float towerRangeFixedBonus;
+        public float towerAttackRateFixedBonus;
+        public string heroName;
+        public string towerName;
         public bool purchaseChoiceMade;
         public string purchaseResult;
         public PurchaseUpgradeOption[] purchaseOptions;
@@ -878,11 +919,37 @@ public sealed class LocalControlServer : MonoBehaviour
             coins = economy != null ? economy.GetCoins(army) : 0,
             passiveIncomePerSecond = economy != null ? economy.GetPassiveIncomePerSecond(army) : 0f,
             incomeSummary = string.Empty,
+            rewardPerKill = economy != null ? economy.GetEffectiveEnemyKillReward(army) : 0f,
+            rewardPerWave = economy != null ? economy.GetEffectiveWaveReward(army) : 0,
+            rewardPerBoss = economy != null ? economy.GetBossReward(army) : 0,
+            waveRewardMultiplier = game != null ? game.CurrentWaveRewardMultiplier : 1f,
             heroDamage = game != null ? game.GetHeroDamage(army) : 0f,
             heroBaseDamage = hero != null ? hero.Damage : 0f,
             heroRange = game != null ? game.GetHeroRange(army) : hero != null ? hero.Range : 0f,
             heroAttackCooldown = game != null ? game.GetHeroAttackCooldown(army) : hero != null ? hero.AttackCooldown : 0f,
             heroSplashRadius = game != null ? game.GetHeroSplashRadius(army) : hero != null ? hero.SplashRadius : 0f,
+            heroBaseCooldown = hero != null ? hero.AttackCooldown : 0f,
+            heroBaseRange = hero != null ? hero.Range : 0f,
+            heroDamageMultiplier = game != null ? game.GetHeroIntermissionMultiplier(army) : 1f,
+            heroAttackSpeedMultiplier = game != null ? game.GetHeroAttackSpeedMultiplier(army) : 1f,
+            heroRangeMultiplier = game != null ? game.GetHeroRangeMultiplier(army) : 1f,
+            heroSplashMultiplier = game != null ? game.GetHeroSplashMultiplier(army) : 1f,
+            heroDamageFixedBonus = game != null ? game.GetHeroDamageFixedBonus(army) : 0f,
+            heroRangeFixedBonus = game != null ? game.GetHeroRangeFixedBonus(army) : 0f,
+            heroSplashFixedBonus = game != null ? game.GetHeroSplashFixedBonus(army) : 0f,
+            heroAttackRateFixedBonus = game != null ? game.GetHeroAttackRateFixedBonus(army) : 0f,
+            towerRangeFixedBonus = game != null ? game.GetTowerRangeFixedBonus(army) : 0f,
+            towerAttackRateFixedBonus = game != null ? game.GetTowerAttackRateFixedBonus(army) : 0f,
+            heroName = hero != null ? hero.DisplayName : "Héroe",
+            towerBaseDamage = towerConfig != null ? towerConfig.GetBaseDamage() : 0f,
+            towerDamageMultiplier = game != null ? game.GetTowerIntermissionMultiplier(army) : 1f,
+            towerDamageFixedBonus = game != null ? game.GetTowerDamageFixedBonus(army) : 0f,
+            towerSplashRadius = towerConfig != null && towerConfig.Hero != null ? towerConfig.Hero.SplashRadius : 0f,
+            towerBaseCooldown = towerConfig != null && towerConfig.Hero != null ? towerConfig.Hero.AttackCooldown : 0f,
+            towerBaseRange = towerConfig != null && towerConfig.Hero != null ? towerConfig.Hero.Range : 0f,
+            towerAttackSpeedMultiplier = game != null ? game.GetTowerAttackSpeedMultiplier(army) : 1f,
+            towerRangeMultiplier = game != null ? game.GetTowerRangeMultiplier(army) : 1f,
+            towerName = shop.GetTowerDisplayName(army),
             purchaseChoiceMade = game != null && game.IsPurchaseChoiceMade(army),
             purchaseResult = game != null ? game.GetPurchaseResult(army) : string.Empty,
             purchaseOptions = CreatePurchaseOptions(army)

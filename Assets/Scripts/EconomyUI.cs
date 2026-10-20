@@ -14,7 +14,7 @@ public sealed class EconomyUI : MonoBehaviour
         new Color(1f, 0.25f, 0.22f),
         new Color(0.2f, 0.55f, 1f)
     };
-    private static readonly string[] Names = { "🟢 Tierra", "🔴 Aire", "🔵 Mar" };
+    private static readonly string[] Names = { "Tierra", "Aire", "Mar" };
 
     private string feedback;
     private float feedbackTime;

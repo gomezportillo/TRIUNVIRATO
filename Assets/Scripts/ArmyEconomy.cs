@@ -23,15 +23,25 @@ public sealed class ArmyEconomy : MonoBehaviour
 
     public int GetEnemyKillReward(ArmyType army)
     {
-        if (config == null) return 0;
+        return Mathf.FloorToInt(GetEffectiveEnemyKillReward(army));
+    }
+
+    public float GetEffectiveEnemyKillReward(ArmyType army)
+    {
+        if (config == null) return 0f;
         float baseReward = army == ArmyType.Aire ? config.GetEnemyKillReward(army) : 0f;
-        float multiplier = game != null ? game.GetIntermissionKillRewardMultiplier(army) : 1f;
-        float fixedBonus = game != null ? game.GetIntermissionKillRewardFixedBonus(army) : 0f;
-        return Mathf.FloorToInt(baseReward * multiplier + fixedBonus);
+        return baseReward * (game != null ? game.GetIntermissionKillRewardMultiplier(army) : 1f) +
+               (game != null ? game.GetIntermissionKillRewardFixedBonus(army) : 0f);
     }
 
     public int GetWaveReward(ArmyType army) =>
         config != null ? config.GetWaveReward(army) : 0;
+
+    /// <summary>Returns the configured next-wave payout using the same modifiers and rounding as rewards.</summary>
+    public int GetEffectiveWaveReward(ArmyType army) =>
+        config == null || army != ArmyType.Mar ? 0 : Mathf.CeilToInt(
+            config.GetWaveReward(army) * (game != null ? game.GetIntermissionWaveRewardMultiplier(army) * game.CurrentWaveRewardMultiplier : 1f) +
+            (game != null ? game.GetEconomyWaveRewardFixedBonus(army) : 0f) + waveRewardRemainder);
 
     public int GetBossReward(ArmyType army) =>
         config != null ? config.GetBossReward(army) : 0;
@@ -148,10 +158,7 @@ public sealed class ArmyEconomy : MonoBehaviour
         for (int i = 0; i < balances.Length; i++)
         {
             ArmyType army = (ArmyType)i;
-            float baseReward = army == ArmyType.Aire ? config.GetEnemyKillReward(army) : 0f;
-            float multiplier = game != null ? game.GetIntermissionKillRewardMultiplier(army) : 1f;
-            float fixedBonus = game != null ? game.GetIntermissionKillRewardFixedBonus(army) : 0f;
-            float total = baseReward * multiplier + fixedBonus + killRewardRemainders[i];
+            float total = GetEffectiveEnemyKillReward(army) + killRewardRemainders[i];
             int coins = Mathf.FloorToInt(total);
             killRewardRemainders[i] = total - coins;
             AddCoins(army, coins, "baja");

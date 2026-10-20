@@ -94,7 +94,7 @@ public sealed class TowerShop : MonoBehaviour
         string action = "Desbloquear torre de ";
         return action + name +
                "\nDaño:  " + damage +
-               "\nCoste: " + GetNextCost(army) + " " + GetCoinIcon(army);
+               "\nCoste: " + GetNextCost(army) + " recursos";
     }
 
     public bool TryPurchase(ArmyType army) => TryPurchase(army, out _);
@@ -204,9 +204,6 @@ public sealed class TowerShop : MonoBehaviour
         failureReason = null;
         return true;
     }
-
-    private static string GetCoinIcon(ArmyType army) => army == ArmyType.Tierra ? "🟢" :
-        army == ArmyType.Aire ? "🔴" : "🔵";
 
     private static float GetBaseTowerCooldown(TowerConfig config, TriunviratoGame owner, ArmyType army)
     {

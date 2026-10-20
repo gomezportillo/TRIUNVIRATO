@@ -16,23 +16,15 @@ MonoBehaviour:
   rareSecondaryCostPercent: 0.5
   definitions:
   - id: economy_passive
-    displayName: Reserva eficiente
-    category: 0
-    effect: 0
-    valueType: 0
-    baseCost: 20
-    normalEffect: 25
-    rareEffect: 40
-  - id: economy_passive_fixed
     displayName: Caudal constante
     category: 0
     effect: 0
     valueType: 1
-    baseCost: 24
-    normalEffect: 0.5
-    rareEffect: 0.8
+    baseCost: 20
+    normalEffect: 1
+    rareEffect: 2
   - id: economy_kill
-    displayName: Recompensa por bajas
+    displayName: "Eficiencia b\xE9lica"
     category: 0
     effect: 1
     valueType: 1
@@ -40,15 +32,15 @@ MonoBehaviour:
     normalEffect: 1
     rareEffect: 2
   - id: economy_wave
-    displayName: "Bot\xEDn de oleada"
+    displayName: "Bot\xEDn de guerra"
     category: 0
     effect: 2
-    valueType: 0
+    valueType: 1
     baseCost: 20
-    normalEffect: 25
-    rareEffect: 40
+    normalEffect: 10
+    rareEffect: 15
   - id: tower_damage
-    displayName: Torres reforzadas
+    displayName: "Ca\xF1ones reforzados"
     category: 1
     effect: 3
     valueType: 0

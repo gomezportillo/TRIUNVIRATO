@@ -20,6 +20,8 @@ public sealed class SceneGameHUD : MonoBehaviour
     [SerializeField] private Text serverStatus;
     [SerializeField] private Text connectionAddress;
     [SerializeField] private Text roomStatus;
+    [Header("Lobby")]
+    [SerializeField] private GameObject lobbyOverlay;
     [Header("Fase de compras")]
     [SerializeField] private GameObject purchaseOverlay;
     [SerializeField] private Text purchaseTimer;
@@ -41,11 +43,18 @@ public sealed class SceneGameHUD : MonoBehaviour
 
     private void Refresh()
     {
+        bool showLobby = game == null || game.Status == TriunviratoGame.MatchStatus.WaitingForPlayers;
+        if (lobbyOverlay != null && lobbyOverlay.activeSelf != showLobby)
+            lobbyOverlay.SetActive(showLobby);
+
         if (economy != null)
         {
-            Set(airCoins, "🔴  " + economy.GetCoins(ArmyType.Aire) + "  ·  " + economy.GetPassiveIncomePerSecond(ArmyType.Aire).ToString("0.##") + "/s");
-            Set(earthCoins, "🟢  " + economy.GetCoins(ArmyType.Tierra) + "  ·  " + economy.GetPassiveIncomePerSecond(ArmyType.Tierra).ToString("0.##") + "/s");
-            Set(seaCoins, "🔵  " + economy.GetCoins(ArmyType.Mar) + "  ·  " + economy.GetPassiveIncomePerSecond(ArmyType.Mar).ToString("0.##") + "/s");
+            if (airCoins != null) airCoins.supportRichText = true;
+            if (earthCoins != null) earthCoins.supportRichText = true;
+            if (seaCoins != null) seaCoins.supportRichText = true;
+            Set(airCoins, "<color=#F87171>●</color>  " + economy.GetCoins(ArmyType.Aire));
+            Set(earthCoins, "<color=#4ADE80>●</color>  " + economy.GetCoins(ArmyType.Tierra));
+            Set(seaCoins, "<color=#60A5FA>●</color>  " + economy.GetCoins(ArmyType.Mar));
         }
 
         if (game != null)
@@ -85,7 +94,7 @@ public sealed class SceneGameHUD : MonoBehaviour
 
     private static void Set(Text target, string value)
     {
-        if (target != null && target.text != value)
-            target.text = value;
+        if (target == null) return;
+        if (target.text != value) target.text = value;
     }
 }

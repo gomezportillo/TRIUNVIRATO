@@ -90,6 +90,7 @@ public sealed class TriunviratoGame : MonoBehaviour
     public int StateRevision { get; private set; }
     public bool IsMatchInProgress => matchStatus == MatchStatus.InProgress;
     public int CurrentWave => wave;
+    public float CurrentWaveRewardMultiplier => currentWaveRewardMultiplier;
     public bool IsWaveInProgress => waveInProgress;
     public bool IsPurchasePhase => purchasePhase;
     public float PurchasePhaseSecondsRemaining => Mathf.Max(0f, purchasePhaseTimer);
@@ -571,12 +572,12 @@ public sealed class TriunviratoGame : MonoBehaviour
 
     private string BuildInsufficientPurchaseResources(int[] costs)
     {
-        string[] icons = { "🟢", "🔴", "🔵" };
+        string[] armyNames = { "Tierra", "Aire", "Mar" };
         List<string> missing = new List<string>();
         for (int i = 0; i < costs.Length; i++)
         {
             int balance = economy != null ? economy.GetCoins((ArmyType)i) : 0;
-            if (balance < costs[i]) missing.Add((costs[i] - balance) + " " + icons[i] + " más");
+            if (balance < costs[i]) missing.Add((costs[i] - balance) + " recursos de " + armyNames[i] + " más");
         }
         return "Recursos insuficientes: necesitas " + string.Join(" y ", missing) + ".";
     }
