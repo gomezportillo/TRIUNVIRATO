@@ -9,19 +9,9 @@ public sealed class TriunviratoGame : MonoBehaviour
     public enum MatchStatus { WaitingForPlayers, InProgress, Finished }
     private const float CastleStartHealth = 100f;
     public const float PurchasePhaseDuration = 20f;
-    public const float UpgradePriceGrowthPerWave = 0.10f;
-    public const int ResourceChoiceReward = 15;
-    private static readonly string[] IntermissionUpgradeIds = { "economy_boost", "tower_boost", "hero_boost" };
-    private static readonly string[] IntermissionUpgradeNames = { "Reserva eficiente", "Torres reforzadas", "Golpe heroico" };
-    private static readonly string[] IntermissionUpgradeDescriptions = {
-        "+25 % de ingreso pasivo para tu ejército.", "+20 % de daño para las torres de tu ejército.", "+20 % de daño para tu héroe." };
-    // Each row is an offer and columns follow ArmyType (green, red, blue).
-    private static readonly int[,] IntermissionUpgradeBaseCosts =
-    {
-        { 30, 0, 0 },
-        { 0, 35, 0 },
-        { 0, 0, 30 }
-    };
+    public const int ResourceChoiceReward = 20;
+    private const int NormalStars = 1;
+    private const int RareStars = 2;
     [SerializeField] private Transform tierraHero;
     [SerializeField] private Transform aireHero;
     [SerializeField] private Transform marHero;
@@ -33,7 +23,7 @@ public sealed class TriunviratoGame : MonoBehaviour
     [SerializeField] private Transform castleTarget;
     [SerializeField] private EnemyConfig enemyConfig;
     [SerializeField] private Font damageFont;
-    [SerializeField] private ArmyUpgradeManager upgrades;
+    [SerializeField] private IntermissionUpgradeCatalog intermissionCatalog;
     private readonly List<SkeletonEnemy> enemies = new List<SkeletonEnemy>();
     private readonly List<Projectile> projectiles = new List<Projectile>();
     private readonly List<FloatingDamage> floatingDamage = new List<FloatingDamage>();
@@ -57,10 +47,42 @@ public sealed class TriunviratoGame : MonoBehaviour
     private float purchasePhaseTimer;
     private readonly bool[] purchaseChoices = new bool[3];
     private readonly string[] purchaseResults = new string[3];
-    private readonly int[] economyUpgradeLevels = new int[3];
-    private readonly int[] towerUpgradeLevels = new int[3];
-    private readonly int[] heroUpgradeLevels = new int[3];
+    private readonly float[] economyUpgradeMultipliers = { 1f, 1f, 1f };
+    private readonly float[] towerUpgradeMultipliers = { 1f, 1f, 1f };
+    private readonly float[] heroUpgradeMultipliers = { 1f, 1f, 1f };
+    private readonly float[] economyKillRewardMultipliers = { 1f, 1f, 1f };
+    private readonly float[] economyKillRewardFixedBonus = new float[3];
+    private readonly float[] economyPassiveFixedBonus = new float[3];
+    private readonly float[] economyWaveRewardFixedBonus = new float[3];
+    private readonly float[] economyWaveRewardMultipliers = { 1f, 1f, 1f };
+    private readonly float[] towerSpeedMultipliers = { 1f, 1f, 1f };
+    private readonly float[] towerAttackRateFixedBonus = new float[3];
+    private readonly float[] towerRangeMultipliers = { 1f, 1f, 1f };
+    private readonly float[] towerRangeFixedBonus = new float[3];
+    private readonly float[] towerDamageFixedBonus = new float[3];
+    private readonly float[] heroSpeedMultipliers = { 1f, 1f, 1f };
+    private readonly float[] heroAttackRateFixedBonus = new float[3];
+    private readonly float[] heroRangeMultipliers = { 1f, 1f, 1f };
+    private readonly float[] heroRangeFixedBonus = new float[3];
+    private readonly float[] heroSplashMultipliers = { 1f, 1f, 1f };
+    private readonly float[] heroSplashFixedBonus = new float[3];
+    private readonly float[] heroDamageFixedBonus = new float[3];
+    private readonly PurchaseOffer[,] purchaseOffers = new PurchaseOffer[3, 3];
+    private bool waveHadBoss;
+    private bool purchaseOffersAreRare;
     private MatchStatus matchStatus = MatchStatus.WaitingForPlayers;
+
+    [Serializable]
+    public sealed class PurchaseOffer
+    {
+        public string id;
+        public string category;
+        public string name;
+        public string description;
+        public int stars;
+        public int[] resourceCosts;
+        public bool isTowerUnlock;
+    }
 
     public MatchStatus Status => matchStatus;
     public float CastleHealth => Mathf.Max(0f, castleHealth);
@@ -73,29 +95,12 @@ public sealed class TriunviratoGame : MonoBehaviour
     public float PurchasePhaseSecondsRemaining => Mathf.Max(0f, purchasePhaseTimer);
     public bool IsPurchaseChoiceMade(ArmyType army) => IsValidArmy(army) && purchaseChoices[(int)army];
     public string GetPurchaseResult(ArmyType army) => IsValidArmy(army) ? purchaseResults[(int)army] : string.Empty;
-    public int GetPurchasePrice(string id) {
-        int index = Array.IndexOf(IntermissionUpgradeIds, id);
-        if (index < 0) return 0;
-        int[] costs = GetPurchaseCosts(id);
-        return costs[0] + costs[1] + costs[2];
-    }
-    public int[] GetPurchaseCosts(string id)
+    public PurchaseOffer[] GetPurchaseOffers(ArmyType army)
     {
-        int index = Array.IndexOf(IntermissionUpgradeIds, id);
-        int[] costs = new int[3];
-        if (index < 0) return costs;
-        float waveMultiplier = Mathf.Pow(1f + UpgradePriceGrowthPerWave, Mathf.Max(0, wave - 1));
-        for (int currency = 0; currency < costs.Length; currency++)
-        {
-            int baseCost = IntermissionUpgradeBaseCosts[index, currency];
-            if (baseCost > 0)
-                costs[currency] = Mathf.Max(1, Mathf.RoundToInt(baseCost * waveMultiplier));
-        }
-        return costs;
+        int index = (int)army;
+        if (!IsValidArmy(army) || !purchasePhase) return Array.Empty<PurchaseOffer>();
+        return new[] { purchaseOffers[index, 0], purchaseOffers[index, 1], purchaseOffers[index, 2] };
     }
-    public string[] GetPurchaseUpgradeIds() => (string[])IntermissionUpgradeIds.Clone();
-    public string GetPurchaseUpgradeName(string id) { int i = Array.IndexOf(IntermissionUpgradeIds, id); return i < 0 ? string.Empty : IntermissionUpgradeNames[i]; }
-    public string GetPurchaseUpgradeDescription(string id) { int i = Array.IndexOf(IntermissionUpgradeIds, id); return i < 0 ? string.Empty : IntermissionUpgradeDescriptions[i]; }
     public bool CanCombatNow => CanCombat;
     public bool IsPaused => paused;
     public int EnemiesRemainingInWave => enemies.Count + remainingToSpawn;
@@ -135,6 +140,8 @@ public sealed class TriunviratoGame : MonoBehaviour
 
     private void Start()
     {
+        if (intermissionCatalog == null)
+            Debug.LogError("Asigna IntermissionUpgrades desde Assets/GameData/Upgrades en el Inspector.", this);
         if (tierraHero == null || aireHero == null || marHero == null ||
             tierraConfig == null || aireConfig == null || marConfig == null ||
             enemySpawner == null || castleTarget == null || enemyConfig == null ||
@@ -147,8 +154,6 @@ public sealed class TriunviratoGame : MonoBehaviour
         damageFont.RequestCharactersInTexture("-0123456789", 48, FontStyle.Normal);
         if (economy == null)
             economy = FindAnyObjectByType<ArmyEconomy>();
-        if (upgrades == null)
-            upgrades = FindAnyObjectByType<ArmyUpgradeManager>();
         ResetMatch(false);
     }
 
@@ -229,17 +234,31 @@ public sealed class TriunviratoGame : MonoBehaviour
         purchasePhaseTimer = 0f;
         Array.Clear(purchaseChoices, 0, purchaseChoices.Length);
         Array.Clear(purchaseResults, 0, purchaseResults.Length);
-        Array.Clear(economyUpgradeLevels, 0, economyUpgradeLevels.Length);
-        Array.Clear(towerUpgradeLevels, 0, towerUpgradeLevels.Length);
-        Array.Clear(heroUpgradeLevels, 0, heroUpgradeLevels.Length);
+        Array.Clear(economyKillRewardFixedBonus, 0, economyKillRewardFixedBonus.Length);
+        Array.Clear(economyPassiveFixedBonus, 0, economyPassiveFixedBonus.Length);
+        Array.Clear(economyWaveRewardFixedBonus, 0, economyWaveRewardFixedBonus.Length);
+        Array.Clear(towerDamageFixedBonus, 0, towerDamageFixedBonus.Length);
+        Array.Clear(towerAttackRateFixedBonus, 0, towerAttackRateFixedBonus.Length);
+        Array.Clear(towerRangeFixedBonus, 0, towerRangeFixedBonus.Length);
+        Array.Clear(heroDamageFixedBonus, 0, heroDamageFixedBonus.Length);
+        Array.Clear(heroAttackRateFixedBonus, 0, heroAttackRateFixedBonus.Length);
+        Array.Clear(heroRangeFixedBonus, 0, heroRangeFixedBonus.Length);
+        Array.Clear(heroSplashFixedBonus, 0, heroSplashFixedBonus.Length);
+        for (int i = 0; i < 3; i++)
+        {
+            economyUpgradeMultipliers[i] = towerUpgradeMultipliers[i] = heroUpgradeMultipliers[i] = 1f;
+            economyKillRewardMultipliers[i] = 1f;
+            economyWaveRewardMultipliers[i] = 1f;
+            towerSpeedMultipliers[i] = towerRangeMultipliers[i] = 1f;
+            heroSpeedMultipliers[i] = heroRangeMultipliers[i] = heroSplashMultipliers[i] = 1f;
+            for (int category = 0; category < 3; category++) purchaseOffers[i, category] = null;
+        }
+        waveHadBoss = false;
         if (economy != null)
             economy.ResetEconomy();
         TowerShop towerShop = FindAnyObjectByType<TowerShop>();
         if (towerShop != null)
             towerShop.ResetPurchasedTowers();
-        ArmyUpgradeManager upgrades = FindAnyObjectByType<ArmyUpgradeManager>();
-        if (upgrades != null)
-            upgrades.ResetRunLevels();
         if (defenders == null)
         {
             defenders = new[]
@@ -290,7 +309,7 @@ public sealed class TriunviratoGame : MonoBehaviour
                 {
                     SpawnEnemy(wave % 3 == 0 && remainingToSpawn == 1);
                     remainingToSpawn--;
-                    spawnTimer = 0.85f;
+                    spawnTimer = 1f;
                 }
             }
             else if (enemies.Count == 0)
@@ -342,7 +361,74 @@ public sealed class TriunviratoGame : MonoBehaviour
         lastPurchaseTimerSecond = Mathf.CeilToInt(PurchasePhaseDuration);
         Array.Clear(purchaseChoices, 0, purchaseChoices.Length);
         Array.Clear(purchaseResults, 0, purchaseResults.Length);
+        purchaseOffersAreRare = waveHadBoss;
+        GeneratePurchaseOffers();
         StateRevision++;
+    }
+
+    private void GeneratePurchaseOffers()
+    {
+        if (intermissionCatalog == null) return;
+        TowerShop towerShop = FindAnyObjectByType<TowerShop>();
+        for (int armyIndex = 0; armyIndex < 3; armyIndex++)
+        {
+            ArmyType army = (ArmyType)armyIndex;
+            purchaseOffers[armyIndex, 0] = GenerateOffer(army, IntermissionUpgradeCategory.Economy, towerShop);
+            purchaseOffers[armyIndex, 1] = towerShop != null && !towerShop.HasTower(army)
+                ? CreateTowerUnlockOffer(army, towerShop)
+                : towerShop != null ? GenerateOffer(army, IntermissionUpgradeCategory.Towers, towerShop) : null;
+            purchaseOffers[armyIndex, 2] = GenerateOffer(army, IntermissionUpgradeCategory.Hero, towerShop);
+        }
+    }
+
+    private PurchaseOffer GenerateOffer(ArmyType army, IntermissionUpgradeCategory category, TowerShop towerShop)
+    {
+        List<IntermissionUpgradeCatalog.Definition> valid = new List<IntermissionUpgradeCatalog.Definition>();
+        int stars = purchaseOffersAreRare ? RareStars : NormalStars;
+        foreach (IntermissionUpgradeCatalog.Definition definition in intermissionCatalog.Definitions)
+        {
+            if (definition == null || definition.category != category || !IsOfferStillApplicable(army, definition)) continue;
+            valid.Add(definition);
+        }
+        if (valid.Count == 0) return null;
+        IntermissionUpgradeCatalog.Definition chosen = valid[UnityEngine.Random.Range(0, valid.Count)];
+        int baseCost = chosen.baseCost;
+        return MakeOffer(chosen.id, category, chosen.displayName,
+            IntermissionUpgradeCatalog.FormatDescription(chosen, stars), baseCost, false);
+    }
+
+    private PurchaseOffer CreateTowerUnlockOffer(ArmyType army, TowerShop towerShop)
+    {
+        TowerConfig config = towerShop != null ? towerShop.GetConfig(army) : null;
+        if (config == null || config.Army != army || config.Hero == null) return null;
+        int normalTowerUpgradeCost = int.MaxValue;
+        foreach (IntermissionUpgradeCatalog.Definition definition in intermissionCatalog.Definitions)
+            if (definition != null && definition.category == IntermissionUpgradeCategory.Towers)
+                normalTowerUpgradeCost = Mathf.Min(normalTowerUpgradeCost, definition.baseCost);
+        if (config.PurchaseCost <= normalTowerUpgradeCost) return null;
+        string name = "Desbloquear torre de " + config.DisplayName;
+        string description = "Compra y activa esta torre para defender tu ejército.";
+        return MakeOffer("tower_unlock_" + army.ToString().ToLowerInvariant(),
+            IntermissionUpgradeCategory.Towers, name, description, config.PurchaseCost, true);
+    }
+
+    private PurchaseOffer MakeOffer(string id, IntermissionUpgradeCategory category, string name,
+        string description, int baseCost, bool isTowerUnlock)
+    {
+        int primary = (int)category;
+        int scaled = Mathf.Max(1, Mathf.RoundToInt(baseCost * Mathf.Pow(1f + intermissionCatalog.PriceGrowthPerWave,
+            Mathf.Max(0, wave - 1))));
+        int[] costs = new int[3];
+        costs[primary] = scaled;
+        if (purchaseOffersAreRare)
+        {
+            int secondary = UnityEngine.Random.Range(0, 2);
+            if (secondary >= primary) secondary++;
+            costs[secondary] = Mathf.Max(1, Mathf.RoundToInt(scaled * intermissionCatalog.RareSecondaryCostPercent));
+        }
+        return new PurchaseOffer { id = id, category = category.ToString().ToLowerInvariant(), name = name,
+            description = description, stars = purchaseOffersAreRare ? RareStars : NormalStars,
+            resourceCosts = costs, isTowerUnlock = isTowerUnlock };
     }
 
     private void FinishPurchasePhase()
@@ -368,24 +454,120 @@ public sealed class TriunviratoGame : MonoBehaviour
             message = purchaseResults[armyIndex];
             return true;
         }
-        int optionIndex = Array.IndexOf(IntermissionUpgradeIds, id);
-        if (optionIndex < 0) { message = "Mejora desconocida para esta fase."; return false; }
-        int[] costs = GetPurchaseCosts(id);
+        PurchaseOffer offer = FindGeneratedOffer(army, id);
+        if (offer == null) { message = "Oferta desconocida para esta fase."; return false; }
+        TowerShop towerShop = FindAnyObjectByType<TowerShop>();
+        if (offer.isTowerUnlock && towerShop == null)
+        {
+            message = "La tienda de torres no está disponible.";
+            return false;
+        }
+        if (offer.isTowerUnlock && towerShop.HasTower(army))
+        {
+            message = "La torre ya está desbloqueada.";
+            return false;
+        }
+        if (offer.isTowerUnlock && !towerShop.CanUnlockForIntermission(army, out message))
+        {
+            return false;
+        }
+        IntermissionUpgradeCatalog.Definition definition = offer.isTowerUnlock ? null : intermissionCatalog.Find(id);
+        if (!offer.isTowerUnlock && (definition == null || !IsOfferStillApplicable(army, definition)))
+        {
+            message = "La mejora ya no está disponible.";
+            return false;
+        }
+        int[] costs = offer.resourceCosts;
         if (!economy.TrySpendIntermissionResources(costs[0], costs[1], costs[2]))
         {
             message = BuildInsufficientPurchaseResources(costs);
             return false;
         }
-        if (optionIndex == 0) economyUpgradeLevels[armyIndex]++;
-        else if (optionIndex == 1) { towerUpgradeLevels[armyIndex]++; FindAnyObjectByType<TowerShop>()?.RefreshArmyIntermissionUpgrade(army); }
-        else heroUpgradeLevels[armyIndex]++;
+        if (offer.isTowerUnlock)
+        {
+            if (!towerShop.UnlockForIntermission(army, out message)) return false;
+        }
+        else
+        {
+            ApplyIntermissionEffect(army, definition, IntermissionUpgradeCatalog.GetOfferEffect(definition, offer.stars));
+        }
         purchaseChoices[armyIndex] = true;
-        purchaseResults[armyIndex] = IntermissionUpgradeNames[optionIndex];
+        purchaseResults[armyIndex] = offer.name + (offer.stars == RareStars ? " ⭐⭐" : " ⭐");
         StateRevision++;
-        message = "Comprada: " + IntermissionUpgradeNames[optionIndex] + ".";
+        message = "Comprada: " + offer.name + ".";
         FinishIfAllChosen();
         return true;
     }
+
+    private PurchaseOffer FindGeneratedOffer(ArmyType army, string id)
+    {
+        int index = (int)army;
+        if (!IsValidArmy(army) || string.IsNullOrEmpty(id)) return null;
+        for (int slot = 0; slot < 3; slot++)
+            if (purchaseOffers[index, slot] != null && purchaseOffers[index, slot].id == id) return purchaseOffers[index, slot];
+        return null;
+    }
+
+    private void ApplyIntermissionEffect(ArmyType army, IntermissionUpgradeCatalog.Definition definition, float effect)
+    {
+        int index = (int)army;
+        bool percentage = definition.valueType == IntermissionUpgradeValueType.Percentage;
+        float multiplier = percentage ? 1f + effect / 100f : 1f;
+        switch (definition.effect)
+        {
+            case IntermissionUpgradeEffect.PassiveIncome: if (percentage) economyUpgradeMultipliers[index] *= multiplier; else economyPassiveFixedBonus[index] += effect; break;
+            case IntermissionUpgradeEffect.KillReward: if (percentage) economyKillRewardMultipliers[index] *= multiplier; else economyKillRewardFixedBonus[index] += effect; break;
+            case IntermissionUpgradeEffect.WaveReward: if (percentage) economyWaveRewardMultipliers[index] *= multiplier; else economyWaveRewardFixedBonus[index] += effect; break;
+            case IntermissionUpgradeEffect.TowerDamage: if (percentage) towerUpgradeMultipliers[index] *= multiplier; else towerDamageFixedBonus[index] += effect; break;
+            case IntermissionUpgradeEffect.TowerAttackSpeed: if (percentage) towerSpeedMultipliers[index] *= multiplier; else towerAttackRateFixedBonus[index] += effect; break;
+            case IntermissionUpgradeEffect.TowerRange: if (percentage) towerRangeMultipliers[index] *= multiplier; else towerRangeFixedBonus[index] += effect; break;
+            case IntermissionUpgradeEffect.HeroDamage: if (percentage) heroUpgradeMultipliers[index] *= multiplier; else heroDamageFixedBonus[index] += effect; break;
+            case IntermissionUpgradeEffect.HeroAttackSpeed: if (percentage) heroSpeedMultipliers[index] *= multiplier; else heroAttackRateFixedBonus[index] += effect; break;
+            case IntermissionUpgradeEffect.HeroRange: if (percentage) heroRangeMultipliers[index] *= multiplier; else heroRangeFixedBonus[index] += effect; break;
+            case IntermissionUpgradeEffect.HeroSplash: if (percentage) heroSplashMultipliers[index] *= multiplier; else heroSplashFixedBonus[index] += effect; break;
+        }
+        if (definition.category == IntermissionUpgradeCategory.Towers)
+            FindAnyObjectByType<TowerShop>()?.RefreshArmyIntermissionUpgrade(army);
+    }
+
+    private bool IsOfferStillApplicable(ArmyType army, IntermissionUpgradeCatalog.Definition definition)
+    {
+        if (definition.category == IntermissionUpgradeCategory.Towers)
+        {
+            TowerShop shop = FindAnyObjectByType<TowerShop>();
+            TowerConfig tower = shop != null ? shop.GetConfig(army) : null;
+            if (shop == null || !shop.HasTower(army) || tower == null || tower.Hero == null)
+                return false;
+            if (definition.effect == IntermissionUpgradeEffect.TowerRange) return tower.Hero.Range > 0f;
+            if (definition.effect == IntermissionUpgradeEffect.TowerAttackSpeed) return tower.Hero.AttackCooldown > 0f;
+            return true;
+        }
+        HeroConfig hero = GetHeroConfig(army);
+        if (hero == null) return false;
+        if (definition.effect == IntermissionUpgradeEffect.HeroSplash) return hero.SplashRadius > 0f;
+        if (definition.effect == IntermissionUpgradeEffect.HeroRange) return hero.Range > 0f;
+        if (definition.effect == IntermissionUpgradeEffect.HeroAttackSpeed) return hero.AttackCooldown > 0f;
+        return true;
+    }
+
+    public float GetIntermissionKillRewardMultiplier(ArmyType army) => IsValidArmy(army) ? economyKillRewardMultipliers[(int)army] : 1f;
+    public float GetIntermissionKillRewardFixedBonus(ArmyType army) => IsValidArmy(army) ? economyKillRewardFixedBonus[(int)army] : 0f;
+    public float GetIntermissionWaveRewardMultiplier(ArmyType army) => IsValidArmy(army) ? economyWaveRewardMultipliers[(int)army] : 1f;
+    public float GetTowerAttackSpeedMultiplier(ArmyType army) => IsValidArmy(army) ? towerSpeedMultipliers[(int)army] : 1f;
+    public float GetTowerRangeMultiplier(ArmyType army) => IsValidArmy(army) ? towerRangeMultipliers[(int)army] : 1f;
+    public float GetTowerAttackRateFixedBonus(ArmyType army) => IsValidArmy(army) ? towerAttackRateFixedBonus[(int)army] : 0f;
+    public float GetTowerRangeFixedBonus(ArmyType army) => IsValidArmy(army) ? towerRangeFixedBonus[(int)army] : 0f;
+    public float GetHeroAttackSpeedMultiplier(ArmyType army) => IsValidArmy(army) ? heroSpeedMultipliers[(int)army] : 1f;
+    public float GetHeroRangeMultiplier(ArmyType army) => IsValidArmy(army) ? heroRangeMultipliers[(int)army] : 1f;
+    public float GetHeroSplashMultiplier(ArmyType army) => IsValidArmy(army) ? heroSplashMultipliers[(int)army] : 1f;
+    public float GetHeroAttackRateFixedBonus(ArmyType army) => IsValidArmy(army) ? heroAttackRateFixedBonus[(int)army] : 0f;
+    public float GetHeroRangeFixedBonus(ArmyType army) => IsValidArmy(army) ? heroRangeFixedBonus[(int)army] : 0f;
+    public float GetHeroSplashFixedBonus(ArmyType army) => IsValidArmy(army) ? heroSplashFixedBonus[(int)army] : 0f;
+    public float GetTowerDamage(ArmyType army, float baseDamage) => baseDamage * GetTowerIntermissionMultiplier(army) + GetTowerDamageFixedBonus(army);
+    public float GetTowerDamageFixedBonus(ArmyType army) => IsValidArmy(army) ? towerDamageFixedBonus[(int)army] : 0f;
+    public float GetHeroDamageFixedBonus(ArmyType army) => IsValidArmy(army) ? heroDamageFixedBonus[(int)army] : 0f;
+    public float GetEconomyPassiveFixedBonus(ArmyType army) => IsValidArmy(army) ? economyPassiveFixedBonus[(int)army] : 0f;
+    public float GetEconomyWaveRewardFixedBonus(ArmyType army) => IsValidArmy(army) ? economyWaveRewardFixedBonus[(int)army] : 0f;
 
     private string BuildInsufficientPurchaseResources(int[] costs)
     {
@@ -415,13 +597,14 @@ public sealed class TriunviratoGame : MonoBehaviour
         FinishPurchasePhase();
     }
 
-    public float GetEconomyIntermissionMultiplier(ArmyType army) => IsValidArmy(army) ? Mathf.Pow(1.25f, economyUpgradeLevels[(int)army]) : 1f;
-    public float GetTowerIntermissionMultiplier(ArmyType army) => IsValidArmy(army) ? Mathf.Pow(1.2f, towerUpgradeLevels[(int)army]) : 1f;
-    public float GetHeroIntermissionMultiplier(ArmyType army) => IsValidArmy(army) ? Mathf.Pow(1.2f, heroUpgradeLevels[(int)army]) : 1f;
+    public float GetEconomyIntermissionMultiplier(ArmyType army) => IsValidArmy(army) ? economyUpgradeMultipliers[(int)army] : 1f;
+    public float GetTowerIntermissionMultiplier(ArmyType army) => IsValidArmy(army) ? towerUpgradeMultipliers[(int)army] : 1f;
+    public float GetHeroIntermissionMultiplier(ArmyType army) => IsValidArmy(army) ? heroUpgradeMultipliers[(int)army] : 1f;
 
     private void StartNextWave()
     {
         wave++;
+        waveHadBoss = false;
         remainingToSpawn = 4 + wave * 2;
         waveInProgress = true;
         spawnTimer = 0f;
@@ -479,15 +662,11 @@ public sealed class TriunviratoGame : MonoBehaviour
         }
     }
 
-    public int GetHeroUpgradeLevel(ArmyType army) =>
-        IsValidArmy(army) && upgrades != null ? upgrades.GetLevel(army, ArmyUpgradeKind.Hero) : 0;
-
     public float GetHeroDamage(ArmyType army)
     {
         HeroConfig config = GetHeroConfig(army);
         return config != null
-            ? config.GetDamageAtUpgradeLevel(GetHeroUpgradeLevel(army)) *
-              (upgrades != null ? upgrades.GetTeamHeroDamageMultiplier() : 1f) * GetHeroIntermissionMultiplier(army)
+            ? config.Damage * GetHeroIntermissionMultiplier(army) + GetHeroDamageFixedBonus(army)
             : 0f;
     }
 
@@ -495,32 +674,36 @@ public sealed class TriunviratoGame : MonoBehaviour
     {
         HeroConfig config = GetHeroConfig(army);
         if (config == null) return 0f;
-        float multiplier = army == ArmyType.Mar && upgrades != null
-            ? upgrades.GetSpecialMultiplier("earth_mar_attack_speed") : 1f;
-        return config.AttackCooldown / Mathf.Max(0.01f, multiplier);
+        float attacksPerSecond = (config.AttackCooldown > 0f ? 1f / config.AttackCooldown : 0f) * GetHeroAttackSpeedMultiplier(army) + GetHeroAttackRateFixedBonus(army);
+        return attacksPerSecond > 0f ? 1f / attacksPerSecond : config.AttackCooldown;
     }
 
     public float GetHeroRange(ArmyType army)
     {
         HeroConfig config = GetHeroConfig(army);
         if (config == null) return 0f;
-        float multiplier = army == ArmyType.Mar && upgrades != null
-            ? upgrades.GetSpecialMultiplier("mar_range") : 1f;
-        return config.Range * multiplier;
+        return config.Range * GetHeroRangeMultiplier(army) + GetHeroRangeFixedBonus(army);
     }
 
     public float GetHeroSplashRadius(ArmyType army)
     {
         HeroConfig config = GetHeroConfig(army);
         if (config == null) return 0f;
-        float multiplier = army == ArmyType.Aire && upgrades != null
-            ? upgrades.GetSpecialMultiplier("air_area") : 1f;
-        return config.SplashRadius * multiplier;
+        return config.SplashRadius * GetHeroSplashMultiplier(army) + GetHeroSplashFixedBonus(army);
     }
 
     private void SpawnEnemy(bool isBoss)
     {
-        SkeletonEnemy enemy = Instantiate(enemyConfig.Prefab, enemySpawner.position, Quaternion.identity);
+        if (isBoss) waveHadBoss = true;
+        float randomY = UnityEngine.Random.Range(-0.25f, 0.25f);
+        Vector3 spawnPosition = enemySpawner.position + Vector3.up * randomY;
+
+        SkeletonEnemy enemy = Instantiate(
+            enemyConfig.Prefab,
+            spawnPosition,
+            Quaternion.identity
+        );
+
         enemy.name = isBoss ? "Skeleton Boss" : "Skeleton";
         enemy.transform.localScale = Vector3.one * (isBoss ? enemyConfig.BossScale : enemyConfig.NormalScale);
         enemy.Initialize(enemyConfig, this, wave, isBoss);
@@ -838,8 +1021,6 @@ public sealed class TriunviratoGame : MonoBehaviour
         float actualDamage = Mathf.Min(castleHealth, amount);
         castleHealth = Mathf.Max(0f, castleHealth - actualDamage);
         StateRevision++;
-        if (economy != null)
-            economy.RewardCastleDamaged(actualDamage);
         if (castleHealth <= 0f)
             EndMatch(false);
     }
@@ -852,12 +1033,12 @@ public sealed class TriunviratoGame : MonoBehaviour
         ResetMatch(true);
     }
 
-    internal void ConfigureTower(DefenseTower tower, TowerConfig config, int individualLevel, int armyLevel)
+    internal void ConfigureTower(DefenseTower tower, TowerConfig config)
     {
         if (tower == null || config == null || config.Hero == null)
             return;
 
-        tower.Configure(this, config, individualLevel, armyLevel);
+        tower.Configure(this, config);
     }
 
     internal bool TryTowerAttack(DefenseTower tower)

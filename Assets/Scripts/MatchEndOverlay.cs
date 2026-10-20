@@ -25,11 +25,12 @@ public sealed class MatchEndOverlay : MonoBehaviour
     private void Update()
     {
         bool shouldShow = game != null && game.Status == TriunviratoGame.MatchStatus.Finished;
+
         if (shouldShow == isShowing)
             return;
 
-        if (shouldShow && message != null)
-            message.text = game.CastleHealth <= 0f ? "PARTIDA TERMINADA\nEl castillo ha caído" : "PARTIDA TERMINADA";
+        // if (shouldShow && message != null)
+        //    message.text = game.CastleHealth <= 0f ? "PARTIDA TERMINADA\nEl castillo ha caído" : "PARTIDA TERMINADA";
 
         SetVisible(shouldShow);
     }

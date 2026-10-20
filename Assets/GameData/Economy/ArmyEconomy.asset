@@ -29,7 +29,7 @@ MonoBehaviour:
     bossRewardIncreasePerLevel: 0
   - army: 1
     initialBalance: 0
-    passiveIncomePerSecond: 0.25
+    passiveIncomePerSecond: 0
     rewardPerEnemyKill: 1
     rewardPerWaveCompleted: 0
     additionalRewardPerBossDefeated: 0
@@ -45,7 +45,7 @@ MonoBehaviour:
     initialBalance: 0
     passiveIncomePerSecond: 0
     rewardPerEnemyKill: 0
-    rewardPerWaveCompleted: 10
+    rewardPerWaveCompleted: 20
     additionalRewardPerBossDefeated: 10
     incomeUpgradeBaseCost: 20
     incomeUpgradeCostGrowthRate: 0.2

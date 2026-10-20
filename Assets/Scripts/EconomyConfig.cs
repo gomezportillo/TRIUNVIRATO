@@ -15,15 +15,6 @@ public sealed class EconomyConfig : ScriptableObject
         [Min(0)] public int rewardPerEnemyKill;
         [Min(0)] public int rewardPerWaveCompleted;
         [Min(0)] public int additionalRewardPerBossDefeated;
-        [Header("Mejora de ingresos")]
-        [Min(0)] public int incomeUpgradeBaseCost;
-        [Min(0f)] public float incomeUpgradeCostGrowthRate = 0.1f;
-        [Min(1)] public int minimumIncomeUpgradeCostIncrease = 1;
-        [Min(0)] public int incomeUpgradeMaximumLevel = 5;
-        [Min(0f)] public float passiveIncomeIncreasePerLevel;
-        [Min(0)] public int enemyKillRewardIncreasePerLevel;
-        [Min(0)] public int waveRewardIncreasePerLevel;
-        [Min(0)] public int bossRewardIncreasePerLevel;
 #pragma warning restore 0649
     }
 
@@ -34,19 +25,6 @@ public sealed class EconomyConfig : ScriptableObject
     public int GetEnemyKillReward(ArmyType army) => GetSettings(army)?.rewardPerEnemyKill ?? 0;
     public int GetWaveReward(ArmyType army) => GetSettings(army)?.rewardPerWaveCompleted ?? 0;
     public int GetBossReward(ArmyType army) => GetSettings(army)?.additionalRewardPerBossDefeated ?? 0;
-    public int GetIncomeUpgradeBaseCost(ArmyType army) => GetSettings(army)?.incomeUpgradeBaseCost ?? 0;
-    public float GetIncomeUpgradeCostGrowthRate(ArmyType army) => GetSettings(army)?.incomeUpgradeCostGrowthRate ?? 0.1f;
-    public int GetMinimumIncomeUpgradeCostIncrease(ArmyType army) => GetSettings(army)?.minimumIncomeUpgradeCostIncrease ?? 1;
-    public int GetIncomeUpgradeMaximumLevel(ArmyType army) => GetSettings(army)?.incomeUpgradeMaximumLevel ?? 0;
-    public float GetPassiveIncomeIncreasePerLevel(ArmyType army) => GetSettings(army)?.passiveIncomeIncreasePerLevel ?? 0f;
-    public int GetEnemyKillRewardIncreasePerLevel(ArmyType army) => GetSettings(army)?.enemyKillRewardIncreasePerLevel ?? 0;
-    public int GetWaveRewardIncreasePerLevel(ArmyType army) => GetSettings(army)?.waveRewardIncreasePerLevel ?? 0;
-    public int GetBossRewardIncreasePerLevel(ArmyType army) => GetSettings(army)?.bossRewardIncreasePerLevel ?? 0;
-
-    public int GetIncomeUpgradeCost(ArmyType army, int currentLevel) =>
-        UpgradePrice.GetCost(GetIncomeUpgradeBaseCost(army), GetIncomeUpgradeCostGrowthRate(army),
-            GetMinimumIncomeUpgradeCostIncrease(army), currentLevel);
-
     private ArmySettings GetSettings(ArmyType army)
     {
         if (armies == null)

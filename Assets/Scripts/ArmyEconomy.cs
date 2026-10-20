@@ -5,48 +5,42 @@ public sealed class ArmyEconomy : MonoBehaviour
 {
     [SerializeField] private TriunviratoGame game;
     [SerializeField] private EconomyConfig config;
-    [SerializeField] private ArmyUpgradeManager upgrades;
 
     private readonly int[] balances = new int[3];
     private readonly float[] generationRemainders = new float[3];
-    private float airMarShareRemainder;
-    private float castleDamageRewardRemainder;
+    private readonly float[] killRewardRemainders = new float[3];
+    private float waveRewardRemainder;
 
     public int StateRevision { get; private set; }
 
     public float GetPassiveIncomePerSecond(ArmyType army)
     {
         if (!IsValidArmy(army) || config == null) return 0f;
-        float rate = config.GetPassiveIncomePerSecond(army) *
-                     (1f + config.GetPassiveIncomeIncreasePerLevel(army) * GetIncomeUpgradeLevel(army));
-        if (army == ArmyType.Aire && upgrades != null && upgrades.GetLevel(ArmyType.Tierra, "earth_air_passive_double") > 0)
-            rate *= 2f;
-        if (army == ArmyType.Mar && upgrades != null)
-            rate += upgrades.GetSpecialEffectLevel("earth_mar_passive_unlock");
-        return rate * (game != null ? game.GetEconomyIntermissionMultiplier(army) : 1f);
+        return config.GetPassiveIncomePerSecond(army) *
+               (game != null ? game.GetEconomyIntermissionMultiplier(army) : 1f) +
+               (game != null ? game.GetEconomyPassiveFixedBonus(army) : 0f);
     }
 
-    public int GetIncomeUpgradeLevel(ArmyType army) =>
-        IsValidArmy(army) && upgrades != null ? upgrades.GetLevel(army, ArmyUpgradeKind.Income) : 0;
-
-    public int GetEnemyKillReward(ArmyType army) =>
-        config != null ? config.GetEnemyKillReward(army) +
-                         config.GetEnemyKillRewardIncreasePerLevel(army) * GetIncomeUpgradeLevel(army) : 0;
+    public int GetEnemyKillReward(ArmyType army)
+    {
+        if (config == null) return 0;
+        float baseReward = army == ArmyType.Aire ? config.GetEnemyKillReward(army) : 0f;
+        float multiplier = game != null ? game.GetIntermissionKillRewardMultiplier(army) : 1f;
+        float fixedBonus = game != null ? game.GetIntermissionKillRewardFixedBonus(army) : 0f;
+        return Mathf.FloorToInt(baseReward * multiplier + fixedBonus);
+    }
 
     public int GetWaveReward(ArmyType army) =>
-        config != null ? config.GetWaveReward(army) +
-                         config.GetWaveRewardIncreasePerLevel(army) * GetIncomeUpgradeLevel(army) : 0;
+        config != null ? config.GetWaveReward(army) : 0;
 
     public int GetBossReward(ArmyType army) =>
-        config != null ? config.GetBossReward(army) +
-                         config.GetBossRewardIncreasePerLevel(army) * GetIncomeUpgradeLevel(army) : 0;
+        config != null ? config.GetBossReward(army) : 0;
 
     public EconomyConfig Config => config;
 
     private void Awake()
     {
         if (game == null) game = FindAnyObjectByType<TriunviratoGame>();
-        if (upgrades == null) upgrades = FindAnyObjectByType<ArmyUpgradeManager>();
     }
 
     private void Update()
@@ -151,7 +145,17 @@ public sealed class ArmyEconomy : MonoBehaviour
         if (config == null)
             return;
 
-        AddCoins(ArmyType.Aire, GetEnemyKillReward(ArmyType.Aire), "baja");
+        for (int i = 0; i < balances.Length; i++)
+        {
+            ArmyType army = (ArmyType)i;
+            float baseReward = army == ArmyType.Aire ? config.GetEnemyKillReward(army) : 0f;
+            float multiplier = game != null ? game.GetIntermissionKillRewardMultiplier(army) : 1f;
+            float fixedBonus = game != null ? game.GetIntermissionKillRewardFixedBonus(army) : 0f;
+            float total = baseReward * multiplier + fixedBonus + killRewardRemainders[i];
+            int coins = Mathf.FloorToInt(total);
+            killRewardRemainders[i] = total - coins;
+            AddCoins(army, coins, "baja");
+        }
         if (isBoss)
             AddCoins(ArmyType.Mar, GetBossReward(ArmyType.Mar), "jefe derrotado");
     }
@@ -164,21 +168,15 @@ public sealed class ArmyEconomy : MonoBehaviour
     public void RewardWaveCompleted(float marRewardMultiplier)
     {
         if (config != null)
-            AddCoins(ArmyType.Mar, Mathf.CeilToInt(GetWaveReward(ArmyType.Mar) * Mathf.Max(1f, marRewardMultiplier)),
+        {
+            float reward = GetWaveReward(ArmyType.Mar) *
+                           (game != null ? game.GetIntermissionWaveRewardMultiplier(ArmyType.Mar) : 1f) * Mathf.Max(1f, marRewardMultiplier) +
+                           (game != null ? game.GetEconomyWaveRewardFixedBonus(ArmyType.Mar) : 0f) + waveRewardRemainder;
+            int wholeReward = Mathf.CeilToInt(reward);
+            waveRewardRemainder = reward - wholeReward;
+            AddCoins(ArmyType.Mar, wholeReward,
                 marRewardMultiplier > 1f ? "oleada completada con llamada anticipada" : "oleada completada");
-    }
-
-    public void RewardCastleDamaged(float actualDamage)
-    {
-        float coinsPerDamage = upgrades != null ? upgrades.GetSpecialEffectLevel("mar_castle_damage_income") : 0f;
-        if (actualDamage <= 0f || coinsPerDamage <= 0f)
-            return;
-
-        castleDamageRewardRemainder += actualDamage * coinsPerDamage;
-        int coins = Mathf.FloorToInt(castleDamageRewardRemainder);
-        if (coins <= 0) return;
-        castleDamageRewardRemainder -= coins;
-        AddCoins(ArmyType.Mar, coins, "daño real recibido por el castillo");
+        }
     }
 
     private void AddCoins(ArmyType army, int amount, string reason)
@@ -191,23 +189,6 @@ public sealed class ArmyEconomy : MonoBehaviour
         StateRevision++;
         Debug.Log("Economía " + army + ": +" + amount + " moneda(s) por " + reason + ". Saldo: " + balances[index] + ".", this);
 
-        if (army == ArmyType.Mar && upgrades != null)
-        {
-            float redCoinsPerBlue = upgrades.GetSpecialEffectLevel("air_mar_income_share");
-            if (redCoinsPerBlue > 0f)
-            {
-                airMarShareRemainder += amount * redCoinsPerBlue;
-                int redCoins = Mathf.FloorToInt(airMarShareRemainder);
-                if (redCoins > 0)
-                {
-                    airMarShareRemainder -= redCoins;
-                    balances[(int)ArmyType.Aire] += redCoins;
-                    StateRevision++;
-                    Debug.Log("Economía Aire: +" + redCoins + " moneda(s) por sinergia con Mar. Saldo: " +
-                              balances[(int)ArmyType.Aire] + ".", this);
-                }
-            }
-        }
     }
 
     public void ResetEconomy()
@@ -217,9 +198,9 @@ public sealed class ArmyEconomy : MonoBehaviour
             ArmyType army = (ArmyType)i;
             balances[i] = config != null ? config.GetInitialBalance(army) : 0;
             generationRemainders[i] = 0f;
+            killRewardRemainders[i] = 0f;
         }
-        airMarShareRemainder = 0f;
-        castleDamageRewardRemainder = 0f;
+        waveRewardRemainder = 0f;
         StateRevision++;
     }
 

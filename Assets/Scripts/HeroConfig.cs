@@ -15,12 +15,6 @@ public sealed class HeroConfig : ScriptableObject
     [SerializeField, Min(0.01f)] private float projectileSpeed = 10f;
     [SerializeField, Min(0.01f)] private float projectileLifetime = 1.5f;
     [SerializeField, Min(0f)] private float projectileDelay = 0.5f;
-    [Header("Mejora del héroe")]
-    [SerializeField, Min(0)] private int heroUpgradeBaseCost = 15;
-    [SerializeField, Min(0f)] private float heroUpgradeCostGrowthRate = 0.1f;
-    [SerializeField, Min(1)] private int minimumHeroUpgradeCostIncrease = 1;
-    [SerializeField, Min(0f)] private float heroDamageIncreasePerLevel = 0.15f;
-    [SerializeField, Min(0)] private int heroUpgradeMaximumLevel = 5;
 
     public string Id => id;
     public string DisplayName => displayName;
@@ -33,14 +27,4 @@ public sealed class HeroConfig : ScriptableObject
     public float ProjectileSpeed => projectileSpeed;
     public float ProjectileLifetime => projectileLifetime;
     public float ProjectileDelay => projectileDelay;
-    public int HeroUpgradeBaseCost => heroUpgradeBaseCost;
-    public float HeroUpgradeCostGrowthRate => heroUpgradeCostGrowthRate;
-    public float HeroDamageIncreasePerLevel => heroDamageIncreasePerLevel;
-    public int HeroUpgradeMaximumLevel => heroUpgradeMaximumLevel;
-
-    public float GetDamageAtUpgradeLevel(int level) =>
-        damage * Mathf.Pow(1f + heroDamageIncreasePerLevel, Mathf.Clamp(level, 0, heroUpgradeMaximumLevel));
-
-    public int GetHeroUpgradeCost(int currentLevel) =>
-        UpgradePrice.GetCost(heroUpgradeBaseCost, heroUpgradeCostGrowthRate, minimumHeroUpgradeCostIncrease, currentLevel);
 }

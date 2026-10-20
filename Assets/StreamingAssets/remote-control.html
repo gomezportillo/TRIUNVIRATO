@@ -184,41 +184,6 @@
         });
         developerButton.disabled = !connected || !sessionReady || state.status !== 'WaitingForPlayers' || !state.developerAvailable || developerMode;
       }
-      function makeUpgradeCard(army, option) {
-        const card = document.createElement('article'); card.className = 'upgrade';
-        const top = document.createElement('div'); top.className = 'upgrade-top';
-        const title = document.createElement('h3'); title.textContent = option.name;
-        const level = document.createElement('span'); level.className = 'level';
-        level.textContent = `Nv. ${option.level}/${option.maximumLevel}`; top.append(title, level);
-        const status = document.createElement('span'); status.className = 'status-pill'; status.dataset.state = option.status || '';
-        status.textContent = option.status === 'max' ? 'Nivel máximo' : option.status === 'locked' ? 'Bloqueada' :
-          option.status === 'waiting' ? 'En espera' : option.status === 'insufficient' ? 'Faltan recursos' :
-          option.level > 0 ? 'Comprada · disponible' : 'Disponible';
-        const description = document.createElement('p'); description.className = 'description'; description.textContent = option.description || '';
-        const current = document.createElement('p'); current.className = 'effect'; current.innerHTML = `Actual: <strong>${escapeHtml(option.currentEffect || '—')}</strong>`;
-        const next = document.createElement('p'); next.className = 'effect'; next.innerHTML = `Siguiente: <strong>${escapeHtml(option.nextEffect || '—')}</strong>`;
-        const cost = document.createElement('p'); cost.className = 'costline';
-        cost.textContent = option.level >= option.maximumLevel ? 'Coste: —' : `Coste: ${option.nextCost} ${icons[army]}` +
-          (option.secondaryCost > 0 ? ` + ${option.secondaryCost} ${icons[option.secondaryArmy] || '🪙'}` : '');
-        const button = document.createElement('button'); button.className = colors[army];
-        const actionKey = `upgrade:${army}:${option.id}`;
-        const pending = pendingActions.has(actionKey);
-        button.dataset.status = option.status || '';
-        button.textContent = pending ? 'Procesando…' : option.level >= option.maximumLevel ? 'Nivel máximo' :
-          option.status === 'locked' ? 'No disponible' : `Mejorar · ${option.nextCost} ${icons[army]}` +
-          (option.secondaryCost > 0 ? ` + ${option.secondaryCost} ${icons[option.secondaryArmy] || '🪙'}` : '');
-        const armyState = state.armies.find(item => item.army === army);
-        button.disabled = pending || !connected || !sessionReady || !armyState.canControl || !option.canPurchase;
-        button.addEventListener('click', () => request({ type: 'buyUpgrade', army, upgrade: option.id }, actionKey));
-        card.append(top, status, description, current, next, cost, button);
-        if (option.blockedReason && option.status !== 'max') {
-          const blocked = document.createElement('p'); blocked.className = 'blocked'; blocked.textContent = option.blockedReason; card.append(blocked);
-        }
-        return card;
-      }
-      function escapeHtml(value) {
-        return String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
-      }
       function createHeroSummary(army) {
         const summary = document.createElement('div'); summary.className = 'hero-summary';
         const stats = [
@@ -234,37 +199,6 @@
           item.append(strong, caption); summary.append(item);
         }
         return summary;
-      }
-      function createTowerCard(army, data) {
-        const card = document.createElement('article'); card.className = 'upgrade tower-artifact';
-        const title = document.createElement('h3'); title.textContent = data.owned ? 'Torre desbloqueada' : 'Desbloquear torre';
-        const level = document.createElement('span'); level.className = 'level';
-        level.textContent = data.owned ? `Nv. ${data.upgradeLevel}/${data.towerMaximumLevel}` : 'Bloqueada';
-        const top = document.createElement('div'); top.className = 'upgrade-top'; top.append(title, level);
-        const damage = document.createElement('div'); damage.className = 'tower-damage';
-        damage.textContent = `${numberFormat.format(data.currentDamage)} daño`;
-        const nextEffect = document.createElement('p'); nextEffect.className = 'effect';
-        nextEffect.textContent = data.owned && data.canUpgrade
-          ? `Siguiente nivel: ${numberFormat.format(data.nextDamage)} daño (+${numberFormat.format(data.upgradeDamagePercent)}%)`
-          : !data.owned ? `Daño al desbloquear: ${numberFormat.format(data.nextDamage)}` : 'Daño al máximo';
-        const desc = document.createElement('p'); desc.className = 'description';
-        desc.textContent = data.owned ? `La torre permanece en el mapa y mejora su daño ${numberFormat.format(data.upgradeDamagePercent)}% por nivel.` : 'Desbloquea la torre de tu ejército en su posición de la partida.';
-        const cost = document.createElement('p'); cost.className = 'costline';
-        const maxed = data.owned && !data.canUpgrade;
-        cost.textContent = maxed ? 'Mejora al nivel máximo' : `Siguiente coste: ${data.nextCost} ${icons[army]}`;
-        const button = document.createElement('button'); button.className = colors[army];
-        const actionKey = `tower:${army}`;
-        const pending = pendingActions.has(actionKey);
-        button.textContent = pending ? 'Procesando…' : maxed ? 'Nivel máximo' : data.owned ? 'Mejorar torre' : 'Desbloquear torre';
-        button.disabled = pending || !connected || !sessionReady || !data.canControl || !data.canPurchaseTower || maxed;
-        button.addEventListener('click', () => request({ type: 'buyTower', army }, actionKey));
-        card.append(top, damage, nextEffect, desc, cost, button);
-        if (!data.canPurchaseTower && !maxed) {
-          const blocked = document.createElement('p'); blocked.className = 'blocked';
-          blocked.textContent = state.status !== 'InProgress' ? 'Disponible cuando empiece la partida.' : `Necesitas ${data.nextCost} ${icons[army]}.`;
-          card.append(blocked);
-        }
-        return card;
       }
       function createCombatStatistics(army) {
         const stats = document.createElement('article'); stats.className = 'hero-summary';
@@ -324,7 +258,8 @@
           if (army.purchaseChoiceMade) {
             const wait = document.createElement('p'); wait.className = 'muted'; wait.textContent = `Elección realizada: ${army.purchaseResult}. Esperando a los demás…`; content.append(wait);
           }
-          for (const option of (state.purchaseOptions || [])) {
+          for (const option of (army.purchaseOptions || [])) {
+            if (!option) continue;
             const card = document.createElement('article'); card.className = 'purchase-card'; card.dataset.category = option.category;
             const currencies = ['tierra', 'aire', 'mar'];
             const requirements = (option.resourceCosts || []).map((amount, index) => {
@@ -342,7 +277,10 @@
             const actionKey = `intermission:${selectedPanel}`; const pending = pendingActions.has(actionKey);
             button.disabled = pending || army.purchaseChoiceMade || !connected || !army.canControl || !affordable;
             button.addEventListener('click', () => request({ type: 'buyIntermissionUpgrade', army: selectedPanel, choice: option.id }, actionKey));
-            card.append(heading, desc, cost, button);
+            const rarity = document.createElement('p'); rarity.className = 'muted';
+            rarity.style.fontSize = '1.2rem'; rarity.style.letterSpacing = '.18em';
+            rarity.textContent = '⭐'.repeat(Math.max(1, Math.min(2, option.stars || 1)));
+            card.append(heading, desc, cost, button, rarity);
             if (!affordable && !army.purchaseChoiceMade) { const reason = document.createElement('p'); reason.className = 'blocked'; reason.textContent = `Saldo insuficiente para ${costLabel}.`; card.append(reason); }
             content.append(card);
           }

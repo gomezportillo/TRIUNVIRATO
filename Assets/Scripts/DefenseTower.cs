@@ -12,44 +12,36 @@ public sealed class DefenseTower : MonoBehaviour
 
     private TriunviratoGame game;
     private float attackTimer;
-    private int individualUpgradeLevel;
-    private int armyUpgradeLevel;
-
-    internal void Configure(TriunviratoGame owner, TowerConfig config, int individualLevel, int globalArmyLevel)
+    internal void Configure(TriunviratoGame owner, TowerConfig config)
     {
         game = owner;
         Config = config;
         if (config == null || config.Hero == null)
             return;
 
-        Range = config.Hero.Range;
-        individualUpgradeLevel = Mathf.Max(0, individualLevel);
-        armyUpgradeLevel = Mathf.Max(0, globalArmyLevel);
-        RefreshDamage();
-        Cooldown = config.Hero.AttackCooldown;
+        RefreshIntermissionStats();
         SplashRadius = config.Hero.SplashRadius;
         attackTimer = 0f;
     }
 
-    internal void SetUpgradeLevel(int level)
+    internal void RefreshIntermissionDamage() => RefreshIntermissionStats();
+
+    internal void RefreshIntermissionStats()
     {
-        individualUpgradeLevel = Mathf.Max(0, level);
+        if (Config == null || Config.Hero == null) return;
+        Range = Config.Hero.Range * (game != null ? game.GetTowerRangeMultiplier(Config.Army) : 1f) +
+                (game != null ? game.GetTowerRangeFixedBonus(Config.Army) : 0f);
+        float attackRate = (Config.Hero.AttackCooldown > 0f ? 1f / Config.Hero.AttackCooldown : 0f) *
+                           (game != null ? game.GetTowerAttackSpeedMultiplier(Config.Army) : 1f) +
+                           (game != null ? game.GetTowerAttackRateFixedBonus(Config.Army) : 0f);
+        Cooldown = attackRate > 0f ? 1f / attackRate : Config.Hero.AttackCooldown;
         RefreshDamage();
     }
-
-    internal void SetArmyUpgradeLevel(int level)
-    {
-        armyUpgradeLevel = Mathf.Max(0, level);
-        RefreshDamage();
-    }
-
-    internal void RefreshIntermissionDamage() => RefreshDamage();
 
     private void RefreshDamage()
     {
         if (Config != null)
-            Damage = Config.GetDamageAtLevels(individualUpgradeLevel, armyUpgradeLevel) *
-                     (game != null ? game.GetTowerIntermissionMultiplier(Config.Army) : 1f);
+            Damage = game != null ? game.GetTowerDamage(Config.Army, Config.GetBaseDamage()) : Config.GetBaseDamage();
     }
 
     private void Update()

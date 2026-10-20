@@ -1,6 +1,6 @@
 using UnityEngine;
 
-/// <summary>Activates the scene-authored tower for each army and routes later purchases into upgrades.</summary>
+/// <summary>Activates the scene-authored tower when its initial purchase succeeds.</summary>
 public sealed class TowerShop : MonoBehaviour
 {
     [SerializeField] private ArmyEconomy economy;
@@ -13,9 +13,6 @@ public sealed class TowerShop : MonoBehaviour
     [SerializeField] private TowerConfig seaConfig;
 
     private readonly DefenseTower[] towers = new DefenseTower[3];
-    private readonly int[] upgradeLevels = new int[3];
-    private readonly int[] armyUpgradeLevels = new int[3];
-    private readonly int[] nextCosts = new int[3];
 
     public int StateRevision { get; private set; }
     public bool CanPurchase => game != null && game.IsPurchasePhase;
@@ -29,33 +26,10 @@ public sealed class TowerShop : MonoBehaviour
     public TowerConfig GetConfig(ArmyType army) => army == ArmyType.Tierra ? groundConfig :
         army == ArmyType.Aire ? airConfig : army == ArmyType.Mar ? seaConfig : null;
 
-    public int GetArmyUpgradeLevel(ArmyType army)
-    {
-        int index = (int)army;
-        return index >= 0 && index < armyUpgradeLevels.Length ? armyUpgradeLevels[index] : 0;
-    }
-
-    public void SetArmyUpgradeLevel(ArmyType army, int level)
-    {
-        int index = (int)army;
-        if (index < 0 || index >= armyUpgradeLevels.Length)
-            return;
-        armyUpgradeLevels[index] = Mathf.Max(0, level);
-        if (towers[index] != null)
-            towers[index].SetArmyUpgradeLevel(armyUpgradeLevels[index]);
-        StateRevision++;
-    }
-
     public bool HasTower(ArmyType army)
     {
         int index = (int)army;
         return index >= 0 && index < towers.Length && towers[index] != null;
-    }
-
-    public int GetUpgradeLevel(ArmyType army)
-    {
-        int index = (int)army;
-        return index >= 0 && index < upgradeLevels.Length && HasTower(army) ? upgradeLevels[index] : 0;
     }
 
     public int GetNextCost(ArmyType army)
@@ -65,7 +39,7 @@ public sealed class TowerShop : MonoBehaviour
             return 0;
 
         TowerConfig config = GetConfig(army);
-        return HasTower(army) ? nextCosts[index] : config != null ? config.PurchaseCost : 0;
+        return !HasTower(army) && config != null ? config.PurchaseCost : 0;
     }
 
     public float GetCurrentDamage(ArmyType army)
@@ -75,32 +49,29 @@ public sealed class TowerShop : MonoBehaviour
             return 0f;
 
         TowerConfig config = GetConfig(army);
-        return HasTower(army)
-            ? towers[index].Damage
-            : config != null ? config.GetDamageAtLevels(0, GetArmyUpgradeLevel(army)) *
-                (game != null ? game.GetTowerIntermissionMultiplier(army) : 1f) : 0f;
+        return HasTower(army) ? towers[index].Damage :
+            config != null && game != null ? game.GetTowerDamage(army, config.GetBaseDamage()) :
+            config != null ? config.GetBaseDamage() : 0f;
     }
 
-    public float GetNextDamage(ArmyType army)
+    public float GetCurrentRange(ArmyType army)
     {
         int index = (int)army;
+        if (index < 0 || index >= towers.Length) return 0f;
         TowerConfig config = GetConfig(army);
-        if (index < 0 || index >= towers.Length || config == null)
-            return 0f;
-        if (!HasTower(army) || !config.CanUpgrade(upgradeLevels[index]))
-            return GetCurrentDamage(army);
-        return config.GetDamageAtLevels(upgradeLevels[index] + 1, armyUpgradeLevels[index]) *
-               (game != null ? game.GetTowerIntermissionMultiplier(army) : 1f);
+        return HasTower(army) ? towers[index].Range :
+            config != null && config.Hero != null ? config.Hero.Range * (game != null ? game.GetTowerRangeMultiplier(army) : 1f) +
+                (game != null ? game.GetTowerRangeFixedBonus(army) : 0f) : 0f;
     }
 
-    public float GetUpgradeDamagePercent(ArmyType army)
+    public float GetCurrentCooldown(ArmyType army)
     {
+        int index = (int)army;
+        if (index < 0 || index >= towers.Length) return 0f;
         TowerConfig config = GetConfig(army);
-        return config != null ? config.UpgradeDamagePercent : 0f;
+        return HasTower(army) ? towers[index].Cooldown :
+            config != null && config.Hero != null ? GetBaseTowerCooldown(config, game, army) : 0f;
     }
-
-    public string GetUpgradeDamageLabel(ArmyType army) =>
-        "+" + (GetUpgradeDamagePercent(army) * 100f).ToString("0.##") + "%";
 
     public string GetTowerDisplayName(ArmyType army)
     {
@@ -108,10 +79,9 @@ public sealed class TowerShop : MonoBehaviour
         return config != null ? config.DisplayName : GetArmyName(army);
     }
 
-    public bool CanUpgrade(ArmyType army)
+    public bool CanPurchaseInitialTower(ArmyType army)
     {
-        TowerConfig config = GetConfig(army);
-        return config != null && (!HasTower(army) || config.CanUpgrade(GetUpgradeLevel(army)));
+        return GetConfig(army) != null && !HasTower(army);
     }
 
     public string GetButtonLabel(ArmyType army)
@@ -119,12 +89,9 @@ public sealed class TowerShop : MonoBehaviour
         TowerConfig config = GetConfig(army);
         string name = GetTowerDisplayName(army);
         bool owned = HasTower(army);
-        if (owned && !CanUpgrade(army))
-            return "Torre de " + name + "\nNivel máximo\nDaño:  " + GetCurrentDamage(army).ToString("0.##");
-
-        string damage = GetCurrentDamage(army).ToString("0.##") +
-            (owned && config != null ? " " + GetUpgradeDamageLabel(army) : "");
-        string action = owned ? CanUpgrade(army) ? "Mejorar torre de " : "Torre de " : "Desbloquear torre de ";
+        if (owned) return "Torre de " + name + "\nDaño:  " + GetCurrentDamage(army).ToString("0.##");
+        string damage = GetCurrentDamage(army).ToString("0.##");
+        string action = "Desbloquear torre de ";
         return action + name +
                "\nDaño:  " + damage +
                "\nCoste: " + GetNextCost(army) + " " + GetCoinIcon(army);
@@ -156,9 +123,9 @@ public sealed class TowerShop : MonoBehaviour
             return false;
         }
 
-        if (isUpgrade && !config.CanUpgrade(upgradeLevels[index]))
+        if (isUpgrade)
         {
-            failureReason = "La torre ya alcanzó su nivel máximo.";
+            failureReason = "Las mejoras de torre se compran en la tienda entre oleadas.";
             return false;
         }
 
@@ -190,33 +157,64 @@ public sealed class TowerShop : MonoBehaviour
             }
 
             SetTowerVisible(army, true);
-            game.ConfigureTower(behavior, config, upgradeLevels[index], armyUpgradeLevels[index]);
+            game.ConfigureTower(behavior, config);
             behavior.enabled = true;
             towers[index] = behavior;
-            upgradeLevels[index] = 0;
-            nextCosts[index] = config.GetNextUpgradeCost(cost);
         }
-        else
-        {
-            if (!economy.TrySpend(army, cost))
-            {
-                failureReason = "Saldo insuficiente: necesitas " + cost.ToString("0.##") + " monedas.";
-                return false;
-            }
-
-            upgradeLevels[index]++;
-            towers[index].SetUpgradeLevel(upgradeLevels[index]);
-            nextCosts[index] = config.GetNextUpgradeCost(cost);
-        }
-
         StateRevision++;
-        if (!isUpgrade)
-            GameSoundManager.Instance?.PlayTowerBuilt();
+        GameSoundManager.Instance?.PlayTowerBuilt();
+        return true;
+    }
+
+    public bool CanUnlockForIntermission(ArmyType army, out string failureReason)
+    {
+        failureReason = null;
+        if (economy == null || game == null || !game.IsPurchasePhase)
+        {
+            failureReason = "Las torres solo se pueden comprar durante la fase de compras.";
+            return false;
+        }
+        TowerConfig config = GetConfig(army);
+        Transform anchor = GetAnchor(army);
+        SpriteRenderer renderer = anchor != null ? anchor.GetComponentInChildren<SpriteRenderer>(true) : null;
+        if (HasTower(army)) { failureReason = "La torre ya está desbloqueada."; return false; }
+        if (config == null || config.Army != army || config.Hero == null || config.Hero.Army != army ||
+            anchor == null || renderer == null || renderer.sprite == null)
+        {
+            failureReason = "La configuración o el objeto de la torre no está listo para desbloquearse.";
+            return false;
+        }
+        return true;
+    }
+
+    public bool UnlockForIntermission(ArmyType army, out string failureReason)
+    {
+        if (!CanUnlockForIntermission(army, out failureReason)) return false;
+        int index = (int)army;
+        TowerConfig config = GetConfig(army);
+        Transform anchor = GetAnchor(army);
+        DefenseTower behavior = anchor.GetComponent<DefenseTower>();
+        if (behavior == null) behavior = anchor.gameObject.AddComponent<DefenseTower>();
+        SetTowerVisible(army, true);
+        game.ConfigureTower(behavior, config);
+        behavior.enabled = true;
+        towers[index] = behavior;
+        StateRevision++;
+        GameSoundManager.Instance?.PlayTowerBuilt();
+        failureReason = null;
         return true;
     }
 
     private static string GetCoinIcon(ArmyType army) => army == ArmyType.Tierra ? "🟢" :
         army == ArmyType.Aire ? "🔴" : "🔵";
+
+    private static float GetBaseTowerCooldown(TowerConfig config, TriunviratoGame owner, ArmyType army)
+    {
+        float rate = (config.Hero.AttackCooldown > 0f ? 1f / config.Hero.AttackCooldown : 0f) *
+                     (owner != null ? owner.GetTowerAttackSpeedMultiplier(army) : 1f) +
+                     (owner != null ? owner.GetTowerAttackRateFixedBonus(army) : 0f);
+        return rate > 0f ? 1f / rate : config.Hero.AttackCooldown;
+    }
 
     private void SetTowerVisible(ArmyType army, bool visible)
     {
@@ -241,12 +239,8 @@ public sealed class TowerShop : MonoBehaviour
             if (towers[i] != null)
                 towers[i].enabled = false;
             towers[i] = null;
-            upgradeLevels[i] = 0;
-            armyUpgradeLevels[i] = 0;
             ArmyType army = (ArmyType)i;
             SetTowerVisible(army, false);
-            TowerConfig config = GetConfig(army);
-            nextCosts[i] = config != null ? config.PurchaseCost : 0;
         }
         StateRevision++;
     }

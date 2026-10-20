@@ -1,0 +1,105 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 18adce0f02c74d96864759bca013f792, type: 3}
+  m_Name: IntermissionUpgrades
+  m_EditorClassIdentifier: 
+  priceGrowthPerWave: 0.1
+  rareSecondaryCostPercent: 0.5
+  definitions:
+  - id: economy_passive
+    displayName: Reserva eficiente
+    category: 0
+    effect: 0
+    valueType: 0
+    baseCost: 20
+    normalEffect: 25
+    rareEffect: 40
+  - id: economy_passive_fixed
+    displayName: Caudal constante
+    category: 0
+    effect: 0
+    valueType: 1
+    baseCost: 24
+    normalEffect: 0.5
+    rareEffect: 0.8
+  - id: economy_kill
+    displayName: Recompensa por bajas
+    category: 0
+    effect: 1
+    valueType: 1
+    baseCost: 20
+    normalEffect: 1
+    rareEffect: 2
+  - id: economy_wave
+    displayName: "Bot\xEDn de oleada"
+    category: 0
+    effect: 2
+    valueType: 0
+    baseCost: 20
+    normalEffect: 25
+    rareEffect: 40
+  - id: tower_damage
+    displayName: Torres reforzadas
+    category: 1
+    effect: 3
+    valueType: 0
+    baseCost: 35
+    normalEffect: 20
+    rareEffect: 30
+  - id: tower_speed
+    displayName: Mecanismo veloz
+    category: 1
+    effect: 4
+    valueType: 0
+    baseCost: 35
+    normalEffect: 15
+    rareEffect: 25
+  - id: tower_range
+    displayName: Mira ampliada
+    category: 1
+    effect: 5
+    valueType: 0
+    baseCost: 35
+    normalEffect: 15
+    rareEffect: 25
+  - id: hero_damage
+    displayName: Golpe heroico
+    category: 2
+    effect: 6
+    valueType: 0
+    baseCost: 30
+    normalEffect: 20
+    rareEffect: 30
+  - id: hero_speed
+    displayName: Reflejos heroicos
+    category: 2
+    effect: 7
+    valueType: 0
+    baseCost: 30
+    normalEffect: 15
+    rareEffect: 25
+  - id: hero_range
+    displayName: "Vista de \xE1guila"
+    category: 2
+    effect: 8
+    valueType: 0
+    baseCost: 30
+    normalEffect: 15
+    rareEffect: 25
+  - id: hero_splash
+    displayName: Impacto expansivo
+    category: 2
+    effect: 9
+    valueType: 0
+    baseCost: 30
+    normalEffect: 20
+    rareEffect: 35

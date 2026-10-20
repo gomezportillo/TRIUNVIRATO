@@ -26,6 +26,6 @@ MonoBehaviour:
   bossCastleDamagePerAttack: 35
   castleAttackInterval: 2
   initialIdleDuration: 0.15
-  normalScale: 1
+  normalScale: 0.8
   bossScale: 1.75
   deathAnimationFallbackSeconds: 1.1

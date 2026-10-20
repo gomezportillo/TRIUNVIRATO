@@ -54,7 +54,7 @@ AnimatorController:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: Green tower_3
+  m_Name: Ground_tower
   serializedVersion: 6
   m_AnimatorParameters: []
   m_AnimatorLayers:

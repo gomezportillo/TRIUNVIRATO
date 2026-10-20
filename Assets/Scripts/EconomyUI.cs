@@ -47,10 +47,9 @@ public sealed class EconomyUI : MonoBehaviour
             for (int i = 0; i < Armies.Length; i++)
             {
                 ArmyType army = Armies[i];
-                GUI.enabled = shop.CanPurchase && shop.CanUpgrade(army);
+                GUI.enabled = shop.CanPurchase && shop.CanPurchaseInitialTower(army);
                 if (GUILayout.Button(shop.GetButtonLabel(army), GUILayout.Height(64f)))
                 {
-                    bool wasOwned = shop.HasTower(army);
                     if (!shop.TryPurchase(army, out string failureReason))
                     {
                         feedback = failureReason;
@@ -58,10 +57,7 @@ public sealed class EconomyUI : MonoBehaviour
                     }
                     else
                     {
-                        feedback = wasOwned
-                            ? "Torre de " + shop.GetTowerDisplayName(army) + " mejorada: " +
-                              shop.GetUpgradeDamageLabel(army) + " daño."
-                            : "Torre de " + shop.GetTowerDisplayName(army) + " comprada.";
+                        feedback = "Torre de " + shop.GetTowerDisplayName(army) + " comprada.";
                         feedbackTime = 1.5f;
                     }
                 }

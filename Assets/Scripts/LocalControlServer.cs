@@ -23,7 +23,6 @@ public sealed class LocalControlServer : MonoBehaviour
     [SerializeField] private TowerShop shop;
     [SerializeField] private ArmyEconomy economy;
     [SerializeField] private TriunviratoGame game;
-    [SerializeField] private ArmyUpgradeManager upgrades;
     [SerializeField, Min(5f)] private float reconnectGraceSeconds = 60f;
 
     private readonly ConcurrentQueue<PendingMessage> pendingMessages = new ConcurrentQueue<PendingMessage>();
@@ -45,7 +44,6 @@ public sealed class LocalControlServer : MonoBehaviour
     private int observedShopRevision = -1;
     private int observedEconomyRevision = -1;
     private int observedGameRevision = -1;
-    private int observedUpgradeRevision = -1;
     private int outgoingStateRevision;
 
     public bool IsDeveloperMode => developerToken != null;
@@ -59,7 +57,6 @@ public sealed class LocalControlServer : MonoBehaviour
 #pragma warning disable 0649 // Unity's JsonUtility fills these fields from the incoming JSON.
         public string type;
         public string army;
-        public string upgrade;
         public string choice;
         public string clientToken;
         public string requestId;
@@ -95,7 +92,6 @@ public sealed class LocalControlServer : MonoBehaviour
         public bool purchasePhase;
         public float purchaseSecondsRemaining;
         public int resourceChoiceReward;
-        public PurchaseUpgradeOption[] purchaseOptions;
         public SeatState[] seats;
         public ArmyShopState[] armies;
     }
@@ -114,31 +110,22 @@ public sealed class LocalControlServer : MonoBehaviour
     {
         public string army;
         public bool owned;
-        public int upgradeLevel;
         public float currentDamage;
         public float towerRange;
         public float towerAttackCooldown;
-        public float nextDamage;
-        public int towerMaximumLevel;
-        public int nextCost;
-        public float upgradeDamagePercent;
-        public bool canUpgrade;
         public bool canControl;
         public bool canPurchaseTower;
         public int coins;
         public float passiveIncomePerSecond;
         public string incomeSummary;
-        public int heroLevel;
         public float heroDamage;
         public float heroBaseDamage;
         public float heroRange;
         public float heroAttackCooldown;
         public float heroSplashRadius;
-        public int armyTowerLevel;
-        public float armyTowerMultiplier;
-        public ArmyUpgradeManager.UpgradeOption[] upgrades;
         public bool purchaseChoiceMade;
         public string purchaseResult;
+        public PurchaseUpgradeOption[] purchaseOptions;
     }
 
     private sealed class WebSocketClient
@@ -181,14 +168,12 @@ public sealed class LocalControlServer : MonoBehaviour
 
         int economyRevision = economy != null ? economy.StateRevision : -1;
         int gameRevision = game != null ? game.StateRevision : -1;
-        int upgradeRevision = upgrades != null ? upgrades.StateRevision : -1;
         if (shop != null && (shop.StateRevision != observedShopRevision || economyRevision != observedEconomyRevision ||
-                             gameRevision != observedGameRevision || upgradeRevision != observedUpgradeRevision))
+                             gameRevision != observedGameRevision))
         {
             observedShopRevision = shop.StateRevision;
             observedEconomyRevision = economyRevision;
             observedGameRevision = gameRevision;
-            observedUpgradeRevision = upgradeRevision;
             PublishState();
         }
     }
@@ -201,8 +186,6 @@ public sealed class LocalControlServer : MonoBehaviour
             economy = FindAnyObjectByType<ArmyEconomy>();
         if (game == null)
             game = FindAnyObjectByType<TriunviratoGame>();
-        if (upgrades == null)
-            upgrades = FindAnyObjectByType<ArmyUpgradeManager>();
 
         if (shop == null)
         {
@@ -233,7 +216,6 @@ public sealed class LocalControlServer : MonoBehaviour
             observedShopRevision = shop.StateRevision;
             observedEconomyRevision = economy != null ? economy.StateRevision : -1;
             observedGameRevision = game != null ? game.StateRevision : -1;
-            observedUpgradeRevision = upgrades != null ? upgrades.StateRevision : -1;
             outgoingStateRevision = 0;
             listener = new TcpListener(IPAddress.Parse(lanAddress), port);
             listener.Start();
@@ -467,31 +449,10 @@ public sealed class LocalControlServer : MonoBehaviour
                         response.message = "Las torres solo se pueden comprar durante la fase de compras.";
                     else
                     {
-                        bool wasOwned = shop.HasTower(army);
                         response.success = shop.TryPurchase(army, out string failureReason);
                         response.message = response.success
-                            ? wasOwned
-                                ? "Torre de " + shop.GetTowerDisplayName(army) + " mejorada: " +
-                                  shop.GetUpgradeDamageLabel(army) + " daño."
-                                : "Torre de " + shop.GetTowerDisplayName(army) + " comprada."
+                            ? "Torre de " + shop.GetTowerDisplayName(army) + " comprada."
                             : failureReason;
-                        stateChanged = response.success;
-                    }
-                }
-                else if (command.type == "buyUpgrade")
-                {
-                    response.type = "upgradeResult";
-                    if (!TryParseArmy(command.army, out ArmyType army))
-                        response.message = "Ejército desconocido.";
-                    else if (!CanControl(session, army))
-                        response.message = "Solo puedes dar órdenes a tu ejército.";
-                    else if (game == null || !game.IsPurchasePhase)
-                        response.message = "Las mejoras solo se pueden comprar durante la fase de compras.";
-                    else if (string.IsNullOrWhiteSpace(command.upgrade) || upgrades == null)
-                        response.message = "Mejora desconocida o no configurada.";
-                    else
-                    {
-                        response.success = upgrades.TryPurchase(army, command.upgrade, out response.message);
                         stateChanged = response.success;
                     }
                 }
@@ -832,7 +793,6 @@ public sealed class LocalControlServer : MonoBehaviour
         observedShopRevision = shop != null ? shop.StateRevision : -1;
         observedEconomyRevision = economy != null ? economy.StateRevision : -1;
         observedGameRevision = game != null ? game.StateRevision : -1;
-        observedUpgradeRevision = upgrades != null ? upgrades.StateRevision : -1;
         outgoingStateRevision++;
         CancellationToken token = shutdown.Token;
         foreach (KeyValuePair<int, WebSocketClient> pair in webSocketClients)
@@ -869,7 +829,6 @@ public sealed class LocalControlServer : MonoBehaviour
             purchasePhase = game != null && game.IsPurchasePhase,
             purchaseSecondsRemaining = game != null ? game.PurchasePhaseSecondsRemaining : 0f,
             resourceChoiceReward = TriunviratoGame.ResourceChoiceReward,
-            purchaseOptions = CreatePurchaseOptions(),
             seats = new[]
             {
                 CreateSeatState(ArmyType.Tierra, session),
@@ -910,33 +869,23 @@ public sealed class LocalControlServer : MonoBehaviour
         {
             army = name,
             owned = shop.HasTower(army),
-            upgradeLevel = shop.GetUpgradeLevel(army),
             currentDamage = shop.GetCurrentDamage(army),
-            towerRange = towerConfig != null && towerConfig.Hero != null ? towerConfig.Hero.Range : 0f,
-            towerAttackCooldown = towerConfig != null && towerConfig.Hero != null ? towerConfig.Hero.AttackCooldown : 0f,
-            nextDamage = shop.GetNextDamage(army),
-            towerMaximumLevel = towerConfig != null ? towerConfig.MaximumUpgradeLevel : 0,
-            nextCost = shop.GetNextCost(army),
-            upgradeDamagePercent = shop.GetUpgradeDamagePercent(army) * 100f,
-            canUpgrade = shop.CanUpgrade(army),
+            towerRange = shop.GetCurrentRange(army),
+            towerAttackCooldown = shop.GetCurrentCooldown(army),
             canControl = canControl,
             canPurchaseTower = canControl && shop.CanPurchase && economy != null &&
                                economy.GetCoins(army) >= shop.GetNextCost(army),
             coins = economy != null ? economy.GetCoins(army) : 0,
             passiveIncomePerSecond = economy != null ? economy.GetPassiveIncomePerSecond(army) : 0f,
-            incomeSummary = upgrades != null ? upgrades.GetIncomeSummary(army) : string.Empty,
-            heroLevel = game != null ? game.GetHeroUpgradeLevel(army) : 0,
+            incomeSummary = string.Empty,
             heroDamage = game != null ? game.GetHeroDamage(army) : 0f,
             heroBaseDamage = hero != null ? hero.Damage : 0f,
             heroRange = game != null ? game.GetHeroRange(army) : hero != null ? hero.Range : 0f,
             heroAttackCooldown = game != null ? game.GetHeroAttackCooldown(army) : hero != null ? hero.AttackCooldown : 0f,
             heroSplashRadius = game != null ? game.GetHeroSplashRadius(army) : hero != null ? hero.SplashRadius : 0f,
-            armyTowerLevel = shop.GetArmyUpgradeLevel(army),
-            armyTowerMultiplier = towerConfig != null
-                ? towerConfig.GetArmyDamageMultiplier(shop.GetArmyUpgradeLevel(army)) : 1f,
-            upgrades = upgrades != null ? upgrades.GetOptions(army) : Array.Empty<ArmyUpgradeManager.UpgradeOption>(),
             purchaseChoiceMade = game != null && game.IsPurchaseChoiceMade(army),
-            purchaseResult = game != null ? game.GetPurchaseResult(army) : string.Empty
+            purchaseResult = game != null ? game.GetPurchaseResult(army) : string.Empty,
+            purchaseOptions = CreatePurchaseOptions(army)
         };
     }
 
@@ -949,19 +898,24 @@ public sealed class LocalControlServer : MonoBehaviour
         public string description;
         public int price;
         public int[] resourceCosts;
+        public int stars;
     }
 
-    private PurchaseUpgradeOption[] CreatePurchaseOptions()
+    private PurchaseUpgradeOption[] CreatePurchaseOptions(ArmyType army)
     {
         if (game == null) return Array.Empty<PurchaseUpgradeOption>();
-        string[] ids = game.GetPurchaseUpgradeIds();
-        PurchaseUpgradeOption[] options = new PurchaseUpgradeOption[ids.Length];
-        string[] categories = { "economy", "towers", "hero" };
-        for (int i = 0; i < ids.Length; i++)
-            options[i] = new PurchaseUpgradeOption { id = ids[i], category = categories[i],
-                name = game.GetPurchaseUpgradeName(ids[i]), description = game.GetPurchaseUpgradeDescription(ids[i]),
-                price = game.GetPurchasePrice(ids[i]),
-                resourceCosts = game.GetPurchaseCosts(ids[i]) };
+        TriunviratoGame.PurchaseOffer[] offers = game.GetPurchaseOffers(army);
+        PurchaseUpgradeOption[] options = new PurchaseUpgradeOption[offers.Length];
+        for (int i = 0; i < offers.Length; i++)
+        {
+            TriunviratoGame.PurchaseOffer offer = offers[i];
+            if (offer == null) continue;
+            int total = 0;
+            foreach (int amount in offer.resourceCosts) total += amount;
+            options[i] = new PurchaseUpgradeOption { id = offer.id, category = offer.category,
+                name = offer.name, description = offer.description, price = total,
+                resourceCosts = offer.resourceCosts, stars = offer.stars };
+        }
         return options;
     }
 
