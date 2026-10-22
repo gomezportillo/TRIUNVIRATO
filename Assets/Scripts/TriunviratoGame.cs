@@ -6,6 +6,7 @@ using UnityEngine.InputSystem;
 /// <summary>Runs the first playable TRIUNVIRATO prototype using scene-authored objects.</summary>
 public sealed class TriunviratoGame : MonoBehaviour
 {
+    private const string NormalAttackState = "Attack_Normal";
     public enum MatchStatus { WaitingForPlayers, InProgress, Finished }
     private const float CastleStartHealth = 100f;
     public const float PurchasePhaseDuration = 20f;
@@ -114,6 +115,7 @@ public sealed class TriunviratoGame : MonoBehaviour
         public GameObject View;
         public HeroConfig Config;
         public Animator Animator;
+        public Transform AttackSpawn;
         public float AttackTimer;
         public bool ShotPending;
         public float PendingShotTimer;
@@ -295,7 +297,8 @@ public sealed class TriunviratoGame : MonoBehaviour
         {
             View = hero.gameObject,
             Config = config,
-            Animator = animator
+            Animator = animator,
+            AttackSpawn = hero.Find("AttackSpawn")
         };
     }
 
@@ -768,7 +771,7 @@ public sealed class TriunviratoGame : MonoBehaviour
 
             defender.AttackTimer = GetHeroAttackCooldown(defender.Config.Army);
             if (defender.Animator != null && defender.Animator.runtimeAnimatorController != null)
-                defender.Animator.Play("Attack", 0, 0f);
+                defender.Animator.Play(NormalAttackState, 0, 0f);
             defender.ShotPending = true;
             defender.PendingTarget = target;
             defender.PendingTargetPosition = target.transform.position;
@@ -790,7 +793,8 @@ public sealed class TriunviratoGame : MonoBehaviour
 
         FireProjectile(defender.View, defender.Config.DisplayName, defender.Config,
             GetHeroDamage(defender.Config.Army), GetHeroSplashRadius(defender.Config.Army),
-            target.transform.position, target);
+            target.transform.position, target, defender.Config.ProjectileAnimatorController,
+            GetAttackSpawnPosition(defender));
     }
 
     private void FireProjectile(Defender defender, Vector3 destination)
@@ -799,38 +803,59 @@ public sealed class TriunviratoGame : MonoBehaviour
             return;
 
         FireProjectile(defender.View, defender.Config.DisplayName, defender.Config,
-            GetHeroDamage(defender.Config.Army), GetHeroSplashRadius(defender.Config.Army), destination, null);
+            GetHeroDamage(defender.Config.Army), GetHeroSplashRadius(defender.Config.Army), destination, null,
+            defender.Config.ProjectileAnimatorController, GetAttackSpawnPosition(defender));
+    }
+
+    private static Vector3 GetAttackSpawnPosition(Defender defender)
+    {
+        if (defender.AttackSpawn != null)
+            return defender.AttackSpawn.position;
+
+        return defender.View.transform.position + Vector3.right * 0.2f;
     }
 
     private void FireProjectile(GameObject source, string sourceName, HeroConfig config, float damage,
-        float splashRadius, SkeletonEnemy target)
+        float splashRadius, SkeletonEnemy target, RuntimeAnimatorController animatorController = null,
+        Vector3? launchPosition = null)
     {
         if (target == null || target.IsDead)
             return;
 
-        FireProjectile(source, sourceName, config, damage, splashRadius, target.transform.position, target);
+        FireProjectile(source, sourceName, config, damage, splashRadius, target.transform.position, target,
+            animatorController, launchPosition);
     }
 
     private void FireProjectile(GameObject source, string sourceName, HeroConfig config, float damage,
-        float splashRadius, Vector3 destination, SkeletonEnemy target)
+        float splashRadius, Vector3 destination, SkeletonEnemy target, RuntimeAnimatorController animatorController = null,
+        Vector3? launchPosition = null)
     {
         if (source == null || config == null)
             return;
 
         GameSoundManager.Instance?.PlayAttack(config.Army);
 
-        if (projectileSprite == null)
-            projectileSprite = Sprite.Create(Texture2D.whiteTexture, new Rect(0f, 0f, 1f, 1f), new Vector2(0.5f, 0.5f), 1f);
-
-        Vector3 origin = source.transform.position + Vector3.right * 0.2f;
+        Vector3 origin = launchPosition ?? source.transform.position + Vector3.right * 0.2f;
         GameObject view = new GameObject("Proyectil - " + sourceName);
         view.transform.position = origin;
-        view.transform.localScale = Vector3.one * 0.14f;
+        float projectileScale = animatorController != null ? config.ProjectileSize : 0.14f;
+        view.transform.localScale = Vector3.one * projectileScale;
+        SetProjectileVisualDirection(view.transform, destination - origin);
 
         SpriteRenderer renderer = view.AddComponent<SpriteRenderer>();
-        renderer.sprite = projectileSprite;
-        renderer.color = config.ProjectileColor;
         renderer.sortingOrder = 15;
+        if (animatorController != null)
+        {
+            Animator animator = view.AddComponent<Animator>();
+            animator.runtimeAnimatorController = animatorController;
+        }
+        else
+        {
+            if (projectileSprite == null)
+                projectileSprite = Sprite.Create(Texture2D.whiteTexture, new Rect(0f, 0f, 1f, 1f), new Vector2(0.5f, 0.5f), 1f);
+            renderer.sprite = projectileSprite;
+            renderer.color = config.ProjectileColor;
+        }
 
         projectiles.Add(new Projectile
         {
@@ -862,6 +887,7 @@ public sealed class TriunviratoGame : MonoBehaviour
 
             Vector3 previousPosition = view.position;
             view.position = Vector3.MoveTowards(view.position, projectile.Destination, projectile.Speed * Time.deltaTime);
+            SetProjectileVisualDirection(view, view.position - previousPosition);
             projectile.RemainingLifetime -= Time.deltaTime;
             SkeletonEnemy hit = FindProjectileImpact(previousPosition, view.position);
             if (hit != null)
@@ -876,6 +902,15 @@ public sealed class TriunviratoGame : MonoBehaviour
                 projectiles.RemoveAt(i);
             }
         }
+    }
+
+    private static void SetProjectileVisualDirection(Transform visual, Vector3 direction)
+    {
+        if (visual == null || direction.sqrMagnitude <= 0.000001f)
+            return;
+
+        float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
+        visual.rotation = Quaternion.Euler(0f, 0f, angle);
     }
 
     private SkeletonEnemy FindProjectileImpact(Vector3 start, Vector3 end)

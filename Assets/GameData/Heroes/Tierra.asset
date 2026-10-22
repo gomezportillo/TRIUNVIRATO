@@ -20,11 +20,8 @@ MonoBehaviour:
   range: 5.5
   splashRadius: 0
   projectileColor: {r: 0.09849052, g: 0.5999999, b: 0.14864144, a: 1}
+  projectileAnimatorController: {fileID: 9100000, guid: bb11787360c071842987760675c535b5, type: 2}
+  projectileSize: 0.4
   projectileSpeed: 10
   projectileLifetime: 1.5
   projectileDelay: 0.5
-  heroUpgradeBaseCost: 15
-  heroUpgradeCostGrowthRate: 0.1
-  minimumHeroUpgradeCostIncrease: 1
-  heroDamageIncreasePerLevel: 0.1
-  heroUpgradeMaximumLevel: 5

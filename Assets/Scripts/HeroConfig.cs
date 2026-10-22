@@ -12,6 +12,8 @@ public sealed class HeroConfig : ScriptableObject
     [SerializeField, Min(0f)] private float range = 1f;
     [SerializeField, Min(0f)] private float splashRadius;
     [SerializeField] private Color projectileColor = Color.white;
+    [SerializeField] private RuntimeAnimatorController projectileAnimatorController;
+    [SerializeField, Min(0.01f)] private float projectileSize = 0.5f;
     [SerializeField, Min(0.01f)] private float projectileSpeed = 10f;
     [SerializeField, Min(0.01f)] private float projectileLifetime = 1.5f;
     [SerializeField, Min(0f)] private float projectileDelay = 0.5f;
@@ -24,6 +26,8 @@ public sealed class HeroConfig : ScriptableObject
     public float Range => range;
     public float SplashRadius => splashRadius;
     public Color ProjectileColor => projectileColor;
+    public RuntimeAnimatorController ProjectileAnimatorController => projectileAnimatorController;
+    public float ProjectileSize => projectileSize;
     public float ProjectileSpeed => projectileSpeed;
     public float ProjectileLifetime => projectileLifetime;
     public float ProjectileDelay => projectileDelay;
