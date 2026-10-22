@@ -29,7 +29,7 @@ public sealed class EconomyUI : MonoBehaviour
         bool showLocalPurchaseButtons = controlServer != null && controlServer.IsDeveloperMode && shop.CanPurchase;
 
         GUILayout.BeginArea(new Rect(18f, 18f, 580f, showLocalPurchaseButtons ? 155f : 85f), GUI.skin.box);
-        GUILayout.Label("💰 RECURSOS DE LOS EJÉRCITOS");
+        GUILayout.Label("RECURSOS DE LOS EJÉRCITOS");
         GUILayout.BeginHorizontal();
         for (int i = 0; i < Armies.Length; i++)
         {

@@ -20,6 +20,8 @@ public sealed class SceneGameHUD : MonoBehaviour
     [SerializeField] private Text serverStatus;
     [SerializeField] private Text connectionAddress;
     [SerializeField] private Text roomStatus;
+    [Header("Paneles")]
+    [SerializeField] private GameObject resourcesPanel;
     [Header("Lobby")]
     [SerializeField] private GameObject lobbyOverlay;
     [Header("Fase de compras")]
@@ -46,23 +48,22 @@ public sealed class SceneGameHUD : MonoBehaviour
         bool showLobby = game == null || game.Status == TriunviratoGame.MatchStatus.WaitingForPlayers;
         if (lobbyOverlay != null && lobbyOverlay.activeSelf != showLobby)
             lobbyOverlay.SetActive(showLobby);
+        if (resourcesPanel != null && resourcesPanel.activeSelf != !showLobby)
+            resourcesPanel.SetActive(!showLobby);
 
         if (economy != null)
         {
-            if (airCoins != null) airCoins.supportRichText = true;
-            if (earthCoins != null) earthCoins.supportRichText = true;
-            if (seaCoins != null) seaCoins.supportRichText = true;
-            Set(airCoins, "<color=#F87171>●</color>  " + economy.GetCoins(ArmyType.Aire));
-            Set(earthCoins, "<color=#4ADE80>●</color>  " + economy.GetCoins(ArmyType.Tierra));
-            Set(seaCoins, "<color=#60A5FA>●</color>  " + economy.GetCoins(ArmyType.Mar));
+            Set(airCoins, economy.GetCoins(ArmyType.Aire).ToString());
+            Set(earthCoins, economy.GetCoins(ArmyType.Tierra).ToString());
+            Set(seaCoins, economy.GetCoins(ArmyType.Mar).ToString());
         }
 
         if (game != null)
         {
             Set(matchStatus, "Partida: " + (game.IsPaused ? "Pausada" : game.Status.ToString()));
-            Set(wave, "🌊  Oleada " + Mathf.Max(1, game.CurrentWave) + " / ∞");
-            Set(enemies, "👾  Enemigos restantes: " + game.EnemiesRemainingInWave);
-            Set(castleHealth, "❤️  Castillo: " + Mathf.CeilToInt(game.CastleHealth) + " / " + Mathf.CeilToInt(game.CastleMaximumHealth));
+            Set(wave, "Oleada " + Mathf.Max(1, game.CurrentWave) + " / ∞");
+            Set(enemies, "Enemigos restantes: " + game.EnemiesRemainingInWave);
+            Set(castleHealth, "Castillo: " + Mathf.CeilToInt(game.CastleHealth) + " / " + Mathf.CeilToInt(game.CastleMaximumHealth));
             if (purchaseOverlay != null && purchaseOverlay.activeSelf != game.IsPurchasePhase)
                 purchaseOverlay.SetActive(game.IsPurchasePhase);
             if (game.IsPurchasePhase)
