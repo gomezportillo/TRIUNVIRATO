@@ -9,6 +9,7 @@ public abstract class HeroSpecialAbilityConfig : ScriptableObject
     [SerializeField] private RuntimeAnimatorController effectController;
     [SerializeField, Min(0.01f)] private float effectScale = 1f;
     [SerializeField] private AudioClip activationSound;
+    [SerializeField, Min(1)] private int activationSoundPlayCount = 1;
 
     public string AbilityName => abilityName;
     public string Description => description;
@@ -16,4 +17,5 @@ public abstract class HeroSpecialAbilityConfig : ScriptableObject
     public RuntimeAnimatorController EffectController => effectController;
     public float EffectScale => effectScale;
     public AudioClip ActivationSound => activationSound;
+    public int ActivationSoundPlayCount => activationSoundPlayCount;
 }

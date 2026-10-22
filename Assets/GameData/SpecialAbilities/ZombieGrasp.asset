@@ -18,6 +18,7 @@ MonoBehaviour:
   effectController: {fileID: 9100000, guid: d21cace83adc1d5498cf7d8bee74ef0a, type: 2}
   effectScale: 0.5
   activationSound: {fileID: 8300000, guid: fc4e7340ca01fa54386fca20592a2fc2, type: 3}
+  activationSoundPlayCount: 1
   normalEnemyDuration: 2
   bossDuration: 1
   normalDurationUpgrade: 1

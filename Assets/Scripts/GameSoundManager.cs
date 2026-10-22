@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -106,7 +107,21 @@ public sealed class GameSoundManager : MonoBehaviour
     public void PlayDefeat() => PlayEffect(defeat, defeatVolume);
     public void PlayMatchStart() => PlayEffect(matchStart, matchStartVolume);
     public void PlayTowerBuilt() => PlayEffect(towerBuilt, towerBuiltVolume);
-    public void PlayAbilityEffect(AudioClip clip) => PlayEffect(clip, 1f);
+    public void PlayAbilityEffect(AudioClip clip, int playCount)
+    {
+        if (clip != null && effectsSource != null)
+            StartCoroutine(PlayAbilityEffectRepeatedly(clip, Mathf.Max(1, playCount)));
+    }
+
+    private IEnumerator PlayAbilityEffectRepeatedly(AudioClip clip, int playCount)
+    {
+        for (int i = 0; i < playCount; i++)
+        {
+            PlayEffect(clip, 1f);
+            if (i < playCount - 1)
+                yield return new WaitForSecondsRealtime(Mathf.Max(0.05f, clip.length));
+        }
+    }
 
     private void PlayEffect(AudioClip clip, float volume)
     {

@@ -18,6 +18,7 @@ MonoBehaviour:
   effectController: {fileID: 9100000, guid: ad1e7be507e8bc14b95fa31e09da4f0f, type: 2}
   effectScale: 0.8
   activationSound: {fileID: 8300000, guid: 3e694835ddf0b2d4d857718ac35127f2, type: 3}
+  activationSoundPlayCount: 1
   meteorCount: 6
   meteorCountUpgrade: 1
   damage: 10
@@ -28,5 +29,5 @@ MonoBehaviour:
   horizontalPadding: 0.4
   centerY: 0.2
   verticalHalfRange: 0.2
-  maximumX: 4.8
+  maximumX: 4.5
   minimumSeparation: 1.2

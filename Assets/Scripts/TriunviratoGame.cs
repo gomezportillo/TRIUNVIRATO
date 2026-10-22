@@ -197,9 +197,12 @@ public sealed class TriunviratoGame : MonoBehaviour
         {
             if (keyboard.rKey.wasPressedThisFrame)
             {
-                ResetMatch(matchStatus != MatchStatus.WaitingForPlayers);
+                economy?.GrantDebugResourcesToAllArmies(10);
                 return;
             }
+
+            if (keyboard.oKey.wasPressedThisFrame)
+                ForceStartNextWaveForDebug();
 
             if (keyboard.pKey.wasPressedThisFrame && !finished)
             {
@@ -224,6 +227,31 @@ public sealed class TriunviratoGame : MonoBehaviour
 
         if (castleHealth <= 0f)
             EndMatch(false);
+    }
+
+    private void ForceStartNextWaveForDebug()
+    {
+        if (matchStatus != MatchStatus.InProgress || finished)
+            return;
+
+        foreach (SkeletonEnemy enemy in enemies)
+            if (enemy != null) Destroy(enemy.gameObject);
+        enemies.Clear();
+        foreach (Projectile projectile in projectiles)
+            if (projectile.View != null) Destroy(projectile.View);
+        projectiles.Clear();
+        foreach (FloatingDamage damage in floatingDamage)
+            if (damage.View != null) Destroy(damage.View);
+        floatingDamage.Clear();
+
+        purchasePhase = false;
+        purchasePhaseTimer = 0f;
+        waveInProgress = false;
+        remainingToSpawn = 0;
+        earlyWaveCallPending = false;
+        currentWaveRewardMultiplier = 1f;
+        StartNextWave();
+        Debug.Log("Depuración: inicio forzado de la oleada " + wave + ".", this);
     }
 
     private void ResetMatch(bool resumeMatch)
@@ -617,7 +645,7 @@ public sealed class TriunviratoGame : MonoBehaviour
     {
         int index = (int)army;
         if (!IsValidArmy(army) || string.IsNullOrEmpty(id)) return null;
-        for (int slot = 0; slot < 3; slot++)
+        for (int slot = 0; slot < 4; slot++)
             if (purchaseOffers[index, slot] != null && purchaseOffers[index, slot].id == id) return purchaseOffers[index, slot];
         return null;
     }
@@ -887,7 +915,8 @@ public sealed class TriunviratoGame : MonoBehaviour
             return false;
         }
 
-        GameSoundManager.Instance?.PlayAbilityEffect(GetSpecialAbilityConfig(army).ActivationSound);
+        HeroSpecialAbilityConfig abilityConfig = GetSpecialAbilityConfig(army);
+        GameSoundManager.Instance?.PlayAbilityEffect(abilityConfig.ActivationSound, abilityConfig.ActivationSoundPlayCount);
         PlaySpecialAttackAnimation(defender);
         specialCooldownEndsAt[(int)army] = Time.time + GetSpecialAbilityCooldown(army);
         specialCooldownsWereRunning = true;

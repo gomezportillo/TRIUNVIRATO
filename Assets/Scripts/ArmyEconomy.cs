@@ -81,6 +81,13 @@ public sealed class ArmyEconomy : MonoBehaviour
         AddCoins(army, amount, "elección de recursos entre oleadas");
     }
 
+    public void GrantDebugResourcesToAllArmies(int amount)
+    {
+        if (amount <= 0) return;
+        for (int i = 0; i < balances.Length; i++)
+            AddCoins((ArmyType)i, amount, "depuración");
+    }
+
     public float GetFractionalCoins(ArmyType army) =>
         IsValidArmy(army) ? generationRemainders[(int)army] : 0f;
 

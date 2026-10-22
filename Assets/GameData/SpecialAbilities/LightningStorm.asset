@@ -18,6 +18,7 @@ MonoBehaviour:
   effectController: {fileID: 9100000, guid: 216314bf50a194f4f88d49455a7fd156, type: 2}
   effectScale: 0.8
   activationSound: {fileID: 8300000, guid: a1dc794d77053294082a8175e99f0474, type: 3}
+  activationSoundPlayCount: 1
   hitCount: 3
   hitCountUpgrade: 1
   damagePerHit: 15
