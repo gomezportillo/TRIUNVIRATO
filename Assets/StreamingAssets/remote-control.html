@@ -28,6 +28,7 @@
     .green { background: #4ade80; }
     .red { background: #f87171; }
     .blue { background: #60a5fa; }
+    .pink { background: #ff69b4; }
     .neutral { background: #cbd5e1; }
     .secondary { min-height: 44px; color: #f8fafc; background: #334155; }
     .tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
@@ -76,6 +77,7 @@
     .purchase-card[data-category="economy"] { border-color: #4ade80; }
     .purchase-card[data-category="towers"] { border-color: #f87171; }
     .purchase-card[data-category="hero"] { border-color: #60a5fa; }
+    .purchase-card[data-category="specialabilities"] { border-color: #ff69b4; }
     .special-card { border-color: var(--army); }
     .special-card button { color: #07111f; background: var(--army); }
     .purchase-timer { font-size: 1.15rem; font-weight: 800; }
@@ -342,17 +344,17 @@
             const affordable = requirements.every(cost => cost.balance >= cost.amount);
             const costLabel = requirements.map(cost => `${cost.amount} ${armyIcon(cost.army)}`).join(' + ');
             const balanceLabel = requirements.map(cost => `${cost.balance} ${armyIcon(cost.army)}`).join(' + ');
-            const heading = document.createElement('h3'); heading.textContent = `${option.category === 'economy' ? '🟢 Economía' : option.category === 'towers' ? '🔴 Torres' : '🔵 Héroe'} · ${option.name}`;
+            const heading = document.createElement('h3'); heading.textContent = `${option.category === 'economy' ? '🟢 Economía' : option.category === 'towers' ? '🔴 Torres' : option.category === 'specialabilities' ? '🩷 Habilidad especial' : '🔵 Héroe'} · ${option.name}`;
             const desc = document.createElement('p'); desc.className = 'description'; desc.textContent = option.description;
             const cost = document.createElement('p'); cost.className = 'costline'; cost.textContent = `Precio: ${costLabel} · Disponible: ${balanceLabel}`;
-            const button = document.createElement('button'); button.className = option.category === 'economy' ? 'green' : option.category === 'towers' ? 'red' : 'blue';
+            const button = document.createElement('button'); button.className = option.category === 'economy' ? 'green' : option.category === 'towers' ? 'red' : option.category === 'specialabilities' ? 'pink' : 'blue';
             button.textContent = `Comprar · ${costLabel}`;
             const actionKey = `intermission:${selectedPanel}`; const pending = pendingActions.has(actionKey);
             button.disabled = pending || army.purchaseChoiceMade || !connected || !army.canControl || !affordable;
             button.addEventListener('click', () => request({ type: 'buyIntermissionUpgrade', army: selectedPanel, choice: option.id }, actionKey));
             const rarity = document.createElement('p'); rarity.className = 'muted';
             rarity.style.fontSize = '1.2rem'; rarity.style.letterSpacing = '.18em';
-            rarity.textContent = '⭐'.repeat(Math.max(1, Math.min(2, option.stars || 1)));
+            rarity.textContent = '⭐'.repeat(Math.max(1, Math.min(3, option.stars || 1)));
             card.append(heading, desc, cost, button, rarity);
             if (!affordable && !army.purchaseChoiceMade) { const reason = document.createElement('p'); reason.className = 'blocked'; reason.textContent = `Saldo insuficiente para ${costLabel}.`; card.append(reason); }
             content.append(card);

@@ -13,7 +13,12 @@ MonoBehaviour:
   m_Name: IntermissionUpgrades
   m_EditorClassIdentifier: 
   priceGrowthPerWave: 0.1
-  rareSecondaryCostPercent: 0.5
+  rareSecondaryCostPercent: 0.25
+  specialGreenCost: 15
+  specialRedCost: 15
+  specialBlueCost: 15
+  specialAbilityOffersAfterBoss: 1
+  specialAbilityStars: 3
   definitions:
   - id: economy_passive
     displayName: Caudal constante

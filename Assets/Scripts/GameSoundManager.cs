@@ -106,6 +106,7 @@ public sealed class GameSoundManager : MonoBehaviour
     public void PlayDefeat() => PlayEffect(defeat, defeatVolume);
     public void PlayMatchStart() => PlayEffect(matchStart, matchStartVolume);
     public void PlayTowerBuilt() => PlayEffect(towerBuilt, towerBuiltVolume);
+    public void PlayAbilityEffect(AudioClip clip) => PlayEffect(clip, 1f);
 
     private void PlayEffect(AudioClip clip, float volume)
     {

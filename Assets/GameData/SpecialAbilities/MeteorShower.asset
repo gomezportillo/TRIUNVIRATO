@@ -17,8 +17,11 @@ MonoBehaviour:
   cooldown: 20
   effectController: {fileID: 9100000, guid: ad1e7be507e8bc14b95fa31e09da4f0f, type: 2}
   effectScale: 0.8
+  activationSound: {fileID: 8300000, guid: 3e694835ddf0b2d4d857718ac35127f2, type: 3}
   meteorCount: 6
+  meteorCountUpgrade: 1
   damage: 10
+  damageUpgrade: 5
   radius: 1.25
   interval: 0.4
   impactDelay: 0.7

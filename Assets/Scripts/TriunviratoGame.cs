@@ -14,6 +14,7 @@ public sealed class TriunviratoGame : MonoBehaviour
     public const int ResourceChoiceReward = 20;
     private const int NormalStars = 1;
     private const int RareStars = 2;
+    private const int SpecialAbilityStars = 3;
     [SerializeField] private Transform tierraHero;
     [SerializeField] private Transform aireHero;
     [SerializeField] private Transform marHero;
@@ -74,7 +75,13 @@ public sealed class TriunviratoGame : MonoBehaviour
     private readonly float[] heroSplashMultipliers = { 1f, 1f, 1f };
     private readonly float[] heroSplashFixedBonus = new float[3];
     private readonly float[] heroDamageFixedBonus = new float[3];
-    private readonly PurchaseOffer[,] purchaseOffers = new PurchaseOffer[3, 3];
+    private readonly PurchaseOffer[,] purchaseOffers = new PurchaseOffer[3, 4];
+    private readonly float[] graspNormalDurationBonus = new float[3];
+    private readonly float[] graspBossDurationBonus = new float[3];
+    private readonly int[] meteorCountBonus = new int[3];
+    private readonly float[] meteorDamageBonus = new float[3];
+    private readonly int[] lightningHitCountBonus = new int[3];
+    private readonly float[] lightningDamageBonus = new float[3];
     private bool waveHadBoss;
     private bool purchaseOffersAreRare;
     private readonly float[] specialCooldownEndsAt = new float[3];
@@ -94,6 +101,7 @@ public sealed class TriunviratoGame : MonoBehaviour
         public int stars;
         public int[] resourceCosts;
         public bool isTowerUnlock;
+        public bool isSpecialAbility;
     }
 
     public MatchStatus Status => matchStatus;
@@ -112,7 +120,10 @@ public sealed class TriunviratoGame : MonoBehaviour
     {
         int index = (int)army;
         if (!IsValidArmy(army) || !purchasePhase) return Array.Empty<PurchaseOffer>();
-        return new[] { purchaseOffers[index, 0], purchaseOffers[index, 1], purchaseOffers[index, 2] };
+        List<PurchaseOffer> offers = new List<PurchaseOffer>(4);
+        for (int slot = 0; slot < 4; slot++)
+            if (purchaseOffers[index, slot] != null) offers.Add(purchaseOffers[index, slot]);
+        return offers.ToArray();
     }
     public bool CanCombatNow => CanCombat;
     public bool IsPaused => paused;
@@ -275,6 +286,12 @@ public sealed class TriunviratoGame : MonoBehaviour
         Array.Clear(heroAttackRateFixedBonus, 0, heroAttackRateFixedBonus.Length);
         Array.Clear(heroRangeFixedBonus, 0, heroRangeFixedBonus.Length);
         Array.Clear(heroSplashFixedBonus, 0, heroSplashFixedBonus.Length);
+        Array.Clear(graspNormalDurationBonus, 0, graspNormalDurationBonus.Length);
+        Array.Clear(graspBossDurationBonus, 0, graspBossDurationBonus.Length);
+        Array.Clear(meteorCountBonus, 0, meteorCountBonus.Length);
+        Array.Clear(meteorDamageBonus, 0, meteorDamageBonus.Length);
+        Array.Clear(lightningHitCountBonus, 0, lightningHitCountBonus.Length);
+        Array.Clear(lightningDamageBonus, 0, lightningDamageBonus.Length);
         for (int i = 0; i < 3; i++)
         {
             economyUpgradeMultipliers[i] = towerUpgradeMultipliers[i] = heroUpgradeMultipliers[i] = 1f;
@@ -282,7 +299,7 @@ public sealed class TriunviratoGame : MonoBehaviour
             economyWaveRewardMultipliers[i] = 1f;
             towerSpeedMultipliers[i] = towerRangeMultipliers[i] = 1f;
             heroSpeedMultipliers[i] = heroRangeMultipliers[i] = heroSplashMultipliers[i] = 1f;
-            for (int category = 0; category < 3; category++) purchaseOffers[i, category] = null;
+            for (int category = 0; category < 4; category++) purchaseOffers[i, category] = null;
         }
         waveHadBoss = false;
         if (economy != null)
@@ -411,7 +428,53 @@ public sealed class TriunviratoGame : MonoBehaviour
                 ? CreateTowerUnlockOffer(army, towerShop)
                 : towerShop != null ? GenerateOffer(army, IntermissionUpgradeCategory.Towers, towerShop) : null;
             purchaseOffers[armyIndex, 2] = GenerateOffer(army, IntermissionUpgradeCategory.Hero, towerShop);
+            purchaseOffers[armyIndex, 3] = purchaseOffersAreRare && intermissionCatalog.SpecialAbilityOffersAfterBoss
+                ? GenerateSpecialAbilityOffer(army) : null;
         }
+    }
+
+    private PurchaseOffer GenerateSpecialAbilityOffer(ArmyType army)
+    {
+        HeroSpecialAbilityConfig ability = GetSpecialAbilityConfig(army);
+        if (intermissionCatalog == null || ability == null) return null;
+        string id;
+        string name;
+        string description;
+        float increment;
+        switch (army)
+        {
+            case ArmyType.Tierra:
+                bool normal = UnityEngine.Random.Range(0, 2) == 0;
+                id = normal ? "special_grasp_normal" : "special_grasp_boss";
+                name = normal ? "Agarre prolongado" : "Agarre contra bosses";
+                increment = normal ? zombieGraspAbility.NormalDurationUpgrade : zombieGraspAbility.BossDurationUpgrade;
+                description = normal ? "Inmovilización contra enemigos normales +" + increment.ToString("0.##") + " s" :
+                    "Inmovilización contra bosses +" + increment.ToString("0.##") + " s";
+                break;
+            case ArmyType.Aire:
+                bool moreMeteors = UnityEngine.Random.Range(0, 2) == 0;
+                id = moreMeteors ? "special_meteor_count" : "special_meteor_damage";
+                name = moreMeteors ? "Lluvia abundante" : "Meteoritos devastadores";
+                increment = moreMeteors ? meteorShowerAbility.MeteorCountUpgrade : meteorShowerAbility.DamageUpgrade;
+                description = moreMeteors ? "Meteoritos por activación +" + increment.ToString("0.##") :
+                    "Daño por meteorito +" + increment.ToString("0.##");
+                break;
+            default:
+                bool moreHits = UnityEngine.Random.Range(0, 2) == 0;
+                id = moreHits ? "special_lightning_count" : "special_lightning_damage";
+                name = moreHits ? "Tormenta intensificada" : "Rayos devastadores";
+                increment = moreHits ? lightningStormAbility.HitCountUpgrade : lightningStormAbility.DamageUpgrade;
+                description = moreHits ? "Impactos de rayo por activación +" + increment.ToString("0.##") :
+                    "Daño por impacto +" + increment.ToString("0.##");
+                break;
+        }
+        int[] baseCosts = intermissionCatalog.SpecialAbilityBaseCosts;
+        int growthWaves = Mathf.Max(0, wave - 1);
+        int[] costs = new int[3];
+        for (int i = 0; i < costs.Length; i++)
+            costs[i] = Mathf.Max(0, Mathf.RoundToInt(baseCosts[i] * Mathf.Pow(1f + intermissionCatalog.PriceGrowthPerWave, growthWaves)));
+        return new PurchaseOffer { id = id, category = "specialabilities", name = name, description = description,
+            stars = intermissionCatalog.SpecialAbilityStars, resourceCosts = costs, isSpecialAbility = true };
     }
 
     private PurchaseOffer GenerateOffer(ArmyType army, IntermissionUpgradeCategory category, TowerShop towerShop)
@@ -504,8 +567,8 @@ public sealed class TriunviratoGame : MonoBehaviour
         {
             return false;
         }
-        IntermissionUpgradeCatalog.Definition definition = offer.isTowerUnlock ? null : intermissionCatalog.Find(id);
-        if (!offer.isTowerUnlock && (definition == null || !IsOfferStillApplicable(army, definition)))
+        IntermissionUpgradeCatalog.Definition definition = offer.isTowerUnlock || offer.isSpecialAbility ? null : intermissionCatalog.Find(id);
+        if (!offer.isTowerUnlock && !offer.isSpecialAbility && (definition == null || !IsOfferStillApplicable(army, definition)))
         {
             message = "La mejora ya no está disponible.";
             return false;
@@ -520,16 +583,34 @@ public sealed class TriunviratoGame : MonoBehaviour
         {
             if (!towerShop.UnlockForIntermission(army, out message)) return false;
         }
+        else if (offer.isSpecialAbility)
+        {
+            ApplySpecialAbilityUpgrade(army, offer.id);
+        }
         else
         {
             ApplyIntermissionEffect(army, definition, IntermissionUpgradeCatalog.GetOfferEffect(definition, offer.stars));
         }
         purchaseChoices[armyIndex] = true;
-        purchaseResults[armyIndex] = offer.name + (offer.stars == RareStars ? " ⭐⭐" : " ⭐");
+        purchaseResults[armyIndex] = offer.name + (offer.stars == SpecialAbilityStars ? " ⭐⭐⭐" : offer.stars == RareStars ? " ⭐⭐" : " ⭐");
         StateRevision++;
         message = "Comprada: " + offer.name + ".";
         FinishIfAllChosen();
         return true;
+    }
+
+    private void ApplySpecialAbilityUpgrade(ArmyType army, string id)
+    {
+        int index = (int)army;
+        switch (id)
+        {
+            case "special_grasp_normal": graspNormalDurationBonus[index] += zombieGraspAbility.NormalDurationUpgrade; break;
+            case "special_grasp_boss": graspBossDurationBonus[index] += zombieGraspAbility.BossDurationUpgrade; break;
+            case "special_meteor_count": meteorCountBonus[index] += meteorShowerAbility.MeteorCountUpgrade; break;
+            case "special_meteor_damage": meteorDamageBonus[index] += meteorShowerAbility.DamageUpgrade; break;
+            case "special_lightning_count": lightningHitCountBonus[index] += lightningStormAbility.HitCountUpgrade; break;
+            case "special_lightning_damage": lightningDamageBonus[index] += lightningStormAbility.DamageUpgrade; break;
+        }
     }
 
     private PurchaseOffer FindGeneratedOffer(ArmyType army, string id)
@@ -736,8 +817,8 @@ public sealed class TriunviratoGame : MonoBehaviour
     {
         switch (army)
         {
-            case ArmyType.Aire: return meteorShowerAbility != null ? meteorShowerAbility.MeteorCount : 0;
-            case ArmyType.Mar: return lightningStormAbility != null ? lightningStormAbility.HitCount : 0;
+            case ArmyType.Aire: return meteorShowerAbility != null ? meteorShowerAbility.MeteorCount + meteorCountBonus[(int)army] : 0;
+            case ArmyType.Mar: return lightningStormAbility != null ? lightningStormAbility.HitCount + lightningHitCountBonus[(int)army] : 0;
             default: return 0;
         }
     }
@@ -747,19 +828,19 @@ public sealed class TriunviratoGame : MonoBehaviour
         switch (army)
         {
             case ArmyType.Aire:
-                return meteorShowerAbility != null ? ScaleSpecialDamage(meteorShowerAbility.Damage, army) : 0f;
+                return meteorShowerAbility != null ? ScaleSpecialDamage(meteorShowerAbility.Damage + meteorDamageBonus[(int)army], army) : 0f;
             case ArmyType.Mar:
-                return lightningStormAbility != null ? ScaleSpecialDamage(lightningStormAbility.DamagePerHit, army) : 0f;
+                return lightningStormAbility != null ? ScaleSpecialDamage(lightningStormAbility.DamagePerHit + lightningDamageBonus[(int)army], army) : 0f;
             default: return 0f;
         }
     }
 
     public float GetSpecialAbilityNormalDuration(ArmyType army) =>
-        army == ArmyType.Tierra && zombieGraspAbility != null ? zombieGraspAbility.NormalEnemyDuration : 0f;
+        army == ArmyType.Tierra && zombieGraspAbility != null ? zombieGraspAbility.NormalEnemyDuration + graspNormalDurationBonus[(int)army] : 0f;
 
     public float GetSpecialAbilityBossDuration(ArmyType army) =>
         army == ArmyType.Tierra && zombieGraspAbility != null
-            ? Mathf.Min(zombieGraspAbility.NormalEnemyDuration, zombieGraspAbility.BossDuration)
+            ? Mathf.Min(GetSpecialAbilityNormalDuration(army), zombieGraspAbility.BossDuration + graspBossDurationBonus[(int)army])
             : 0f;
 
     public bool TryActivateSpecial(ArmyType army, out string message)
@@ -806,6 +887,7 @@ public sealed class TriunviratoGame : MonoBehaviour
             return false;
         }
 
+        GameSoundManager.Instance?.PlayAbilityEffect(GetSpecialAbilityConfig(army).ActivationSound);
         PlaySpecialAttackAnimation(defender);
         specialCooldownEndsAt[(int)army] = Time.time + GetSpecialAbilityCooldown(army);
         specialCooldownsWereRunning = true;
@@ -971,8 +1053,8 @@ public sealed class TriunviratoGame : MonoBehaviour
                 Debug.LogWarning("Asigna el asset Zombie Grasp y su controlador de efecto; la inmovilización se aplicará sin efecto visual.", this);
             warnedMissingZombieGraspController = true;
         }
-        float normalDuration = ability != null ? Mathf.Max(0f, ability.NormalEnemyDuration) : 0f;
-        float bossDuration = ability != null ? Mathf.Min(normalDuration, Mathf.Max(0f, ability.BossDuration)) : 0f;
+        float normalDuration = ability != null ? Mathf.Max(0f, ability.NormalEnemyDuration + graspNormalDurationBonus[(int)ArmyType.Tierra]) : 0f;
+        float bossDuration = ability != null ? Mathf.Min(normalDuration, Mathf.Max(0f, ability.BossDuration + graspBossDurationBonus[(int)ArmyType.Tierra])) : 0f;
         foreach (SkeletonEnemy enemy in enemies)
         {
             if (enemy == null || enemy.IsDead)
@@ -998,7 +1080,7 @@ public sealed class TriunviratoGame : MonoBehaviour
                 Debug.LogWarning("Asigna el asset Meteor Shower y su controlador de efecto; los impactos se aplicarán sin efecto visual.", this);
             warnedMissingMeteorController = true;
         }
-        int meteorCount = ability != null ? ability.MeteorCount : 0;
+        int meteorCount = ability != null ? ability.MeteorCount + meteorCountBonus[(int)ArmyType.Aire] : 0;
         List<Vector3> strikePositions = new List<Vector3>(Mathf.Max(1, meteorCount));
         int count = Mathf.Max(1, meteorCount);
         for (int i = 0; i < count; i++)
@@ -1020,7 +1102,7 @@ public sealed class TriunviratoGame : MonoBehaviour
         if (!CanCombat)
             yield break;
 
-        float damage = ScaleSpecialDamage(ability != null ? ability.Damage : 0f, ArmyType.Aire);
+        float damage = ScaleSpecialDamage(ability != null ? ability.Damage + meteorDamageBonus[(int)ArmyType.Aire] : 0f, ArmyType.Aire);
         float radius = ability != null ? Mathf.Max(0f, ability.Radius) : 0f;
         foreach (SkeletonEnemy enemy in enemies)
         {
@@ -1084,7 +1166,7 @@ public sealed class TriunviratoGame : MonoBehaviour
                 Debug.LogWarning("Asigna el asset Lightning Storm y su controlador de efecto; los impactos se aplicarán sin efecto visual.", this);
             warnedMissingLightningController = true;
         }
-        int hitCount = Mathf.Max(1, ability != null ? ability.HitCount : 0);
+        int hitCount = Mathf.Max(1, ability != null ? ability.HitCount + lightningHitCountBonus[(int)ArmyType.Mar] : 0);
         for (int i = 0; i < hitCount; i++)
         {
             if (target == null || target.IsDead)
@@ -1096,7 +1178,7 @@ public sealed class TriunviratoGame : MonoBehaviour
                 yield return new WaitForSeconds(ability.ImpactDelay);
             if (target == null || target.IsDead)
                 yield break;
-            ApplyDamage(target, ScaleSpecialDamage(ability != null ? ability.DamagePerHit : 0f, ArmyType.Mar),
+            ApplyDamage(target, ScaleSpecialDamage(ability != null ? ability.DamagePerHit + lightningDamageBonus[(int)ArmyType.Mar] : 0f, ArmyType.Mar),
                 marConfig != null ? marConfig.ProjectileColor : Color.cyan);
             if (i < hitCount - 1)
                 yield return new WaitForSeconds(ability != null ? ability.HitInterval : 0f);

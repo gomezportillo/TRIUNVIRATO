@@ -2,7 +2,7 @@ using System;
 using System.Globalization;
 using UnityEngine;
 
-public enum IntermissionUpgradeCategory { Economy, Towers, Hero }
+public enum IntermissionUpgradeCategory { Economy, Towers, Hero, SpecialAbilities }
 public enum IntermissionUpgradeValueType { Percentage, Fixed }
 public enum IntermissionUpgradeEffect
 {
@@ -30,10 +30,19 @@ public sealed class IntermissionUpgradeCatalog : ScriptableObject
 
     [SerializeField, Min(0f)] private float priceGrowthPerWave = 0.10f;
     [SerializeField, Min(0f)] private float rareSecondaryCostPercent = 0.50f;
+    [Header("Habilidades especiales (solo tras boss)")]
+    [SerializeField, Min(0)] private int specialGreenCost = 15;
+    [SerializeField, Min(0)] private int specialRedCost = 15;
+    [SerializeField, Min(0)] private int specialBlueCost = 15;
+    [SerializeField] private bool specialAbilityOffersAfterBoss = true;
+    [SerializeField, Min(1)] private int specialAbilityStars = 3;
     [SerializeField] private Definition[] definitions = Array.Empty<Definition>();
 
     public float PriceGrowthPerWave => priceGrowthPerWave;
     public float RareSecondaryCostPercent => rareSecondaryCostPercent;
+    public int[] SpecialAbilityBaseCosts => new[] { specialGreenCost, specialRedCost, specialBlueCost };
+    public bool SpecialAbilityOffersAfterBoss => specialAbilityOffersAfterBoss;
+    public int SpecialAbilityStars => specialAbilityStars;
     public Definition[] Definitions => definitions;
 
     public Definition Find(string id)
