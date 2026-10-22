@@ -24,6 +24,9 @@ public sealed class SkeletonEnemy : MonoBehaviour
     private float castleAttackTimer;
     private float idleRemaining;
     private float deathFallbackTimer;
+    private float rootedUntil;
+    private float animationSpeedBeforeRoot = 1f;
+    private bool isRooted;
 
     public bool IsDead => isDead;
     public bool IsBoss => isBoss;
@@ -59,6 +62,8 @@ public sealed class SkeletonEnemy : MonoBehaviour
         {
             isDead = true;
             isTakingHit = false;
+            isRooted = false;
+            rootedUntil = 0f;
             PlayState(DeathState, 1f);
             deathFallbackTimer = config.DeathAnimationFallbackSeconds;
             GameSoundManager.Instance?.PlaySkeletonDeath();
@@ -69,8 +74,17 @@ public sealed class SkeletonEnemy : MonoBehaviour
         {
             isTakingHit = true;
             PlayState(TakeHitState, 1f);
+            if (isRooted && animator != null)
+                animator.speed = 0f;
         }
         return false;
+    }
+
+    internal void ApplyRooted(float duration)
+    {
+        if (isDead || duration <= 0f)
+            return;
+        rootedUntil = Mathf.Max(rootedUntil, Time.time + duration);
     }
 
     /// <summary>Moves toward the castle and returns true after the death animation has finished.</summary>
@@ -85,6 +99,24 @@ public sealed class SkeletonEnemy : MonoBehaviour
             AnimatorStateInfo deathInfo = animator.GetCurrentAnimatorStateInfo(0);
             return (deathInfo.shortNameHash == DeathState && deathInfo.normalizedTime >= 1f) ||
                    deathFallbackTimer <= 0f;
+        }
+
+        if (Time.time < rootedUntil)
+        {
+            if (!isRooted)
+            {
+                isRooted = true;
+                animationSpeedBeforeRoot = animator != null ? animator.speed : 1f;
+                if (animator != null)
+                    animator.speed = 0f;
+            }
+            return false;
+        }
+        if (isRooted)
+        {
+            isRooted = false;
+            if (animator != null)
+                animator.speed = animationSpeedBeforeRoot;
         }
 
         // Castle damage is driven by a timer as well as the animation event. The timer

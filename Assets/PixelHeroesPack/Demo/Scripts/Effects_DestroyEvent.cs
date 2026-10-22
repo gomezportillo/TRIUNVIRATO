@@ -4,8 +4,11 @@ using UnityEngine;
 
 public class Effects_DestroyEvent : MonoBehaviour
 {
+    public bool DestroyOnEvent = true;
+
     public void destroyEvent()
     {
-        Destroy(gameObject);
+        if (DestroyOnEvent)
+            Destroy(gameObject);
     }
 }

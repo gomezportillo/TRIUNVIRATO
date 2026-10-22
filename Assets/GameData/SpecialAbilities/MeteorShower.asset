@@ -1,0 +1,29 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4a7a84df65234ef0aaf27276c8f5b003, type: 3}
+  m_Name: MeteorShower
+  m_EditorClassIdentifier: 
+  abilityName: "Lluvia mete\xF3rica"
+  description: Bombardea el mapa con una lluvia de meteoritos
+  cooldown: 20
+  effectController: {fileID: 9100000, guid: ad1e7be507e8bc14b95fa31e09da4f0f, type: 2}
+  effectScale: 0.8
+  meteorCount: 6
+  damage: 10
+  radius: 1.25
+  interval: 0.4
+  impactDelay: 0.7
+  horizontalPadding: 0.4
+  centerY: 0.2
+  verticalHalfRange: 0.2
+  maximumX: 4.8
+  minimumSeparation: 1.2

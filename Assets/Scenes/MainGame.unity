@@ -169,7 +169,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!224 &250000001
 RectTransform:
   m_ObjectHideFlags: 0
@@ -188,8 +188,8 @@ RectTransform:
   - {fileID: 250000041}
   - {fileID: 250000051}
   - {fileID: 250000061}
-  - {fileID: 250000071}
   - {fileID: 250000081}
+  - {fileID: 250000071}
   - {fileID: 250000091}
   - {fileID: 250000111}
   m_Father: {fileID: 880000001}
@@ -434,7 +434,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 1
     m_LineSpacing: 1
-  m_Text: 0.4.1
+  m_Text: 0.5
 --- !u!1 &250000030
 GameObject:
   m_ObjectHideFlags: 0
@@ -785,7 +785,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 1, y: 0.5}
   m_AnchorMax: {x: 1, y: 0.5}
-  m_AnchoredPosition: {x: -700, y: 39}
+  m_AnchoredPosition: {x: -700, y: -75}
   m_SizeDelta: {x: 470, y: 110}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &250000072
@@ -864,7 +864,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 1, y: 0.5}
   m_AnchorMax: {x: 1, y: 0.5}
-  m_AnchoredPosition: {x: -700, y: -71}
+  m_AnchoredPosition: {x: -700, y: 40}
   m_SizeDelta: {x: 470, y: 110}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &250000082
@@ -1256,6 +1256,9 @@ MonoBehaviour:
   enemyConfig: {fileID: 11400000, guid: b15f0c26e01943f59de2e35d817a0005, type: 2}
   damageFont: {fileID: 12800000, guid: 3516ce2d6a7e55f4eb648f57f6f5f47e, type: 3}
   intermissionCatalog: {fileID: 11400000, guid: 3fbc06f2046d442fa27c4a3a3c1f0a91, type: 2}
+  zombieGraspAbility: {fileID: 11400000, guid: 4a7a84df65234ef0aaf27276c8f5b020, type: 2}
+  meteorShowerAbility: {fileID: 11400000, guid: 4a7a84df65234ef0aaf27276c8f5b021, type: 2}
+  lightningStormAbility: {fileID: 11400000, guid: 4a7a84df65234ef0aaf27276c8f5b022, type: 2}
 --- !u!1 &390120928
 GameObject:
   m_ObjectHideFlags: 0
@@ -1953,11 +1956,11 @@ RectTransform:
   - {fileID: 880000121}
   m_Father: {fileID: 880000001}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 1, y: 1}
-  m_AnchorMax: {x: 1, y: 1}
-  m_AnchoredPosition: {x: -276, y: -50}
+  m_AnchorMin: {x: 1, y: 0}
+  m_AnchorMax: {x: 1, y: 0}
+  m_AnchoredPosition: {x: -75, y: 50}
   m_SizeDelta: {x: 200, y: 200}
-  m_Pivot: {x: 0, y: 1}
+  m_Pivot: {x: 1, y: 0}
 --- !u!222 &880000012
 CanvasRenderer:
   m_ObjectHideFlags: 0
@@ -2427,7 +2430,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 27, y: -23}
+  m_AnchoredPosition: {x: 30, y: -23}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0, y: 0}
 --- !u!222 &880000202
@@ -2506,7 +2509,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0.5}
   m_AnchorMax: {x: 0, y: 0.5}
-  m_AnchoredPosition: {x: 12.5, y: 34.299988}
+  m_AnchoredPosition: {x: 30, y: 35}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0, y: 0}
 --- !u!222 &880000212
@@ -2550,7 +2553,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 1
     m_VerticalOverflow: 1
     m_LineSpacing: 1
-  m_Text: "\U0001F30A  Oleada 1 / \u221E"
+  m_Text: "Oleada 1 / \u221E"
 --- !u!1 &880000220
 GameObject:
   m_ObjectHideFlags: 0
@@ -2585,7 +2588,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0.5}
   m_AnchorMax: {x: 0, y: 0.5}
-  m_AnchoredPosition: {x: 11.9, y: -12.500015}
+  m_AnchoredPosition: {x: 30, y: -10}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0, y: 0}
 --- !u!222 &880000222
@@ -2629,7 +2632,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 1
     m_VerticalOverflow: 1
     m_LineSpacing: 1
-  m_Text: "\U0001F47E  Enemigos restantes: 0"
+  m_Text: 'Enemigos restantes: 0'
 --- !u!1 &880000230
 GameObject:
   m_ObjectHideFlags: 0
@@ -2664,7 +2667,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 0, y: 0}
-  m_AnchoredPosition: {x: 27.000027, y: 44.79999}
+  m_AnchoredPosition: {x: 30, y: 44.79999}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0, y: 0}
 --- !u!222 &880000232
@@ -2708,7 +2711,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 1
     m_VerticalOverflow: 1
     m_LineSpacing: 1
-  m_Text: "\u2764\uFE0F  Castillo: 100 / 100"
+  m_Text: 'Castillo: 100 / 100'
 --- !u!1 &880000300
 GameObject:
   m_ObjectHideFlags: 0

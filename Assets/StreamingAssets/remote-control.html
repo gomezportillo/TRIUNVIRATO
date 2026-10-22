@@ -41,9 +41,10 @@
     .army-header h2 { margin: 0; font-size: 1.2rem; }
     .wave-label { color: #94a3b8; font-size: .82rem; white-space: nowrap; }
     .wallet { display: flex; justify-content: space-between; align-items: center; gap: 10px; background: var(--army-soft); border-color: color-mix(in srgb, var(--army) 36%, #263449); }
+    .wallet-balance { display: flex; align-items: center; gap: 10px; }
+    .wallet-icon { width: 38px; height: 38px; object-fit: contain; flex: 0 0 auto; }
     .wallet-value { font-size: 1.35rem; font-weight: 800; }
-    .wallet-income { color: #d1fae5; font-size: .82rem; text-align: right; }
-    .section-tabs { position: sticky; top: 0; z-index: 2; margin: 12px 0; padding: 5px; display: grid; grid-template-columns: repeat(3,1fr); gap: 5px; border-radius: 14px; background: #0b1220; }
+    .section-tabs { position: sticky; top: 0; z-index: 2; margin: 12px 0; padding: 5px; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 5px; border-radius: 14px; background: #0b1220; }
     .section-tabs button { min-height: 42px; padding: 7px 4px; color: #cbd5e1; background: #1e293b; font-size: .88rem; }
     .section-tabs button.active { color: #07111f; background: var(--army); }
     .hero-summary { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 7px; }
@@ -75,6 +76,8 @@
     .purchase-card[data-category="economy"] { border-color: #4ade80; }
     .purchase-card[data-category="towers"] { border-color: #f87171; }
     .purchase-card[data-category="hero"] { border-color: #60a5fa; }
+    .special-card { border-color: var(--army); }
+    .special-card button { color: #07111f; background: var(--army); }
     .purchase-timer { font-size: 1.15rem; font-weight: 800; }
     .lobby-actions { display: grid; gap: 2px; }
     [hidden] { display: none !important; }
@@ -109,10 +112,9 @@
         <button class="blue" data-tab="mar">Agua</button>
       </div>
       <div id="wallet" class="wallet"></div>
-      <nav id="section-tabs" class="section-tabs" aria-label="Secciones de mejoras">
-        <button data-section="hero" class="active">🦸 Héroe</button>
-        <button data-section="tower">🗼 Torre</button>
-        <button data-section="resources">📦 Recursos</button>
+      <nav id="section-tabs" class="section-tabs" aria-label="Secciones del ejército">
+        <button data-view="statistics" class="active" aria-pressed="true">Estadísticas</button>
+        <button data-view="attacks" aria-pressed="false">Ataques</button>
       </nav>
       <div id="section-content"></div>
       <button id="reconnect" class="secondary">Conectar / volver a conectar</button>
@@ -129,13 +131,15 @@
       const seatsElement = document.getElementById('seats');
       const wallet = document.getElementById('wallet');
       const content = document.getElementById('section-content');
+      const sectionTabs = document.getElementById('section-tabs');
       const developerButton = document.getElementById('developer');
       const chooseButtons = [...document.querySelectorAll('.choose-army')];
       const tabs = [...document.querySelectorAll('[data-tab]')];
-      const sectionButtons = [...document.querySelectorAll('[data-section]')];
+      const sectionButtons = [...document.querySelectorAll('[data-view]')];
       const names = { tierra: 'Tierra', aire: 'Aire', mar: 'Agua' };
       const colors = { tierra: 'green', aire: 'red', mar: 'blue' };
       const icons = { tierra: '🟢', aire: '🔴', mar: '🔵' };
+      const resourceIconPaths = { tierra: '/icons/ground_icon.png', aire: '/icons/air_icon.png', mar: '/icons/sea_icon.png' };
       const numberFormat = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 2 });
       const tokenKey = 'triunvirato-session-token';
       let token = localStorage.getItem(tokenKey);
@@ -146,7 +150,7 @@
       }
       let socket, state;
       let connected = false, sessionReady = false, developerMode = false;
-      let selectedPanel = '', activeSection = 'hero', stateRevision = -1, requestCounter = 0;
+      let selectedPanel = '', activeView = 'statistics', stateRevision = -1, requestCounter = 0;
       const pendingRequests = new Map();
       const pendingActions = new Set();
 
@@ -243,9 +247,48 @@
           [army.owned ? 'Desbloqueada' : 'Bloqueada', 'Estado']
         ];
         if (army.towerSplashRadius > 0) towerStats.push([`${numberFormat.format(army.towerSplashRadius)} u`, 'Radio de área']);
-        fragments.append(statSection(`Torre · ${army.towerName}`, towerStats,
-          'Las estadísticas muestran el rendimiento efectivo actual, también antes de desbloquear la torre.'));
+        if (army.owned) fragments.append(statSection(`Torre · ${army.towerName}`, towerStats));
         return fragments;
+      }
+      function createSpecialAbilityCard(army) {
+        const card = document.createElement('article'); card.className = 'purchase-card special-card';
+        const title = document.createElement('h3'); title.textContent = 'Habilidad especial';
+        const name = document.createElement('p'); name.className = 'description'; name.textContent = army.specialAbilityName || 'Habilidad especial';
+        if (army.specialAbilityDescription) {
+          const description = document.createElement('p'); description.className = 'description'; description.textContent = army.specialAbilityDescription;
+          card.append(title, name, description);
+        } else card.append(title, name);
+        const remaining = Math.max(0, army.specialCooldownRemaining || 0);
+        const cooldown = document.createElement('p'); cooldown.className = 'muted';
+        cooldown.textContent = `Cooldown: ${numberFormat.format(army.specialCooldownDuration || 0)} s`;
+        const detail = document.createElement('p'); detail.className = 'description';
+        if (army.army === 'tierra') {
+          detail.textContent = `Inmoviliza ${numberFormat.format(army.specialNormalDuration || 0)} s · Jefes: ${numberFormat.format(army.specialBossDuration || 0)} s`;
+        } else if (army.army === 'aire') {
+          detail.textContent = `${army.specialEffectCount || 0} meteoritos · ${numberFormat.format(army.specialDamagePerEffect || 0)} daño por meteorito`;
+        } else if (army.army === 'mar') {
+          detail.textContent = `${army.specialEffectCount || 0} rayos · ${numberFormat.format(army.specialDamagePerEffect || 0)} daño por rayo`;
+        }
+        card.append(detail, cooldown);
+        const status = document.createElement('p'); status.className = 'muted';
+        if (remaining > 0) status.textContent = `Disponible en ${numberFormat.format(remaining)} s`;
+        else if (army.specialCanActivate) status.textContent = 'Lista para activar';
+        else if (state.purchasePhase || !state.waveInProgress) status.textContent = 'Disponible durante una oleada de combate';
+        else status.textContent = 'No hay enemigos vivos';
+
+        const actionKey = `special:${selectedPanel}`;
+        const pending = pendingActions.has(actionKey);
+        const button = document.createElement('button');
+        button.textContent = remaining > 0 ? `${army.specialAbilityName} · ${Math.ceil(remaining)} s` : army.specialAbilityName;
+        button.disabled = pending || !connected || !army.canControl || !army.specialCanActivate;
+        button.addEventListener('click', () => request({ type: 'activateSpecial', army: selectedPanel }, actionKey));
+        card.append(status, button);
+        return card;
+      }
+      function createAttacksPanel(army) {
+        const panel = document.createDocumentFragment();
+        panel.append(createSpecialAbilityCard(army));
+        return panel;
       }
       function renderPanel() {
         if (!state || !sessionReady) return;
@@ -260,6 +303,7 @@
         if (!developerMode && !state.selectedArmy) {
           document.getElementById('panel-heading').textContent = 'Partida en curso';
           document.getElementById('dev-tabs').hidden = true;
+          sectionTabs.hidden = true;
           wallet.textContent = 'Esta sesión no tiene un ejército asignado.'; content.replaceChildren(); return;
         }
         if (!selectedPanel || (!developerMode && selectedPanel !== state.selectedArmy)) selectedPanel = developerMode ? 'tierra' : state.selectedArmy;
@@ -270,18 +314,18 @@
         document.getElementById('wave-label').textContent = `Oleada ${state.currentWave || 0}`;
         document.getElementById('dev-tabs').hidden = !developerMode;
         tabs.forEach(tab => tab.classList.toggle('active', tab.dataset.tab === selectedPanel));
-        sectionButtons.forEach(button => { button.hidden = true; });
         wallet.replaceChildren();
-        const balance = document.createElement('span'); balance.className = 'wallet-value'; balance.textContent = `${armyIcon(selectedPanel)} ${army.coins} recursos`;
-        const income = document.createElement('span'); income.className = 'wallet-income';
-        income.textContent = state.purchasePhase
-          ? `Pausado · ${numberFormat.format(army.passiveIncomePerSecond)} recursos/s durante el combate`
-          : `${numberFormat.format(army.passiveIncomePerSecond)} recursos/s`;
-        wallet.append(balance, income);
+        const balance = document.createElement('div'); balance.className = 'wallet-balance';
+        const resourceIcon = document.createElement('img'); resourceIcon.className = 'wallet-icon';
+        resourceIcon.src = resourceIconPaths[selectedPanel]; resourceIcon.alt = `${names[selectedPanel]} recursos`;
+        const balanceValue = document.createElement('span'); balanceValue.className = 'wallet-value';
+        balanceValue.textContent = numberFormat.format(army.coins);
+        balance.append(resourceIcon, balanceValue);
+        wallet.replaceChildren(balance);
 
         if (state.purchasePhase) {
-          sectionButtons.forEach(button => button.hidden = true);
-          content.replaceChildren(createCombatStatistics(army));
+          sectionTabs.hidden = true;
+          content.replaceChildren();
           const title = document.createElement('h2'); title.textContent = `Preparad la siguiente oleada · ${Math.ceil(state.purchaseSecondsRemaining)} s`;
           content.append(title);
           if (army.purchaseChoiceMade) {
@@ -323,10 +367,16 @@
           resources.append(resourceTitle, resourceDesc, resourceButton); content.append(resources);
           return;
         }
-        sectionButtons.forEach(button => button.hidden = true);
+        sectionTabs.hidden = false;
+        sectionButtons.forEach(button => {
+          const isActive = button.dataset.view === activeView;
+          button.classList.toggle('active', isActive);
+          button.setAttribute('aria-pressed', String(isActive));
+        });
 
-        const fragment = document.createDocumentFragment();
-        fragment.append(createCombatStatistics(army));
+        const fragment = activeView === 'attacks'
+          ? createAttacksPanel(army)
+          : createCombatStatistics(army);
         if (state.status === 'Finished') {
           const finished = document.createElement('p'); finished.className = 'blocked'; finished.textContent = 'Partida finalizada. Las órdenes están bloqueadas.'; fragment.prepend(finished);
         }
@@ -338,7 +388,11 @@
         result.textContent = 'Conectando…'; result.dataset.kind = '';
         socket = new WebSocket(`ws://${location.host}/ws`);
         socket.addEventListener('open', () => { stateRevision = -1; updateConnection(true); request({ type: 'hello', clientToken: token }); });
-        socket.addEventListener('close', () => updateConnection(false));
+        socket.addEventListener('close', () => {
+          updateConnection(false);
+          pendingRequests.clear(); pendingActions.clear();
+          renderPanel();
+        });
         socket.addEventListener('error', () => { updateConnection(false); feedback('No se pudo conectar. Comprueba la Wi-Fi y vuelve a intentarlo.', false); });
         socket.addEventListener('message', event => {
           try {
@@ -364,7 +418,7 @@
       chooseButtons.forEach(button => button.addEventListener('click', () => request({ type: 'selectArmy', army: button.dataset.army })));
       developerButton.addEventListener('click', () => request({ type: 'joinDeveloper' }));
       tabs.forEach(tab => tab.addEventListener('click', () => { if (developerMode) { selectedPanel = tab.dataset.tab; renderPanel(); } }));
-      sectionButtons.forEach(button => button.addEventListener('click', () => { activeSection = button.dataset.section; renderPanel(); }));
+      sectionButtons.forEach(button => button.addEventListener('click', () => { activeView = button.dataset.view; renderPanel(); }));
       document.getElementById('reconnect').addEventListener('click', connect);
       document.getElementById('reconnectLobby').addEventListener('click', connect);
       connect();

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Collections;
 using System;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -25,9 +26,14 @@ public sealed class TriunviratoGame : MonoBehaviour
     [SerializeField] private EnemyConfig enemyConfig;
     [SerializeField] private Font damageFont;
     [SerializeField] private IntermissionUpgradeCatalog intermissionCatalog;
+    [Header("Hero Special Abilities")]
+    [SerializeField] private ZombieGraspAbilityConfig zombieGraspAbility;
+    [SerializeField] private MeteorShowerAbilityConfig meteorShowerAbility;
+    [SerializeField] private LightningStormAbilityConfig lightningStormAbility;
     private readonly List<SkeletonEnemy> enemies = new List<SkeletonEnemy>();
     private readonly List<Projectile> projectiles = new List<Projectile>();
     private readonly List<FloatingDamage> floatingDamage = new List<FloatingDamage>();
+    private readonly List<GameObject> specialEffects = new List<GameObject>();
     private Defender[] defenders;
     private Sprite projectileSprite;
     private float castleHealth;
@@ -71,6 +77,11 @@ public sealed class TriunviratoGame : MonoBehaviour
     private readonly PurchaseOffer[,] purchaseOffers = new PurchaseOffer[3, 3];
     private bool waveHadBoss;
     private bool purchaseOffersAreRare;
+    private readonly float[] specialCooldownEndsAt = new float[3];
+    private bool specialCooldownsWereRunning;
+    private bool warnedMissingZombieGraspController;
+    private bool warnedMissingMeteorController;
+    private bool warnedMissingLightningController;
     private MatchStatus matchStatus = MatchStatus.WaitingForPlayers;
 
     [Serializable]
@@ -109,6 +120,7 @@ public sealed class TriunviratoGame : MonoBehaviour
     public bool IsEarlyWaveCallPending => earlyWaveCallPending;
     public int NextEarlyCallAvailableWave => lastEarlyCallWave + 2;
     public bool CanCallNextWaveEarly => CanCombat && !earlyWaveCallPending && wave >= lastEarlyCallWave + 2;
+    public bool HasSpecialCooldownsRunning => HasActiveSpecialCooldowns();
 
     private sealed class Defender
     {
@@ -118,6 +130,9 @@ public sealed class TriunviratoGame : MonoBehaviour
         public Transform AttackSpawn;
         public float AttackTimer;
         public bool ShotPending;
+        public bool SpecialAnimationActive;
+        public bool SpecialAnimationWarningLogged;
+        public float SpecialAnimationStartedAt;
         public float PendingShotTimer;
         public SkeletonEnemy PendingTarget;
         public Vector3 PendingTargetPosition;
@@ -162,6 +177,10 @@ public sealed class TriunviratoGame : MonoBehaviour
 
     private void Update()
     {
+        UpdateSpecialCooldownState();
+        UpdateSpecialAnimations();
+        CleanupSpecialEffects();
+
         Keyboard keyboard = Keyboard.current;
         if (keyboard != null)
         {
@@ -198,6 +217,15 @@ public sealed class TriunviratoGame : MonoBehaviour
 
     private void ResetMatch(bool resumeMatch)
     {
+        StopAllCoroutines();
+        foreach (GameObject effect in specialEffects)
+        {
+            if (effect != null)
+                Destroy(effect);
+        }
+        specialEffects.Clear();
+        Array.Clear(specialCooldownEndsAt, 0, specialCooldownEndsAt.Length);
+        specialCooldownsWereRunning = false;
         foreach (SkeletonEnemy enemy in enemies)
         {
             if (enemy != null)
@@ -280,6 +308,7 @@ public sealed class TriunviratoGame : MonoBehaviour
                 defender.PendingTarget = null;
                 defender.PendingTargetPosition = Vector3.zero;
                 defender.PendingShotTimer = 0f;
+                defender.SpecialAnimationActive = false;
             }
         }
     }
@@ -678,8 +707,464 @@ public sealed class TriunviratoGame : MonoBehaviour
     {
         HeroConfig config = GetHeroConfig(army);
         if (config == null) return 0f;
-        float attacksPerSecond = (config.AttackCooldown > 0f ? 1f / config.AttackCooldown : 0f) * GetHeroAttackSpeedMultiplier(army) + GetHeroAttackRateFixedBonus(army);
-        return attacksPerSecond > 0f ? 1f / attacksPerSecond : config.AttackCooldown;
+        return ApplyHeroAttackSpeedToCooldown(config.AttackCooldown, army);
+    }
+
+    public float GetSpecialAbilityCooldown(ArmyType army) =>
+        ApplyHeroAttackSpeedToCooldown(GetBaseSpecialCooldown(army), army);
+
+    public float GetSpecialAbilityCooldownRemaining(ArmyType army) =>
+        IsValidArmy(army) ? Mathf.Max(0f, specialCooldownEndsAt[(int)army] - Time.time) : 0f;
+
+    public bool CanActivateSpecial(ArmyType army) =>
+        CanCombat && IsValidArmy(army) && defenders != null && defenders[(int)army] != null &&
+        GetSpecialAbilityConfig(army) != null &&
+        GetSpecialAbilityCooldownRemaining(army) <= 0f && HasLivingEnemies();
+
+    public string GetSpecialAbilityName(ArmyType army)
+    {
+        HeroSpecialAbilityConfig config = GetSpecialAbilityConfig(army);
+        return config != null && !string.IsNullOrWhiteSpace(config.AbilityName)
+            ? config.AbilityName
+            : "Habilidad especial";
+    }
+
+    public string GetSpecialAbilityDescription(ArmyType army) =>
+        GetSpecialAbilityConfig(army) != null ? GetSpecialAbilityConfig(army).Description : string.Empty;
+
+    public int GetSpecialAbilityEffectCount(ArmyType army)
+    {
+        switch (army)
+        {
+            case ArmyType.Aire: return meteorShowerAbility != null ? meteorShowerAbility.MeteorCount : 0;
+            case ArmyType.Mar: return lightningStormAbility != null ? lightningStormAbility.HitCount : 0;
+            default: return 0;
+        }
+    }
+
+    public float GetSpecialAbilityDamagePerEffect(ArmyType army)
+    {
+        switch (army)
+        {
+            case ArmyType.Aire:
+                return meteorShowerAbility != null ? ScaleSpecialDamage(meteorShowerAbility.Damage, army) : 0f;
+            case ArmyType.Mar:
+                return lightningStormAbility != null ? ScaleSpecialDamage(lightningStormAbility.DamagePerHit, army) : 0f;
+            default: return 0f;
+        }
+    }
+
+    public float GetSpecialAbilityNormalDuration(ArmyType army) =>
+        army == ArmyType.Tierra && zombieGraspAbility != null ? zombieGraspAbility.NormalEnemyDuration : 0f;
+
+    public float GetSpecialAbilityBossDuration(ArmyType army) =>
+        army == ArmyType.Tierra && zombieGraspAbility != null
+            ? Mathf.Min(zombieGraspAbility.NormalEnemyDuration, zombieGraspAbility.BossDuration)
+            : 0f;
+
+    public bool TryActivateSpecial(ArmyType army, out string message)
+    {
+        message = string.Empty;
+        if (!IsValidArmy(army))
+        {
+            message = "Ejército desconocido.";
+            return false;
+        }
+        if (GetSpecialAbilityConfig(army) == null)
+        {
+            message = "La habilidad especial no está configurada.";
+            return false;
+        }
+        if (!CanCombat)
+        {
+            message = "Las habilidades solo se pueden activar durante el combate.";
+            return false;
+        }
+        float remaining = GetSpecialAbilityCooldownRemaining(army);
+        if (remaining > 0f)
+        {
+            message = "Disponible en " + Mathf.CeilToInt(remaining) + " s.";
+            return false;
+        }
+        if (!HasLivingEnemies())
+        {
+            message = "No hay enemigos vivos.";
+            return false;
+        }
+
+        Defender defender = defenders != null ? defenders[(int)army] : null;
+        if (defender == null || defender.View == null)
+        {
+            message = "El héroe no está disponible.";
+            return false;
+        }
+
+        SkeletonEnemy lightningTarget = army == ArmyType.Mar ? SelectLightningTarget() : null;
+        if (army == ArmyType.Mar && lightningTarget == null)
+        {
+            message = "No hay enemigos vivos.";
+            return false;
+        }
+
+        PlaySpecialAttackAnimation(defender);
+        specialCooldownEndsAt[(int)army] = Time.time + GetSpecialAbilityCooldown(army);
+        specialCooldownsWereRunning = true;
+        StateRevision++;
+
+        switch (army)
+        {
+            case ArmyType.Tierra:
+                ActivateZombieGrasp();
+                message = "Zombie Grasp activado.";
+                break;
+            case ArmyType.Aire:
+                StartCoroutine(PerformMeteorShower());
+                message = "Meteor Shower activado.";
+                break;
+            case ArmyType.Mar:
+                StartCoroutine(PerformLightningStorm(lightningTarget));
+                message = "Lightning Storm activado.";
+                break;
+        }
+        return true;
+    }
+
+    private float ApplyHeroAttackSpeedToCooldown(float baseCooldown, ArmyType army)
+    {
+        if (baseCooldown <= 0f)
+            return baseCooldown;
+        float attacksPerSecond = (1f / baseCooldown) * GetHeroAttackSpeedMultiplier(army) +
+                                 GetHeroAttackRateFixedBonus(army);
+        return attacksPerSecond > 0f ? 1f / attacksPerSecond : baseCooldown;
+    }
+
+    private float GetBaseSpecialCooldown(ArmyType army)
+    {
+        HeroSpecialAbilityConfig config = GetSpecialAbilityConfig(army);
+        return config != null ? config.Cooldown : 0f;
+    }
+
+    private HeroSpecialAbilityConfig GetSpecialAbilityConfig(ArmyType army)
+    {
+        switch (army)
+        {
+            case ArmyType.Tierra: return zombieGraspAbility;
+            case ArmyType.Aire: return meteorShowerAbility;
+            case ArmyType.Mar: return lightningStormAbility;
+            default: return null;
+        }
+    }
+
+    private bool HasLivingEnemies()
+    {
+        foreach (SkeletonEnemy enemy in enemies)
+        {
+            if (enemy != null && !enemy.IsDead)
+                return true;
+        }
+        return false;
+    }
+
+    private SkeletonEnemy SelectLightningTarget()
+    {
+        SkeletonEnemy firstBoss = null;
+        SkeletonEnemy highestHealthEnemy = null;
+        foreach (SkeletonEnemy enemy in enemies)
+        {
+            if (enemy == null || enemy.IsDead)
+                continue;
+            if (enemy.IsBoss)
+            {
+                if (firstBoss == null)
+                    firstBoss = enemy;
+            }
+            else if (highestHealthEnemy == null || enemy.CurrentHealth > highestHealthEnemy.CurrentHealth)
+            {
+                highestHealthEnemy = enemy;
+            }
+        }
+        return firstBoss != null ? firstBoss : highestHealthEnemy;
+    }
+
+    private void PlaySpecialAttackAnimation(Defender defender)
+    {
+        if (defender.Animator == null || defender.Animator.runtimeAnimatorController == null)
+            return;
+        int specialState = Animator.StringToHash("Attack_Special");
+        if (!defender.Animator.HasState(0, specialState))
+        {
+            if (!defender.SpecialAnimationWarningLogged)
+            {
+                Debug.LogWarning("El controlador de " + defender.Config.DisplayName +
+                    " no contiene Attack_Special; añade ese estado al Animator para reproducir la animación.", defender.View);
+                defender.SpecialAnimationWarningLogged = true;
+            }
+            return;
+        }
+        defender.Animator.Play(specialState, 0, 0f);
+        defender.SpecialAnimationActive = true;
+        defender.SpecialAnimationStartedAt = Time.time;
+    }
+
+    private void UpdateSpecialAnimations()
+    {
+        if (defenders == null)
+            return;
+        int specialState = Animator.StringToHash("Attack_Special");
+        int idleState = Animator.StringToHash("Idle");
+        foreach (Defender defender in defenders)
+        {
+            if (defender == null || !defender.SpecialAnimationActive)
+                continue;
+            if (defender.Animator == null)
+            {
+                defender.SpecialAnimationActive = false;
+                continue;
+            }
+            AnimatorStateInfo state = defender.Animator.GetCurrentAnimatorStateInfo(0);
+            if (state.shortNameHash != specialState && Time.time - defender.SpecialAnimationStartedAt < 0.1f)
+                continue;
+            if (state.shortNameHash == specialState && state.normalizedTime < 1f)
+                continue;
+
+            if (state.shortNameHash == specialState && defender.Animator.HasState(0, idleState))
+                defender.Animator.Play(idleState, 0, 0f);
+            defender.SpecialAnimationActive = false;
+        }
+    }
+
+    private void CleanupSpecialEffects()
+    {
+        for (int i = specialEffects.Count - 1; i >= 0; i--)
+        {
+            if (specialEffects[i] == null)
+                specialEffects.RemoveAt(i);
+        }
+    }
+
+    private void UpdateSpecialCooldownState()
+    {
+        bool hasRunningCooldown = HasActiveSpecialCooldowns();
+        if (hasRunningCooldown != specialCooldownsWereRunning)
+        {
+            specialCooldownsWereRunning = hasRunningCooldown;
+            StateRevision++;
+        }
+    }
+
+    private bool HasActiveSpecialCooldowns()
+    {
+        for (int i = 0; i < specialCooldownEndsAt.Length; i++)
+        {
+            if (specialCooldownEndsAt[i] > Time.time)
+                return true;
+        }
+        return false;
+    }
+
+    private void ActivateZombieGrasp()
+    {
+        ZombieGraspAbilityConfig ability = zombieGraspAbility;
+        if (ability == null || ability.EffectController == null)
+        {
+            if (!warnedMissingZombieGraspController)
+                Debug.LogWarning("Asigna el asset Zombie Grasp y su controlador de efecto; la inmovilización se aplicará sin efecto visual.", this);
+            warnedMissingZombieGraspController = true;
+        }
+        float normalDuration = ability != null ? Mathf.Max(0f, ability.NormalEnemyDuration) : 0f;
+        float bossDuration = ability != null ? Mathf.Min(normalDuration, Mathf.Max(0f, ability.BossDuration)) : 0f;
+        foreach (SkeletonEnemy enemy in enemies)
+        {
+            if (enemy == null || enemy.IsDead)
+                continue;
+            enemy.ApplyRooted(enemy.IsBoss ? bossDuration : normalDuration);
+            float rootDuration = enemy.IsBoss ? bossDuration : normalDuration;
+            float holdAt = Mathf.Min(0.5f, rootDuration * 0.4f);
+            float clipLength = GetEffectClipLength(ability != null ? ability.EffectController : null);
+            GameObject graspEffect = CreateAnimatedEffect(ability != null ? ability.EffectController : null,
+                enemy.transform.position, ability != null ? ability.EffectScale : 1f,
+                null, rootDuration + clipLength - holdAt + 0.1f, false);
+            if (graspEffect != null)
+                StartCoroutine(HoldZombieGraspEffect(graspEffect, rootDuration, holdAt, clipLength));
+        }
+    }
+
+    private IEnumerator PerformMeteorShower()
+    {
+        MeteorShowerAbilityConfig ability = meteorShowerAbility;
+        if (ability == null || ability.EffectController == null)
+        {
+            if (!warnedMissingMeteorController)
+                Debug.LogWarning("Asigna el asset Meteor Shower y su controlador de efecto; los impactos se aplicarán sin efecto visual.", this);
+            warnedMissingMeteorController = true;
+        }
+        int meteorCount = ability != null ? ability.MeteorCount : 0;
+        List<Vector3> strikePositions = new List<Vector3>(Mathf.Max(1, meteorCount));
+        int count = Mathf.Max(1, meteorCount);
+        for (int i = 0; i < count; i++)
+        {
+            Vector3 position = GetMeteorStrikePosition(strikePositions, ability);
+            strikePositions.Add(position);
+            CreateAnimatedEffect(ability != null ? ability.EffectController : null, position,
+                ability != null ? ability.EffectScale : 1f, null);
+            StartCoroutine(ResolveMeteorImpact(position, ability));
+            if (i < count - 1)
+                yield return new WaitForSeconds(ability != null ? ability.Interval : 0f);
+        }
+    }
+
+    private IEnumerator ResolveMeteorImpact(Vector3 position, MeteorShowerAbilityConfig ability)
+    {
+        if (ability != null && ability.ImpactDelay > 0f)
+            yield return new WaitForSeconds(ability.ImpactDelay);
+        if (!CanCombat)
+            yield break;
+
+        float damage = ScaleSpecialDamage(ability != null ? ability.Damage : 0f, ArmyType.Aire);
+        float radius = ability != null ? Mathf.Max(0f, ability.Radius) : 0f;
+        foreach (SkeletonEnemy enemy in enemies)
+        {
+            if (enemy == null || enemy.IsDead || Vector2.Distance(position, enemy.transform.position) > radius)
+                continue;
+            ApplyDamage(enemy, damage, aireConfig != null ? aireConfig.ProjectileColor : Color.red);
+        }
+    }
+
+    private Vector3 GetMeteorStrikePosition(List<Vector3> previousPositions, MeteorShowerAbilityConfig ability)
+    {
+        float padding = ability != null ? ability.HorizontalPadding : 0f;
+        float maximumX = ability != null ? ability.MaximumX : float.MaxValue;
+        float left = Mathf.Min(enemySpawner.position.x, castleTarget.position.x) + padding;
+        float right = Mathf.Min(Mathf.Max(enemySpawner.position.x, castleTarget.position.x) - padding,
+            maximumX);
+        if (right < left)
+            left = right = Mathf.Min((enemySpawner.position.x + castleTarget.position.x) * 0.5f, maximumX);
+
+        float centerY = ability != null ? ability.CenterY : 0f;
+        float verticalHalfRange = ability != null ? ability.VerticalHalfRange : 0f;
+        float minY = centerY - verticalHalfRange;
+        float maxY = centerY + verticalHalfRange;
+        Camera mainCamera = Camera.main;
+        if (mainCamera != null && mainCamera.orthographic)
+        {
+            minY = Mathf.Max(minY, mainCamera.transform.position.y - mainCamera.orthographicSize + 0.2f);
+            maxY = Mathf.Min(maxY, mainCamera.transform.position.y + mainCamera.orthographicSize - 0.2f);
+        }
+        if (maxY < minY)
+            minY = maxY = centerY;
+
+        Vector3 position = default;
+        float minimumSeparation = ability != null ? ability.MinimumSeparation : 0f;
+        int attempts = Mathf.Max(8, previousPositions.Count * 3);
+        for (int i = 0; i < attempts; i++)
+        {
+            position = new Vector3(UnityEngine.Random.Range(left, right), UnityEngine.Random.Range(minY, maxY),
+                (enemySpawner.position.z + castleTarget.position.z) * 0.5f);
+            bool separated = true;
+            foreach (Vector3 previous in previousPositions)
+            {
+                if (Vector2.Distance(position, previous) < minimumSeparation)
+                {
+                    separated = false;
+                    break;
+                }
+            }
+            if (separated)
+                return position;
+        }
+        return position;
+    }
+
+    private IEnumerator PerformLightningStorm(SkeletonEnemy target)
+    {
+        LightningStormAbilityConfig ability = lightningStormAbility;
+        if (ability == null || ability.EffectController == null)
+        {
+            if (!warnedMissingLightningController)
+                Debug.LogWarning("Asigna el asset Lightning Storm y su controlador de efecto; los impactos se aplicarán sin efecto visual.", this);
+            warnedMissingLightningController = true;
+        }
+        int hitCount = Mathf.Max(1, ability != null ? ability.HitCount : 0);
+        for (int i = 0; i < hitCount; i++)
+        {
+            if (target == null || target.IsDead)
+                yield break;
+            Vector3 impactPosition = target.transform.position;
+            CreateAnimatedEffect(ability != null ? ability.EffectController : null, impactPosition,
+                ability != null ? ability.EffectScale : 1f, null);
+            if (ability != null && ability.ImpactDelay > 0f)
+                yield return new WaitForSeconds(ability.ImpactDelay);
+            if (target == null || target.IsDead)
+                yield break;
+            ApplyDamage(target, ScaleSpecialDamage(ability != null ? ability.DamagePerHit : 0f, ArmyType.Mar),
+                marConfig != null ? marConfig.ProjectileColor : Color.cyan);
+            if (i < hitCount - 1)
+                yield return new WaitForSeconds(ability != null ? ability.HitInterval : 0f);
+        }
+    }
+
+    private float ScaleSpecialDamage(float baseDamage, ArmyType army) =>
+        baseDamage * GetHeroIntermissionMultiplier(army) + GetHeroDamageFixedBonus(army);
+
+    private IEnumerator HoldZombieGraspEffect(GameObject effect, float duration, float holdAt, float clipLength)
+    {
+        if (holdAt > 0f)
+            yield return new WaitForSeconds(holdAt);
+        if (effect == null)
+            yield break;
+
+        Animator animator = effect.GetComponent<Animator>();
+        if (animator != null)
+            animator.speed = 0f;
+        float remaining = Mathf.Max(0f, duration - holdAt);
+        if (remaining > 0f)
+            yield return new WaitForSeconds(remaining);
+        if (effect == null)
+            yield break;
+
+        if (animator != null)
+            animator.speed = 1f;
+        float animationRemaining = Mathf.Max(0f, clipLength - holdAt);
+        if (animationRemaining > 0f)
+            yield return new WaitForSeconds(animationRemaining);
+        if (effect != null)
+            Destroy(effect);
+    }
+
+    private GameObject CreateAnimatedEffect(RuntimeAnimatorController controller, Vector3 position,
+        float scale, Transform parent, float lifetimeOverride = -1f, bool destroyOnAnimationEvent = true)
+    {
+        if (controller == null)
+            return null;
+        GameObject effect = new GameObject("Special Effect - " + controller.name);
+        effect.transform.position = position;
+        effect.transform.localScale = Vector3.one * scale;
+        if (parent != null)
+            effect.transform.SetParent(parent, true);
+
+        SpriteRenderer renderer = effect.AddComponent<SpriteRenderer>();
+        renderer.sortingOrder = 20;
+        Effects_DestroyEvent destroyEvent = effect.AddComponent<Effects_DestroyEvent>();
+        destroyEvent.DestroyOnEvent = destroyOnAnimationEvent;
+        Animator animator = effect.AddComponent<Animator>();
+        animator.runtimeAnimatorController = controller;
+        animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+        specialEffects.Add(effect);
+
+        float lifetime = GetEffectClipLength(controller);
+        Destroy(effect, lifetimeOverride >= 0f ? lifetimeOverride : lifetime + 0.05f);
+        return effect;
+    }
+
+    private static float GetEffectClipLength(RuntimeAnimatorController controller)
+    {
+        if (controller != null)
+        {
+            AnimationClip[] clips = controller.animationClips;
+            if (clips != null && clips.Length > 0 && clips[0] != null && clips[0].length > 0f)
+                return clips[0].length;
+        }
+        return 1.25f;
     }
 
     public float GetHeroRange(ArmyType army)
@@ -770,7 +1255,7 @@ public sealed class TriunviratoGame : MonoBehaviour
                 continue;
 
             defender.AttackTimer = GetHeroAttackCooldown(defender.Config.Army);
-            if (defender.Animator != null && defender.Animator.runtimeAnimatorController != null)
+            if (!defender.SpecialAnimationActive && defender.Animator != null && defender.Animator.runtimeAnimatorController != null)
                 defender.Animator.Play(NormalAttackState, 0, 0f);
             defender.ShotPending = true;
             defender.PendingTarget = target;

@@ -38,6 +38,7 @@ public sealed class LocalControlServer : MonoBehaviour
     private TcpListener listener;
     private CancellationTokenSource shutdown;
     private string pagePath;
+    private string iconsDirectory;
     private string status = "Servidor detenido";
     private string accessUrl = "IP LAN no detectada";
     private int nextClientId;
@@ -45,6 +46,7 @@ public sealed class LocalControlServer : MonoBehaviour
     private int observedEconomyRevision = -1;
     private int observedGameRevision = -1;
     private int outgoingStateRevision;
+    private float nextSpecialCooldownPublishTime;
 
     public bool IsDeveloperMode => developerToken != null;
     public string StatusText => status;
@@ -164,6 +166,15 @@ public sealed class LocalControlServer : MonoBehaviour
         public float towerAttackRateFixedBonus;
         public string heroName;
         public string towerName;
+        public string specialAbilityName;
+        public string specialAbilityDescription;
+        public float specialCooldownRemaining;
+        public float specialCooldownDuration;
+        public bool specialCanActivate;
+        public int specialEffectCount;
+        public float specialDamagePerEffect;
+        public float specialNormalDuration;
+        public float specialBossDuration;
         public bool purchaseChoiceMade;
         public string purchaseResult;
         public PurchaseUpgradeOption[] purchaseOptions;
@@ -192,6 +203,21 @@ public sealed class LocalControlServer : MonoBehaviour
         public bool Connected;
         public int ClientId = -1;
         public float DisconnectedAt;
+        public readonly Dictionary<string, string> SpecialResponses = new Dictionary<string, string>();
+        public readonly Queue<string> SpecialResponseOrder = new Queue<string>();
+
+        public bool TryGetSpecialResponse(string requestId, out string response) =>
+            SpecialResponses.TryGetValue(requestId, out response);
+
+        public void CacheSpecialResponse(string requestId, string response)
+        {
+            if (string.IsNullOrEmpty(requestId) || SpecialResponses.ContainsKey(requestId))
+                return;
+            SpecialResponses.Add(requestId, response);
+            SpecialResponseOrder.Enqueue(requestId);
+            while (SpecialResponseOrder.Count > 64)
+                SpecialResponses.Remove(SpecialResponseOrder.Dequeue());
+        }
     }
 
     private void Start() => StartServer();
@@ -206,6 +232,12 @@ public sealed class LocalControlServer : MonoBehaviour
         ExpireDisconnectedLobbySeats();
         while (pendingMessages.TryDequeue(out PendingMessage pending))
             ProcessMessage(pending);
+
+        if (game != null && game.HasSpecialCooldownsRunning && Time.unscaledTime >= nextSpecialCooldownPublishTime)
+        {
+            nextSpecialCooldownPublishTime = Time.unscaledTime + 0.25f;
+            PublishState();
+        }
 
         int economyRevision = economy != null ? economy.StateRevision : -1;
         int gameRevision = game != null ? game.StateRevision : -1;
@@ -236,6 +268,7 @@ public sealed class LocalControlServer : MonoBehaviour
         }
 
         pagePath = Path.Combine(Application.streamingAssetsPath, "remote-control.html");
+        iconsDirectory = Path.Combine(Application.streamingAssetsPath, "icons");
         if (!File.Exists(pagePath))
         {
             status = "Error: falta Assets/StreamingAssets/remote-control.html";
@@ -351,6 +384,21 @@ public sealed class LocalControlServer : MonoBehaviour
                     return;
                 }
 
+                string iconFileName = path == "/icons/ground_icon.png" ? "ground_icon.png" :
+                    path == "/icons/air_icon.png" ? "air_icon.png" :
+                    path == "/icons/sea_icon.png" ? "sea_icon.png" : null;
+                if (iconFileName != null)
+                {
+                    string iconPath = Path.Combine(iconsDirectory, iconFileName);
+                    if (File.Exists(iconPath))
+                    {
+                        byte[] icon = await File.ReadAllBytesAsync(iconPath, token).ConfigureAwait(false);
+                        await WriteHttpResponseAsync(stream, 200, "OK", "image/png", icon, token)
+                            .ConfigureAwait(false);
+                        return;
+                    }
+                }
+
                 await WriteHttpResponseAsync(stream, 404, "Not Found", "text/plain; charset=utf-8",
                     Encoding.UTF8.GetBytes("Not found."), token).ConfigureAwait(false);
             }
@@ -442,6 +490,7 @@ public sealed class LocalControlServer : MonoBehaviour
     private void ProcessMessage(PendingMessage pending)
     {
         PurchaseResponse response = new PurchaseResponse();
+        PlayerSession specialResponseSession = null;
         bool stateChanged = false;
         try
         {
@@ -466,6 +515,11 @@ public sealed class LocalControlServer : MonoBehaviour
                 if (session == null)
                 {
                     response.message = "Primero debes identificar esta sesión.";
+                }
+                else if (command.type == "activateSpecial" && session.TryGetSpecialResponse(command.requestId, out string cachedSpecialResponse))
+                {
+                    pending.Response.TrySetResult(cachedSpecialResponse);
+                    return;
                 }
                 else if (command.type == "selectArmy")
                 {
@@ -525,6 +579,22 @@ public sealed class LocalControlServer : MonoBehaviour
                         stateChanged = response.success;
                     }
                 }
+                else if (command.type == "activateSpecial")
+                {
+                    response.type = "specialAbilityResult";
+                    specialResponseSession = session;
+                    if (!TryParseArmy(command.army, out ArmyType army))
+                        response.message = "Ejército desconocido.";
+                    else if (!CanControl(session, army))
+                        response.message = "Solo puedes activar la habilidad de tu ejército.";
+                    else if (game == null)
+                        response.message = "La partida no está disponible.";
+                    else
+                    {
+                        response.success = game.TryActivateSpecial(army, out response.message);
+                        stateChanged = response.success;
+                    }
+                }
                 else
                 {
                     response.message = "Orden desconocida.";
@@ -537,7 +607,10 @@ public sealed class LocalControlServer : MonoBehaviour
             response.message = "No se pudo interpretar la solicitud.";
         }
 
-        pending.Response.TrySetResult(JsonUtility.ToJson(response));
+        string responseJson = JsonUtility.ToJson(response);
+        if (specialResponseSession != null && !string.IsNullOrEmpty(response.requestId))
+            specialResponseSession.CacheSpecialResponse(response.requestId, responseJson);
+        pending.Response.TrySetResult(responseJson);
         if (stateChanged)
             PublishState();
     }
@@ -950,6 +1023,15 @@ public sealed class LocalControlServer : MonoBehaviour
             towerAttackSpeedMultiplier = game != null ? game.GetTowerAttackSpeedMultiplier(army) : 1f,
             towerRangeMultiplier = game != null ? game.GetTowerRangeMultiplier(army) : 1f,
             towerName = shop.GetTowerDisplayName(army),
+            specialAbilityName = game != null ? game.GetSpecialAbilityName(army) : "Habilidad especial",
+            specialAbilityDescription = game != null ? game.GetSpecialAbilityDescription(army) : string.Empty,
+            specialCooldownRemaining = game != null ? game.GetSpecialAbilityCooldownRemaining(army) : 0f,
+            specialCooldownDuration = game != null ? game.GetSpecialAbilityCooldown(army) : 0f,
+            specialCanActivate = canControl && game != null && game.CanActivateSpecial(army),
+            specialEffectCount = game != null ? game.GetSpecialAbilityEffectCount(army) : 0,
+            specialDamagePerEffect = game != null ? game.GetSpecialAbilityDamagePerEffect(army) : 0f,
+            specialNormalDuration = game != null ? game.GetSpecialAbilityNormalDuration(army) : 0f,
+            specialBossDuration = game != null ? game.GetSpecialAbilityBossDuration(army) : 0f,
             purchaseChoiceMade = game != null && game.IsPurchaseChoiceMade(army),
             purchaseResult = game != null ? game.GetPurchaseResult(army) : string.Empty,
             purchaseOptions = CreatePurchaseOptions(army)

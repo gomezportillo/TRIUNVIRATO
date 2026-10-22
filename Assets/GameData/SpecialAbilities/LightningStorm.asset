@@ -1,0 +1,23 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4a7a84df65234ef0aaf27276c8f5b004, type: 3}
+  m_Name: LightningStorm
+  m_EditorClassIdentifier: 
+  abilityName: "Tormenta el\xE9ctrica"
+  description: Convoca varios rayos sobre el objetivo prioritario
+  cooldown: 25
+  effectController: {fileID: 9100000, guid: 216314bf50a194f4f88d49455a7fd156, type: 2}
+  effectScale: 0.8
+  hitCount: 3
+  damagePerHit: 15
+  hitInterval: 0.75
+  impactDelay: 0.2
