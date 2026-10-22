@@ -193,293 +193,7 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: Warlock_Attack_0
-      rect:
-        serializedVersion: 2
-        x: 0
-        y: 400
-        width: 100
-        height: 80
-      alignment: 7
-      pivot: {x: 0.5, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: 0
-      bones: []
-      spriteID: 36df88348be8f9e4d836164bf65088dc
-      internalID: 21300000
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: Warlock_Attack_1
-      rect:
-        serializedVersion: 2
-        x: 100
-        y: 400
-        width: 100
-        height: 80
-      alignment: 7
-      pivot: {x: 0.5, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: 0
-      bones: []
-      spriteID: af4aeeaff54394849bf5f82f1f29149d
-      internalID: 21300002
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: Warlock_Attack_2
-      rect:
-        serializedVersion: 2
-        x: 200
-        y: 400
-        width: 100
-        height: 80
-      alignment: 7
-      pivot: {x: 0.5, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: 0
-      bones: []
-      spriteID: d685bbe256b67bd4c84ff83ea0a4049e
-      internalID: 21300004
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: Warlock_Attack_3
-      rect:
-        serializedVersion: 2
-        x: 300
-        y: 400
-        width: 100
-        height: 80
-      alignment: 7
-      pivot: {x: 0.5, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: 0
-      bones: []
-      spriteID: 525d49c8be312ee479191e8eba04d9ff
-      internalID: 21300006
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: Warlock_Attack_4
-      rect:
-        serializedVersion: 2
-        x: 400
-        y: 400
-        width: 100
-        height: 80
-      alignment: 7
-      pivot: {x: 0.5, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: 0
-      bones: []
-      spriteID: 01ce79e1674815444bdd7722a8c5af4f
-      internalID: 21300008
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: Warlock_Attack_5
-      rect:
-        serializedVersion: 2
-        x: 0
-        y: 320
-        width: 100
-        height: 80
-      alignment: 7
-      pivot: {x: 0.5, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: 0
-      bones: []
-      spriteID: 21b144bd099f03c4c842d89c9ccc0b35
-      internalID: 21300010
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: Warlock_Attack_6
-      rect:
-        serializedVersion: 2
-        x: 100
-        y: 320
-        width: 100
-        height: 80
-      alignment: 7
-      pivot: {x: 0.5, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: 0
-      bones: []
-      spriteID: b0737f276ec924747b55ac7bed1b1c88
-      internalID: 21300012
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: Warlock_Attack_7
-      rect:
-        serializedVersion: 2
-        x: 200
-        y: 320
-        width: 100
-        height: 80
-      alignment: 7
-      pivot: {x: 0.5, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: 0
-      bones: []
-      spriteID: 73298ce965e034341b32a98b4326fa89
-      internalID: 21300014
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: Warlock_Attack_8
-      rect:
-        serializedVersion: 2
-        x: 300
-        y: 320
-        width: 100
-        height: 80
-      alignment: 7
-      pivot: {x: 0.5, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: 0
-      bones: []
-      spriteID: d3c8a96a8ce8c8643b495031b271ccfc
-      internalID: 21300016
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: Warlock_Attack_9
-      rect:
-        serializedVersion: 2
-        x: 400
-        y: 320
-        width: 100
-        height: 80
-      alignment: 7
-      pivot: {x: 0.5, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: 0
-      bones: []
-      spriteID: 6b4c9052d9d69ec43a40c09b87461886
-      internalID: 21300018
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: Warlock_Attack_10
-      rect:
-        serializedVersion: 2
-        x: 0
-        y: 240
-        width: 100
-        height: 80
-      alignment: 7
-      pivot: {x: 0.5, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: 0
-      bones: []
-      spriteID: 14f79017b3e4cee498d223045965ce68
-      internalID: 21300020
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: Warlock_Attack_11
-      rect:
-        serializedVersion: 2
-        x: 100
-        y: 240
-        width: 100
-        height: 80
-      alignment: 7
-      pivot: {x: 0.5, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: 0
-      bones: []
-      spriteID: a2ce3c54b6d7e3b408de7741c4539678
-      internalID: 21300022
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: Warlock_Attack_12
-      rect:
-        serializedVersion: 2
-        x: 200
-        y: 240
-        width: 100
-        height: 80
-      alignment: 7
-      pivot: {x: 0.5, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: 0
-      bones: []
-      spriteID: 8787325ef368af549b0c805c62003e69
-      internalID: 21300024
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: Warlock_Attack_13
+      name: Warlock_Attack_1_0
       rect:
         serializedVersion: 2
         x: 0
@@ -494,14 +208,14 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: 0
       bones: []
-      spriteID: e70376f6b485f4a4b9406dd765fda549
-      internalID: 21300026
+      spriteID: 43c897a091dc4ce41beccc3f78562aaf
+      internalID: 1223562511
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: Warlock_Attack_14
+      name: Warlock_Attack_1_1
       rect:
         serializedVersion: 2
         x: 100
@@ -516,14 +230,14 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: 0
       bones: []
-      spriteID: 19d9a87bf760c4e4a8495d5bd97b8336
-      internalID: 21300028
+      spriteID: 63bf6c68c7ca8364399f0f08f343cef8
+      internalID: 1627755530
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: Warlock_Attack_15
+      name: Warlock_Attack_1_2
       rect:
         serializedVersion: 2
         x: 200
@@ -538,14 +252,14 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: 0
       bones: []
-      spriteID: cda9edfc9efccd94eb16a2012fc23a67
-      internalID: 21300030
+      spriteID: a36813c4169166d488b6a9a743be5b6b
+      internalID: 380589511
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: Warlock_Attack_16
+      name: Warlock_Attack_1_3
       rect:
         serializedVersion: 2
         x: 300
@@ -560,14 +274,14 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: 0
       bones: []
-      spriteID: 1f852f3a9b8039d498f9368c678add5b
-      internalID: 21300032
+      spriteID: 332051bda2cfff549bfbd0846712135c
+      internalID: -506404650
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: Warlock_Attack_17
+      name: Warlock_Attack_1_4
       rect:
         serializedVersion: 2
         x: 400
@@ -582,14 +296,14 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: 0
       bones: []
-      spriteID: 6b83859037ae233448660b23b0703e6f
-      internalID: 21300034
+      spriteID: e20cb34a113bbce48a19b6048cd09952
+      internalID: 1437512031
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: Warlock_Attack_18
+      name: Warlock_Attack_1_5
       rect:
         serializedVersion: 2
         x: 0
@@ -604,14 +318,14 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: 0
       bones: []
-      spriteID: f0602a083aff08a4e900dc7ff7e104ae
-      internalID: 21300036
+      spriteID: 75e779bbbdf30c04596cfd69f8559722
+      internalID: 397421486
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: Warlock_Attack_19
+      name: Warlock_Attack_1_6
       rect:
         serializedVersion: 2
         x: 100
@@ -626,14 +340,14 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: 0
       bones: []
-      spriteID: 573ca5037141e7645a48ed72af584a8b
-      internalID: 21300038
+      spriteID: d5dfa597f26015f4ab64471dbdb87cc0
+      internalID: -1598378353
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: Warlock_Attack_20
+      name: Warlock_Attack_1_7
       rect:
         serializedVersion: 2
         x: 200
@@ -648,14 +362,14 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: 0
       bones: []
-      spriteID: 0d48f65421ae6d1429c2283ec1ead452
-      internalID: 21300040
+      spriteID: 239172526efbb7d4396a9b52fd7800b6
+      internalID: 1502500732
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: Warlock_Attack_21
+      name: Warlock_Attack_1_8
       rect:
         serializedVersion: 2
         x: 300
@@ -670,14 +384,14 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: 0
       bones: []
-      spriteID: 14c6663125837264499f33a632d4d712
-      internalID: 21300042
+      spriteID: 00e355e4644f78e4da8c68d6cbf44caa
+      internalID: 79049723
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: Warlock_Attack_22
+      name: Warlock_Attack_1_9
       rect:
         serializedVersion: 2
         x: 400
@@ -692,14 +406,14 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: 0
       bones: []
-      spriteID: 397092d66cd7b6e41b1fce0ab8103ce5
-      internalID: 21300044
+      spriteID: ab3db217d10170a4a808aa6b63af219f
+      internalID: -1476273373
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: Warlock_Attack_23
+      name: Warlock_Attack_1_10
       rect:
         serializedVersion: 2
         x: 0
@@ -714,14 +428,14 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: 0
       bones: []
-      spriteID: 725256fad54812545b2f84f929540574
-      internalID: 21300046
+      spriteID: 911c3bd1b11576d4982ccb6adbf66ffa
+      internalID: 2038742718
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: Warlock_Attack_24
+      name: Warlock_Attack_1_11
       rect:
         serializedVersion: 2
         x: 100
@@ -736,14 +450,14 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: 0
       bones: []
-      spriteID: 83267d569f213ab4d95d4bac38de2edf
-      internalID: 21300048
+      spriteID: 2bc847b9154713d45b508b8ca736a672
+      internalID: 1148344536
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: Warlock_Attack_25
+      name: Warlock_Attack_1_12
       rect:
         serializedVersion: 2
         x: 200
@@ -758,30 +472,8 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: 0
       bones: []
-      spriteID: d8888e853f3b1334b8a8c05cec796407
-      internalID: 21300050
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: Warlock_Attack_26
-      rect:
-        serializedVersion: 2
-        x: 300
-        y: 0
-        width: 100
-        height: 80
-      alignment: 7
-      pivot: {x: 0.5, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: 0
-      bones: []
-      spriteID: f62590de61b2b934d846f68e8666d8bc
-      internalID: 21300052
+      spriteID: f2cff5a9181286c4882a8fbaee707f8b
+      internalID: -821160668
       vertices: []
       indices: 
       edges: []
@@ -798,35 +490,23 @@ TextureImporter:
     weights: []
     secondaryTextures: []
     spriteCustomMetadata:
-      entries: []
+      entries:
+      - key: SpriteEditor.SliceSettings
+        value: '{"sliceOnImport":false,"gridCellCount":{"x":5.0,"y":3.0},"gridSpriteSize":{"x":100.0,"y":80.0},"gridSpriteOffset":{"x":0.0,"y":0.0},"gridSpritePadding":{"x":0.0,"y":0.0},"pivot":{"x":0.5,"y":0.5},"pivotPixels":{"x":0.0,"y":0.0},"autoSlicingMethod":0,"spriteAlignment":0,"pivotUnitMode":0,"slicingType":2,"keepEmptyRects":false,"isAlternate":false}'
     nameFileIdTable:
-      Warlock_Attack_0: 21300000
-      Warlock_Attack_1: 21300002
-      Warlock_Attack_10: 21300020
-      Warlock_Attack_11: 21300022
-      Warlock_Attack_12: 21300024
-      Warlock_Attack_13: 21300026
-      Warlock_Attack_14: 21300028
-      Warlock_Attack_15: 21300030
-      Warlock_Attack_16: 21300032
-      Warlock_Attack_17: 21300034
-      Warlock_Attack_18: 21300036
-      Warlock_Attack_19: 21300038
-      Warlock_Attack_2: 21300004
-      Warlock_Attack_20: 21300040
-      Warlock_Attack_21: 21300042
-      Warlock_Attack_22: 21300044
-      Warlock_Attack_23: 21300046
-      Warlock_Attack_24: 21300048
-      Warlock_Attack_25: 21300050
-      Warlock_Attack_26: 21300052
-      Warlock_Attack_3: 21300006
-      Warlock_Attack_4: 21300008
-      Warlock_Attack_5: 21300010
-      Warlock_Attack_6: 21300012
-      Warlock_Attack_7: 21300014
-      Warlock_Attack_8: 21300016
-      Warlock_Attack_9: 21300018
+      Warlock_Attack_1_0: 1223562511
+      Warlock_Attack_1_1: 1627755530
+      Warlock_Attack_1_10: 2038742718
+      Warlock_Attack_1_11: 1148344536
+      Warlock_Attack_1_12: -821160668
+      Warlock_Attack_1_2: 380589511
+      Warlock_Attack_1_3: -506404650
+      Warlock_Attack_1_4: 1437512031
+      Warlock_Attack_1_5: 397421486
+      Warlock_Attack_1_6: -1598378353
+      Warlock_Attack_1_7: 1502500732
+      Warlock_Attack_1_8: 79049723
+      Warlock_Attack_1_9: -1476273373
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

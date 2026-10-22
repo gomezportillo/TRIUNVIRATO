@@ -5,6 +5,11 @@ using UnityEngine;
 [RequireComponent(typeof(SpriteRenderer))]
 public sealed class SpriteOutlineUvBounds : MonoBehaviour
 {
+    [SerializeField, Tooltip("Si está activado, usa este grosor para este SpriteRenderer en vez del valor del material.")]
+    private bool overrideMaterialWidth;
+    [SerializeField, Range(0f, 4f), Tooltip("Grosor del borde en píxeles de la imagen fuente.")]
+    private float outlinePixels = 1f;
+
     private static readonly int UvMinId = Shader.PropertyToID("_SpriteUvMin");
     private static readonly int UvMaxId = Shader.PropertyToID("_SpriteUvMax");
     private static readonly int UvValidId = Shader.PropertyToID("_SpriteUvValid");
@@ -31,11 +36,9 @@ public sealed class SpriteOutlineUvBounds : MonoBehaviour
     {
         if (spriteRenderer == null)
             return;
-        float outlinePixels = spriteRenderer.sharedMaterial != null && spriteRenderer.sharedMaterial.HasProperty(OutlinePixelsId)
-            ? spriteRenderer.sharedMaterial.GetFloat(OutlinePixelsId)
-            : 0f;
+        float effectiveOutlinePixels = GetEffectiveOutlinePixels();
         if (spriteRenderer.sprite != cachedSprite || spriteRenderer.flipX != cachedFlipX || spriteRenderer.flipY != cachedFlipY ||
-            !Mathf.Approximately(outlinePixels, cachedOutlinePixels))
+            !Mathf.Approximately(effectiveOutlinePixels, cachedOutlinePixels))
             RefreshBounds();
     }
 
@@ -54,9 +57,7 @@ public sealed class SpriteOutlineUvBounds : MonoBehaviour
             return;
 
         cachedSprite = spriteRenderer.sprite;
-        cachedOutlinePixels = spriteRenderer.sharedMaterial != null && spriteRenderer.sharedMaterial.HasProperty(OutlinePixelsId)
-            ? spriteRenderer.sharedMaterial.GetFloat(OutlinePixelsId)
-            : 0f;
+        cachedOutlinePixels = GetEffectiveOutlinePixels();
         cachedFlipX = spriteRenderer.flipX;
         cachedFlipY = spriteRenderer.flipY;
         if (cachedSprite == null)
@@ -85,6 +86,7 @@ public sealed class SpriteOutlineUvBounds : MonoBehaviour
         }
 
         spriteRenderer.GetPropertyBlock(propertyBlock);
+        propertyBlock.SetFloat(OutlinePixelsId, cachedOutlinePixels);
         propertyBlock.SetVector(UvMinId, new Vector4(min.x, min.y, 0f, 0f));
         propertyBlock.SetVector(UvMaxId, new Vector4(max.x, max.y, 0f, 0f));
         Bounds bounds = cachedSprite.bounds;
@@ -108,5 +110,14 @@ public sealed class SpriteOutlineUvBounds : MonoBehaviour
         propertyBlock.SetFloat(OutlineLocalWidthId, cachedOutlinePixels / pixelsPerUnit);
         propertyBlock.SetFloat(UvValidId, 1f);
         spriteRenderer.SetPropertyBlock(propertyBlock);
+    }
+
+    private float GetEffectiveOutlinePixels()
+    {
+        if (overrideMaterialWidth)
+            return Mathf.Clamp(outlinePixels, 0f, 4f);
+        return spriteRenderer.sharedMaterial != null && spriteRenderer.sharedMaterial.HasProperty(OutlinePixelsId)
+            ? spriteRenderer.sharedMaterial.GetFloat(OutlinePixelsId)
+            : 0f;
     }
 }
