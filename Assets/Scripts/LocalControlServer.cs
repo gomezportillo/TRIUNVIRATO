@@ -175,7 +175,8 @@ public sealed class LocalControlServer : MonoBehaviour
         public float specialDamagePerEffect;
         public float specialNormalDuration;
         public float specialBossDuration;
-        public bool purchaseChoiceMade;
+        public bool hasPurchasedUpgrade;
+        public bool resourceChoiceMade;
         public string purchaseResult;
         public PurchaseUpgradeOption[] purchaseOptions;
     }
@@ -1032,7 +1033,8 @@ public sealed class LocalControlServer : MonoBehaviour
             specialDamagePerEffect = game != null ? game.GetSpecialAbilityDamagePerEffect(army) : 0f,
             specialNormalDuration = game != null ? game.GetSpecialAbilityNormalDuration(army) : 0f,
             specialBossDuration = game != null ? game.GetSpecialAbilityBossDuration(army) : 0f,
-            purchaseChoiceMade = game != null && game.IsPurchaseChoiceMade(army),
+            hasPurchasedUpgrade = game != null && game.HasPurchasedUpgrade(army),
+            resourceChoiceMade = game != null && game.IsResourceChoiceMade(army),
             purchaseResult = game != null ? game.GetPurchaseResult(army) : string.Empty,
             purchaseOptions = CreatePurchaseOptions(army)
         };
@@ -1047,6 +1049,7 @@ public sealed class LocalControlServer : MonoBehaviour
         public string description;
         public int price;
         public int[] resourceCosts;
+        public string paymentMode;
         public int stars;
     }
 
@@ -1063,7 +1066,7 @@ public sealed class LocalControlServer : MonoBehaviour
             foreach (int amount in offer.resourceCosts) total += amount;
             options[i] = new PurchaseUpgradeOption { id = offer.id, category = offer.category,
                 name = offer.name, description = offer.description, price = total,
-                resourceCosts = offer.resourceCosts, stars = offer.stars };
+                resourceCosts = offer.resourceCosts, paymentMode = offer.paymentMode.ToString().ToLowerInvariant(), stars = offer.stars };
         }
         return options;
     }

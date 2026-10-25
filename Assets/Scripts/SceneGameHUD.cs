@@ -88,7 +88,10 @@ public sealed class SceneGameHUD : MonoBehaviour
         {
             ArmyType army = (ArmyType)i;
             string name = army == ArmyType.Tierra ? "Tierra" : army == ArmyType.Aire ? "Aire" : "Mar";
-            lines[i] = name + ": " + (game.IsPurchaseChoiceMade(army) ? game.GetPurchaseResult(army) : "pendiente");
+            string latestAction = game.GetPurchaseResult(army);
+            lines[i] = name + ": " + (string.IsNullOrEmpty(latestAction)
+                ? "compras abiertas"
+                : "última acción: " + latestAction + " (puede seguir comprando)");
         }
         return string.Join("\n", lines);
     }

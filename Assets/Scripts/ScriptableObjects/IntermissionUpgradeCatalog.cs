@@ -4,6 +4,7 @@ using UnityEngine;
 
 public enum IntermissionUpgradeCategory { Economy, Towers, Hero, SpecialAbilities }
 public enum IntermissionUpgradeValueType { Percentage, Fixed }
+public enum IntermissionUpgradePaymentMode { Individual, Cooperative }
 public enum IntermissionUpgradeEffect
 {
     PassiveIncome, KillReward, WaveReward,
@@ -23,6 +24,10 @@ public sealed class IntermissionUpgradeCatalog : ScriptableObject
         public IntermissionUpgradeCategory category;
         public IntermissionUpgradeEffect effect;
         public IntermissionUpgradeValueType valueType;
+        public IntermissionUpgradePaymentMode paymentMode;
+        [Min(0)] public int tierraContribution;
+        [Min(0)] public int aireContribution;
+        [Min(0)] public int marContribution;
         [Min(1)] public int baseCost = 30;
         [Min(0f)] public float normalEffect;
         [Min(0f)] public float rareEffect;

@@ -55,8 +55,9 @@ public sealed class TriunviratoGame : MonoBehaviour
     private bool victory;
     private bool purchasePhase;
     private float purchasePhaseTimer;
-    private readonly bool[] purchaseChoices = new bool[3];
     private readonly string[] purchaseResults = new string[3];
+    private readonly bool[] purchasedUpgrades = new bool[3];
+    private readonly bool[] resourceChoices = new bool[3];
     private readonly float[] economyUpgradeMultipliers = { 1f, 1f, 1f };
     private readonly float[] towerUpgradeMultipliers = { 1f, 1f, 1f };
     private readonly float[] heroUpgradeMultipliers = { 1f, 1f, 1f };
@@ -102,6 +103,7 @@ public sealed class TriunviratoGame : MonoBehaviour
         public string description;
         public int stars;
         public int[] resourceCosts;
+        public IntermissionUpgradePaymentMode paymentMode;
         public bool isTowerUnlock;
         public bool isSpecialAbility;
     }
@@ -116,7 +118,8 @@ public sealed class TriunviratoGame : MonoBehaviour
     public bool IsWaveInProgress => waveInProgress;
     public bool IsPurchasePhase => purchasePhase;
     public float PurchasePhaseSecondsRemaining => Mathf.Max(0f, purchasePhaseTimer);
-    public bool IsPurchaseChoiceMade(ArmyType army) => IsValidArmy(army) && purchaseChoices[(int)army];
+    public bool HasPurchasedUpgrade(ArmyType army) => IsValidArmy(army) && purchasedUpgrades[(int)army];
+    public bool IsResourceChoiceMade(ArmyType army) => IsValidArmy(army) && resourceChoices[(int)army];
     public string GetPurchaseResult(ArmyType army) => IsValidArmy(army) ? purchaseResults[(int)army] : string.Empty;
     public PurchaseOffer[] GetPurchaseOffers(ArmyType army)
     {
@@ -304,8 +307,9 @@ public sealed class TriunviratoGame : MonoBehaviour
             GameSoundManager.Instance?.PlayMatchStart();
         purchasePhase = false;
         purchasePhaseTimer = 0f;
-        Array.Clear(purchaseChoices, 0, purchaseChoices.Length);
         Array.Clear(purchaseResults, 0, purchaseResults.Length);
+        Array.Clear(purchasedUpgrades, 0, purchasedUpgrades.Length);
+        Array.Clear(resourceChoices, 0, resourceChoices.Length);
         Array.Clear(economyKillRewardFixedBonus, 0, economyKillRewardFixedBonus.Length);
         Array.Clear(economyPassiveFixedBonus, 0, economyPassiveFixedBonus.Length);
         Array.Clear(economyWaveRewardFixedBonus, 0, economyWaveRewardFixedBonus.Length);
@@ -416,8 +420,8 @@ public sealed class TriunviratoGame : MonoBehaviour
             }
             if (purchasePhaseTimer <= 0f)
             {
-                for (int i = 0; i < purchaseChoices.Length; i++)
-                    if (!purchaseChoices[i]) GrantResourceChoice((ArmyType)i);
+                for (int i = 0; i < purchasedUpgrades.Length; i++)
+                    if (!purchasedUpgrades[i] && !resourceChoices[i]) GrantResourceChoice((ArmyType)i);
                 FinishPurchasePhase();
             }
         }
@@ -439,8 +443,9 @@ public sealed class TriunviratoGame : MonoBehaviour
         purchasePhase = true;
         purchasePhaseTimer = PurchasePhaseDuration;
         lastPurchaseTimerSecond = Mathf.CeilToInt(PurchasePhaseDuration);
-        Array.Clear(purchaseChoices, 0, purchaseChoices.Length);
         Array.Clear(purchaseResults, 0, purchaseResults.Length);
+        Array.Clear(purchasedUpgrades, 0, purchasedUpgrades.Length);
+        Array.Clear(resourceChoices, 0, resourceChoices.Length);
         purchaseOffersAreRare = waveHadBoss;
         GeneratePurchaseOffers();
         StateRevision++;
@@ -499,12 +504,15 @@ public sealed class TriunviratoGame : MonoBehaviour
                 break;
         }
         int[] baseCosts = intermissionCatalog.SpecialAbilityBaseCosts;
-        int growthWaves = Mathf.Max(0, wave - 1);
-        int[] costs = new int[3];
-        for (int i = 0; i < costs.Length; i++)
-            costs[i] = Mathf.Max(0, Mathf.RoundToInt(baseCosts[i] * Mathf.Pow(1f + intermissionCatalog.PriceGrowthPerWave, growthWaves)));
+        int totalCost = 0;
+        float growth = Mathf.Pow(1f + intermissionCatalog.PriceGrowthPerWave, Mathf.Max(0, wave - 1));
+        foreach (int cost in baseCosts)
+            totalCost += Mathf.Max(0, Mathf.RoundToInt(cost * growth));
+        int scaledCost = totalCost;
+        int[] costs = IndividualCosts(army, scaledCost);
         return new PurchaseOffer { id = id, category = "specialabilities", name = name, description = description,
-            stars = intermissionCatalog.SpecialAbilityStars, resourceCosts = costs, isSpecialAbility = true };
+            stars = intermissionCatalog.SpecialAbilityStars, resourceCosts = costs,
+            paymentMode = IntermissionUpgradePaymentMode.Individual, isSpecialAbility = true };
     }
 
     private PurchaseOffer GenerateOffer(ArmyType army, IntermissionUpgradeCategory category, TowerShop towerShop)
@@ -519,8 +527,8 @@ public sealed class TriunviratoGame : MonoBehaviour
         if (valid.Count == 0) return null;
         IntermissionUpgradeCatalog.Definition chosen = valid[UnityEngine.Random.Range(0, valid.Count)];
         int baseCost = chosen.baseCost;
-        return MakeOffer(chosen.id, category, chosen.displayName,
-            IntermissionUpgradeCatalog.FormatDescription(chosen, stars), baseCost, false);
+        return MakeOffer(army, chosen.id, category, chosen.displayName,
+            IntermissionUpgradeCatalog.FormatDescription(chosen, stars), baseCost, false, chosen);
     }
 
     private PurchaseOffer CreateTowerUnlockOffer(ArmyType army, TowerShop towerShop)
@@ -534,27 +542,45 @@ public sealed class TriunviratoGame : MonoBehaviour
         if (config.PurchaseCost <= normalTowerUpgradeCost) return null;
         string name = "Desbloquear torre de " + config.DisplayName;
         string description = "Compra y activa esta torre para defender tu ejército.";
-        return MakeOffer("tower_unlock_" + army.ToString().ToLowerInvariant(),
-            IntermissionUpgradeCategory.Towers, name, description, config.PurchaseCost, true);
+        return MakeOffer(army, "tower_unlock_" + army.ToString().ToLowerInvariant(),
+            IntermissionUpgradeCategory.Towers, name, description, config.PurchaseCost, true, null);
     }
 
-    private PurchaseOffer MakeOffer(string id, IntermissionUpgradeCategory category, string name,
-        string description, int baseCost, bool isTowerUnlock)
+    private PurchaseOffer MakeOffer(ArmyType army, string id, IntermissionUpgradeCategory category, string name,
+        string description, int baseCost, bool isTowerUnlock, IntermissionUpgradeCatalog.Definition definition)
     {
-        int primary = (int)category;
         int scaled = Mathf.Max(1, Mathf.RoundToInt(baseCost * Mathf.Pow(1f + intermissionCatalog.PriceGrowthPerWave,
             Mathf.Max(0, wave - 1))));
-        int[] costs = new int[3];
-        costs[primary] = scaled;
-        if (purchaseOffersAreRare)
+        IntermissionUpgradePaymentMode paymentMode = definition != null
+            ? definition.paymentMode : IntermissionUpgradePaymentMode.Individual;
+        int[] costs;
+        if (paymentMode == IntermissionUpgradePaymentMode.Cooperative && definition != null)
         {
-            int secondary = UnityEngine.Random.Range(0, 2);
-            if (secondary >= primary) secondary++;
-            costs[secondary] = Mathf.Max(1, Mathf.RoundToInt(scaled * intermissionCatalog.RareSecondaryCostPercent));
+            float growth = Mathf.Pow(1f + intermissionCatalog.PriceGrowthPerWave, Mathf.Max(0, wave - 1));
+            costs = new[] {
+                Mathf.RoundToInt(definition.tierraContribution * growth),
+                Mathf.RoundToInt(definition.aireContribution * growth),
+                Mathf.RoundToInt(definition.marContribution * growth)
+            };
+        }
+        else
+        {
+            // Rare offers retain their former total surcharge, charged to the army receiving the benefit.
+            if (purchaseOffersAreRare)
+                scaled += Mathf.Max(1, Mathf.RoundToInt(scaled * intermissionCatalog.RareSecondaryCostPercent));
+            costs = IndividualCosts(army, scaled);
+            paymentMode = IntermissionUpgradePaymentMode.Individual;
         }
         return new PurchaseOffer { id = id, category = category.ToString().ToLowerInvariant(), name = name,
             description = description, stars = purchaseOffersAreRare ? RareStars : NormalStars,
-            resourceCosts = costs, isTowerUnlock = isTowerUnlock };
+            resourceCosts = costs, paymentMode = paymentMode, isTowerUnlock = isTowerUnlock };
+    }
+
+    private static int[] IndividualCosts(ArmyType army, int amount)
+    {
+        int[] costs = new int[3];
+        if (IsValidArmy(army)) costs[(int)army] = amount;
+        return costs;
     }
 
     private void FinishPurchasePhase()
@@ -572,7 +598,6 @@ public sealed class TriunviratoGame : MonoBehaviour
         message = "La fase de compras no está activa.";
         if (!purchasePhase || purchasePhaseTimer <= 0f || !IsValidArmy(army)) return false;
         int armyIndex = (int)army;
-        if (purchaseChoices[armyIndex]) { message = "Ya has elegido en esta fase."; return false; }
         if (economy == null) { message = "La economía no está disponible."; return false; }
         if (id == "resources")
         {
@@ -604,6 +629,23 @@ public sealed class TriunviratoGame : MonoBehaviour
             return false;
         }
         int[] costs = offer.resourceCosts;
+        bool invalidCosts = costs == null || costs.Length != 3;
+        if (!invalidCosts)
+        {
+            bool hasCost = false;
+            for (int i = 0; i < costs.Length; i++)
+            {
+                hasCost |= costs[i] > 0;
+                if (costs[i] < 0 || (offer.paymentMode == IntermissionUpgradePaymentMode.Individual && i != armyIndex && costs[i] != 0))
+                    invalidCosts = true;
+            }
+            if (!hasCost) invalidCosts = true;
+        }
+        if (invalidCosts)
+        {
+            message = "Coste de compra no válido.";
+            return false;
+        }
         if (!economy.TrySpendIntermissionResources(costs[0], costs[1], costs[2]))
         {
             message = BuildInsufficientPurchaseResources(costs);
@@ -611,7 +653,12 @@ public sealed class TriunviratoGame : MonoBehaviour
         }
         if (offer.isTowerUnlock)
         {
-            if (!towerShop.UnlockForIntermission(army, out message)) return false;
+            if (!towerShop.UnlockForIntermission(army, out message))
+            {
+                for (int i = 0; i < costs.Length; i++)
+                    if (costs[i] > 0) economy.Refund((ArmyType)i, costs[i]);
+                return false;
+            }
         }
         else if (offer.isSpecialAbility)
         {
@@ -621,11 +668,10 @@ public sealed class TriunviratoGame : MonoBehaviour
         {
             ApplyIntermissionEffect(army, definition, IntermissionUpgradeCatalog.GetOfferEffect(definition, offer.stars));
         }
-        purchaseChoices[armyIndex] = true;
+        purchasedUpgrades[armyIndex] = true;
         purchaseResults[armyIndex] = offer.name + (offer.stars == SpecialAbilityStars ? " ⭐⭐⭐" : offer.stars == RareStars ? " ⭐⭐" : " ⭐");
         StateRevision++;
         message = "Comprada: " + offer.name + ".";
-        FinishIfAllChosen();
         return true;
     }
 
@@ -727,18 +773,11 @@ public sealed class TriunviratoGame : MonoBehaviour
 
     private void GrantResourceChoice(ArmyType army)
     {
-        if (!purchasePhase || !IsValidArmy(army) || purchaseChoices[(int)army]) return;
+        if (!purchasePhase || !IsValidArmy(army) || resourceChoices[(int)army]) return;
         economy?.GrantIntermissionResources(army, ResourceChoiceReward);
-        purchaseChoices[(int)army] = true;
+        resourceChoices[(int)army] = true;
         purchaseResults[(int)army] = "+" + ResourceChoiceReward + " recursos";
         StateRevision++;
-        FinishIfAllChosen();
-    }
-
-    private void FinishIfAllChosen()
-    {
-        foreach (bool chosen in purchaseChoices) if (!chosen) return;
-        FinishPurchasePhase();
     }
 
     public float GetEconomyIntermissionMultiplier(ArmyType army) => IsValidArmy(army) ? economyUpgradeMultipliers[(int)army] : 1f;
