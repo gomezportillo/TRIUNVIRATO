@@ -20,6 +20,10 @@ public sealed class EnemyConfig : ScriptableObject
     [SerializeField, Min(0f)] private float initialIdleDuration = 0.15f;
     [SerializeField, Min(0.01f)] private float normalScale = 0.5f;
     [SerializeField, Min(0.01f)] private float bossScale = 0.9f;
+    [Header("Barra de vida")]
+    [SerializeField, Min(0.01f), Tooltip("Longitud de la barra en unidades de mundo.")] private float healthBarLength = 0.3f;
+    [SerializeField, Min(0.001f), Tooltip("Altura de la barra en unidades de mundo.")] private float healthBarHeight = 0.03f;
+    [SerializeField, Tooltip("Desplazamiento vertical respecto al sprite, en unidades de mundo. Puede ser negativo.")] private float healthBarOffset = 0.03f;
     [SerializeField, Min(0.1f)] private float deathAnimationFallbackSeconds = 1f;
 
     public string Id => id;
@@ -29,6 +33,9 @@ public sealed class EnemyConfig : ScriptableObject
     public float InitialIdleDuration => initialIdleDuration;
     public float NormalScale => normalScale;
     public float BossScale => bossScale;
+    public float HealthBarLength => healthBarLength;
+    public float HealthBarHeight => healthBarHeight;
+    public float HealthBarOffset => healthBarOffset;
     public float DeathAnimationFallbackSeconds => deathAnimationFallbackSeconds;
 
     public float GetMaximumHealth(int wave, bool isBoss)

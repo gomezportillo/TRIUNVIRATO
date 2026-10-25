@@ -22,8 +22,8 @@ MonoBehaviour:
   meteorCount: 6
   meteorCountUpgrade: 1
   damage: 10
-  damageUpgrade: 5
-  radius: 1.25
+  damageUpgrade: 10
+  radius: 1.5
   interval: 0.4
   impactDelay: 0.7
   horizontalPadding: 0.4

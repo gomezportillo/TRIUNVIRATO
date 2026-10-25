@@ -19,6 +19,12 @@ public sealed class EconomyUI : MonoBehaviour
     private string feedback;
     private float feedbackTime;
 
+    private void Update()
+    {
+        if (feedbackTime > 0f)
+            feedbackTime = Mathf.Max(0f, feedbackTime - Time.unscaledDeltaTime);
+    }
+
     private void OnGUI()
     {
         if (economy == null || shop == null)
@@ -66,10 +72,7 @@ public sealed class EconomyUI : MonoBehaviour
             GUILayout.EndHorizontal();
 
             if (feedbackTime > 0f)
-            {
-                feedbackTime -= Time.unscaledDeltaTime;
                 GUILayout.Label(feedback);
-            }
         }
         GUILayout.EndArea();
     }

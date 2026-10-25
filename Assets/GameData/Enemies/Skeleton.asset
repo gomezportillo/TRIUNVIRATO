@@ -28,4 +28,7 @@ MonoBehaviour:
   initialIdleDuration: 0.15
   normalScale: 0.8
   bossScale: 1.75
+  healthBarLength: 0.35
+  healthBarHeight: 0.035
+  healthBarOffset: -0.15
   deathAnimationFallbackSeconds: 1.1

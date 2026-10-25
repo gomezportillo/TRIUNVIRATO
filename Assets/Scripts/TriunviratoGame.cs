@@ -31,6 +31,8 @@ public sealed class TriunviratoGame : MonoBehaviour
     [SerializeField] private ZombieGraspAbilityConfig zombieGraspAbility;
     [SerializeField] private MeteorShowerAbilityConfig meteorShowerAbility;
     [SerializeField] private LightningStormAbilityConfig lightningStormAbility;
+    [SerializeField, Tooltip("Si se asigna, los límites del SpriteRenderer delimitan dónde caen los meteoritos.")]
+    private SpriteRenderer meteorShowerArea;
     private readonly List<SkeletonEnemy> enemies = new List<SkeletonEnemy>();
     private readonly List<Projectile> projectiles = new List<Projectile>();
     private readonly List<FloatingDamage> floatingDamage = new List<FloatingDamage>();
@@ -1143,26 +1145,42 @@ public sealed class TriunviratoGame : MonoBehaviour
 
     private Vector3 GetMeteorStrikePosition(List<Vector3> previousPositions, MeteorShowerAbilityConfig ability)
     {
-        float padding = ability != null ? ability.HorizontalPadding : 0f;
-        float maximumX = ability != null ? ability.MaximumX : float.MaxValue;
-        float left = Mathf.Min(enemySpawner.position.x, castleTarget.position.x) + padding;
-        float right = Mathf.Min(Mathf.Max(enemySpawner.position.x, castleTarget.position.x) - padding,
-            maximumX);
-        if (right < left)
-            left = right = Mathf.Min((enemySpawner.position.x + castleTarget.position.x) * 0.5f, maximumX);
-
-        float centerY = ability != null ? ability.CenterY : 0f;
-        float verticalHalfRange = ability != null ? ability.VerticalHalfRange : 0f;
-        float minY = centerY - verticalHalfRange;
-        float maxY = centerY + verticalHalfRange;
-        Camera mainCamera = Camera.main;
-        if (mainCamera != null && mainCamera.orthographic)
+        float left;
+        float right;
+        float minY;
+        float maxY;
+        SpriteRenderer area = GetMeteorShowerAreaRenderer();
+        if (area != null && area.sprite != null)
         {
-            minY = Mathf.Max(minY, mainCamera.transform.position.y - mainCamera.orthographicSize + 0.2f);
-            maxY = Mathf.Min(maxY, mainCamera.transform.position.y + mainCamera.orthographicSize - 0.2f);
+            Bounds bounds = area.bounds;
+            left = bounds.min.x;
+            right = bounds.max.x;
+            minY = bounds.min.y;
+            maxY = bounds.max.y;
         }
-        if (maxY < minY)
-            minY = maxY = centerY;
+        else
+        {
+            float padding = ability != null ? ability.HorizontalPadding : 0f;
+            float maximumX = ability != null ? ability.MaximumX : float.MaxValue;
+            left = Mathf.Min(enemySpawner.position.x, castleTarget.position.x) + padding;
+            right = Mathf.Min(Mathf.Max(enemySpawner.position.x, castleTarget.position.x) - padding,
+                maximumX);
+            if (right < left)
+                left = right = Mathf.Min((enemySpawner.position.x + castleTarget.position.x) * 0.5f, maximumX);
+
+            float centerY = ability != null ? ability.CenterY : 0f;
+            float verticalHalfRange = ability != null ? ability.VerticalHalfRange : 0f;
+            minY = centerY - verticalHalfRange;
+            maxY = centerY + verticalHalfRange;
+            Camera mainCamera = Camera.main;
+            if (mainCamera != null && mainCamera.orthographic)
+            {
+                minY = Mathf.Max(minY, mainCamera.transform.position.y - mainCamera.orthographicSize + 0.2f);
+                maxY = Mathf.Min(maxY, mainCamera.transform.position.y + mainCamera.orthographicSize - 0.2f);
+            }
+            if (maxY < minY)
+                minY = maxY = centerY;
+        }
 
         Vector3 position = default;
         float minimumSeparation = ability != null ? ability.MinimumSeparation : 0f;
@@ -1184,6 +1202,17 @@ public sealed class TriunviratoGame : MonoBehaviour
                 return position;
         }
         return position;
+    }
+
+    private SpriteRenderer GetMeteorShowerAreaRenderer()
+    {
+        if (meteorShowerArea == null)
+        {
+            GameObject area = GameObject.Find("Area_MeteorShower");
+            if (area != null)
+                meteorShowerArea = area.GetComponent<SpriteRenderer>();
+        }
+        return meteorShowerArea;
     }
 
     private IEnumerator PerformLightningStorm(SkeletonEnemy target)
