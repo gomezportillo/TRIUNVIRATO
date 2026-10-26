@@ -20,8 +20,7 @@ public sealed class LocalControlServer : MonoBehaviour
     private const int MaxMessageBytes = 2048;
 
     [SerializeField, Min(1)] private int port = 2468;
-    [SerializeField] private TowerShop shop;
-    [SerializeField] private ArmyEconomy economy;
+    [SerializeField] private TowerManager towerManager;
     [SerializeField] private TriunviratoGame game;
     [SerializeField, Min(5f)] private float reconnectGraceSeconds = 60f;
 
@@ -34,6 +33,8 @@ public sealed class LocalControlServer : MonoBehaviour
     private readonly Dictionary<int, PlayerSession> sessionsByClient = new Dictionary<int, PlayerSession>();
     private readonly Dictionary<string, PlayerSession> sessionsByToken = new Dictionary<string, PlayerSession>();
     private readonly string[] armySeats = new string[3];
+    private readonly bool[] restartRequestedByArmy = new bool[3];
+    private bool restartTriggered;
     private string developerToken;
     private TcpListener listener;
     private CancellationTokenSource shutdown;
@@ -42,8 +43,7 @@ public sealed class LocalControlServer : MonoBehaviour
     private string status = "Servidor detenido";
     private string accessUrl = "IP LAN no detectada";
     private int nextClientId;
-    private int observedShopRevision = -1;
-    private int observedEconomyRevision = -1;
+    private int observedTowerRevision = -1;
     private int observedGameRevision = -1;
     private int outgoingStateRevision;
     private float nextSpecialCooldownPublishTime;
@@ -51,6 +51,7 @@ public sealed class LocalControlServer : MonoBehaviour
     public bool IsDeveloperMode => developerToken != null;
     public string StatusText => status;
     public string AccessUrlText => accessUrl;
+    public int RestartRequestCount => CountRestartRequests();
     public string RoomStatusText => game != null ? "Sala: " + game.Status + " · " + SeatSummary() : "Sala: no disponible";
 
     /// <summary>Reads a live lobby seat directly from the authoritative session table.</summary>
@@ -75,15 +76,16 @@ public sealed class LocalControlServer : MonoBehaviour
         public string type;
         public string army;
         public string choice;
+        public string offerToken;
         public string clientToken;
         public string requestId;
 #pragma warning restore 0649
     }
 
     [Serializable]
-    private sealed class PurchaseResponse
+    private sealed class ServerResponse
     {
-        public string type = "purchaseResult";
+        public string type = "upgradeResult";
         public string requestId;
         public bool success;
         public string message;
@@ -93,24 +95,19 @@ public sealed class LocalControlServer : MonoBehaviour
     }
 
     [Serializable]
-    private sealed class ShopStateMessage
+    private sealed class MatchStateMessage
     {
-        public string type = "shopState";
+        public string type = "matchState";
         public int revision;
         public string status;
         public string selectedArmy;
         public bool developerMode;
         public bool developerAvailable;
         public int currentWave;
-        public int nextEarlyCallAvailableWave;
         public bool waveInProgress;
-        public bool earlyWaveCallPending;
-        public bool canCallNextWaveEarly;
-        public bool purchasePhase;
-        public float purchaseSecondsRemaining;
-        public int resourceChoiceReward;
+        public int restartRequestCount;
         public SeatState[] seats;
-        public ArmyShopState[] armies;
+        public ArmyState[] armies;
     }
 
     [Serializable]
@@ -123,22 +120,27 @@ public sealed class LocalControlServer : MonoBehaviour
     }
 
     [Serializable]
-    private sealed class ArmyShopState
+    private sealed class ArmyState
     {
         public string army;
-        public bool owned;
+        public bool towerUnlocked;
         public float currentDamage;
         public float towerRange;
         public float towerAttackCooldown;
         public bool canControl;
-        public bool canPurchaseTower;
-        public int coins;
-        public float passiveIncomePerSecond;
-        public string incomeSummary;
-        public float rewardPerKill;
-        public int rewardPerWave;
-        public int rewardPerBoss;
-        public float waveRewardMultiplier;
+        public int level;
+        public float experience;
+        public float experienceNeeded;
+        public float experienceMultiplier;
+        public float experienceIncrease;
+        public float luckChance;
+        public float heroBossDamageBonusPercent;
+        public float damageByHero;
+        public float damageByTower;
+        public float damageBySpecialAbility;
+        public bool restartRequested;
+        public bool hasUpgradeOffer;
+        public bool hasBossOffer;
         public float heroDamage;
         public float heroBaseDamage;
         public float heroRange;
@@ -175,10 +177,7 @@ public sealed class LocalControlServer : MonoBehaviour
         public float specialDamagePerEffect;
         public float specialNormalDuration;
         public float specialBossDuration;
-        public bool hasPurchasedUpgrade;
-        public bool resourceChoiceMade;
-        public string purchaseResult;
-        public PurchaseUpgradeOption[] purchaseOptions;
+        public UpgradeOption[] upgradeOptions;
     }
 
     private sealed class WebSocketClient
@@ -234,19 +233,24 @@ public sealed class LocalControlServer : MonoBehaviour
         while (pendingMessages.TryDequeue(out PendingMessage pending))
             ProcessMessage(pending);
 
+        // The TV overlay can restart directly. Clear votes carried from the finished
+        // match when the shared game state returns to combat.
+        if (game != null && game.Status == TriunviratoGame.MatchStatus.InProgress && CountRestartRequests() > 0)
+        {
+            Array.Clear(restartRequestedByArmy, 0, restartRequestedByArmy.Length);
+            restartTriggered = false;
+        }
+
         if (game != null && game.HasSpecialCooldownsRunning && Time.unscaledTime >= nextSpecialCooldownPublishTime)
         {
             nextSpecialCooldownPublishTime = Time.unscaledTime + 0.25f;
             PublishState();
         }
 
-        int economyRevision = economy != null ? economy.StateRevision : -1;
         int gameRevision = game != null ? game.StateRevision : -1;
-        if (shop != null && (shop.StateRevision != observedShopRevision || economyRevision != observedEconomyRevision ||
-                             gameRevision != observedGameRevision))
+        if (towerManager != null && (towerManager.StateRevision != observedTowerRevision || gameRevision != observedGameRevision))
         {
-            observedShopRevision = shop.StateRevision;
-            observedEconomyRevision = economyRevision;
+            observedTowerRevision = towerManager.StateRevision;
             observedGameRevision = gameRevision;
             PublishState();
         }
@@ -254,16 +258,14 @@ public sealed class LocalControlServer : MonoBehaviour
 
     private void StartServer()
     {
-        if (shop == null)
-            shop = FindAnyObjectByType<TowerShop>();
-        if (economy == null)
-            economy = FindAnyObjectByType<ArmyEconomy>();
+        if (towerManager == null)
+            towerManager = FindAnyObjectByType<TowerManager>();
         if (game == null)
             game = FindAnyObjectByType<TriunviratoGame>();
 
-        if (shop == null)
+        if (towerManager == null)
         {
-            status = "Error: no se encontró Tower Shop";
+            status = "Error: no se encontró Tower Manager";
             Debug.LogError(status, this);
             return;
         }
@@ -288,8 +290,7 @@ public sealed class LocalControlServer : MonoBehaviour
             }
 
             shutdown = new CancellationTokenSource();
-            observedShopRevision = shop.StateRevision;
-            observedEconomyRevision = economy != null ? economy.StateRevision : -1;
+            observedTowerRevision = towerManager.StateRevision;
             observedGameRevision = game != null ? game.StateRevision : -1;
             outgoingStateRevision = 0;
             listener = new TcpListener(IPAddress.Parse(lanAddress), port);
@@ -454,7 +455,7 @@ public sealed class LocalControlServer : MonoBehaviour
                     }
                     if (result.MessageType != WebSocketMessageType.Text || message.Length + result.Count > MaxMessageBytes)
                     {
-                        await SendMessageAsync(client, new PurchaseResponse
+                        await SendMessageAsync(client, new ServerResponse
                         {
                             success = false,
                             message = "Mensaje no válido o demasiado grande."
@@ -490,7 +491,7 @@ public sealed class LocalControlServer : MonoBehaviour
 
     private void ProcessMessage(PendingMessage pending)
     {
-        PurchaseResponse response = new PurchaseResponse();
+        ServerResponse response = new ServerResponse();
         PlayerSession specialResponseSession = null;
         bool stateChanged = false;
         try
@@ -534,27 +535,9 @@ public sealed class LocalControlServer : MonoBehaviour
                     response.success = JoinDeveloper(session, out response.message);
                     stateChanged = response.success;
                 }
-                else if (command.type == "buyTower")
+                else if (command.type == "selectUpgrade")
                 {
-                    response.type = "purchaseResult";
-                    if (!TryParseArmy(command.army, out ArmyType army))
-                        response.message = "Ejército desconocido.";
-                    else if (!CanControl(session, army))
-                        response.message = "Solo puedes dar órdenes a tu ejército.";
-                    else if (game == null || !game.IsPurchasePhase)
-                        response.message = "Las torres solo se pueden comprar durante la fase de compras.";
-                    else
-                    {
-                        response.success = shop.TryPurchase(army, out string failureReason);
-                        response.message = response.success
-                            ? "Torre de " + shop.GetTowerDisplayName(army) + " comprada."
-                            : failureReason;
-                        stateChanged = response.success;
-                    }
-                }
-                else if (command.type == "buyIntermissionUpgrade")
-                {
-                    response.type = "purchaseResult";
+                    response.type = "upgradeResult";
                     if (!TryParseArmy(command.army, out ArmyType army))
                         response.message = "Ejército desconocido.";
                     else if (!CanControl(session, army))
@@ -563,21 +546,42 @@ public sealed class LocalControlServer : MonoBehaviour
                         response.message = "La partida no está disponible.";
                     else
                     {
-                        response.success = game.TryChooseIntermissionOption(army, command.choice, out response.message);
+                        response.success = game.TrySelectUpgrade(army, command.choice, command.offerToken, out response.message);
                         stateChanged = response.success;
                     }
                 }
-                else if (command.type == "callNextWaveEarly")
+                else if (command.type == "requestRestart")
                 {
-                    response.type = "waveCallResult";
-                    if (!CanControl(session, ArmyType.Mar))
-                        response.message = "Solo el ejército Mar puede adelantar la siguiente oleada.";
-                    else if (game == null)
-                        response.message = "La partida no está disponible.";
+                    response.type = "restartVoteResult";
+                    if (game == null || game.Status != TriunviratoGame.MatchStatus.Finished)
+                        response.message = "El reinicio solo se puede solicitar al terminar la partida.";
+                    else if (session.Developer || session.ArmyIndex < 0 || session.ArmyIndex >= restartRequestedByArmy.Length ||
+                             !CanControl(session, (ArmyType)session.ArmyIndex))
+                        response.message = "Esta sesión no está vinculada a un ejército jugador.";
+                    else if (restartTriggered)
+                        response.message = "El reinicio ya está en curso.";
                     else
                     {
-                        response.success = game.TryCallNextWaveEarly(out response.message);
-                        stateChanged = response.success;
+                        int armyIndex = session.ArmyIndex;
+                        if (!restartRequestedByArmy[armyIndex])
+                        {
+                            restartRequestedByArmy[armyIndex] = true;
+                            stateChanged = true;
+                        }
+                        response.success = true;
+                        response.message = "Confirmación de reinicio registrada.";
+                        int votes = 0;
+                        foreach (bool requested in restartRequestedByArmy)
+                            if (requested) votes++;
+                        if (votes == restartRequestedByArmy.Length)
+                        {
+                            restartTriggered = true;
+                            game.RestartFinishedMatch();
+                            Array.Clear(restartRequestedByArmy, 0, restartRequestedByArmy.Length);
+                            restartTriggered = false;
+                            response.message = "Los tres jugadores confirmaron. Nueva partida iniciada.";
+                            stateChanged = true;
+                        }
                     }
                 }
                 else if (command.type == "activateSpecial")
@@ -616,7 +620,7 @@ public sealed class LocalControlServer : MonoBehaviour
             PublishState();
     }
 
-    private bool ProcessHello(int clientId, string token, PurchaseResponse response)
+    private bool ProcessHello(int clientId, string token, ServerResponse response)
     {
         if (string.IsNullOrWhiteSpace(token) || token.Length < 16 || token.Length > 64)
         {
@@ -905,19 +909,18 @@ public sealed class LocalControlServer : MonoBehaviour
         if (shutdown == null)
             return;
 
-        observedShopRevision = shop != null ? shop.StateRevision : -1;
-        observedEconomyRevision = economy != null ? economy.StateRevision : -1;
+        observedTowerRevision = towerManager != null ? towerManager.StateRevision : -1;
         observedGameRevision = game != null ? game.StateRevision : -1;
         outgoingStateRevision++;
         CancellationToken token = shutdown.Token;
         foreach (KeyValuePair<int, WebSocketClient> pair in webSocketClients)
         {
             PlayerSession session = GetSession(pair.Key);
-            _ = SendMessageAsync(pair.Value, BuildShopStateJson(session), token);
+            _ = SendMessageAsync(pair.Value, BuildMatchStateJson(session), token);
         }
     }
 
-    private string BuildShopStateJson(PlayerSession session)
+    private string BuildMatchStateJson(PlayerSession session)
     {
         bool canChooseDeveloper = game != null && game.Status == TriunviratoGame.MatchStatus.WaitingForPlayers &&
                                   (developerToken == null || (session != null && developerToken == session.Token));
@@ -929,7 +932,7 @@ public sealed class LocalControlServer : MonoBehaviour
                     canChooseDeveloper = false;
             }
         }
-        ShopStateMessage state = new ShopStateMessage
+        MatchStateMessage state = new MatchStateMessage
         {
             revision = outgoingStateRevision,
             status = game != null ? game.Status.ToString() : "Unavailable",
@@ -937,13 +940,8 @@ public sealed class LocalControlServer : MonoBehaviour
             developerMode = session != null && session.Developer,
             developerAvailable = canChooseDeveloper,
             currentWave = game != null ? game.CurrentWave : 0,
-            nextEarlyCallAvailableWave = game != null ? game.NextEarlyCallAvailableWave : 0,
             waveInProgress = game != null && game.IsWaveInProgress,
-            earlyWaveCallPending = game != null && game.IsEarlyWaveCallPending,
-            canCallNextWaveEarly = game != null && game.CanCallNextWaveEarly && CanControl(session, ArmyType.Mar),
-            purchasePhase = game != null && game.IsPurchasePhase,
-            purchaseSecondsRemaining = game != null ? game.PurchasePhaseSecondsRemaining : 0f,
-            resourceChoiceReward = TriunviratoGame.ResourceChoiceReward,
+            restartRequestCount = CountRestartRequests(),
             seats = new[]
             {
                 CreateSeatState(ArmyType.Tierra, session),
@@ -952,9 +950,9 @@ public sealed class LocalControlServer : MonoBehaviour
             },
             armies = new[]
             {
-                CreateArmyShopState(ArmyType.Tierra, "tierra", session),
-                CreateArmyShopState(ArmyType.Aire, "aire", session),
-                CreateArmyShopState(ArmyType.Mar, "mar", session)
+                CreateArmyState(ArmyType.Tierra, "tierra", session),
+                CreateArmyState(ArmyType.Aire, "aire", session),
+                CreateArmyState(ArmyType.Mar, "mar", session)
             }
         };
         return JsonUtility.ToJson(state);
@@ -975,28 +973,19 @@ public sealed class LocalControlServer : MonoBehaviour
         };
     }
 
-    private ArmyShopState CreateArmyShopState(ArmyType army, string name, PlayerSession session)
+    private ArmyState CreateArmyState(ArmyType army, string name, PlayerSession session)
     {
         HeroConfig hero = game != null ? game.GetHeroConfig(army) : null;
         bool canControl = CanControl(session, army);
-        TowerConfig towerConfig = shop.GetConfig(army);
-        return new ArmyShopState
+        TowerConfig towerConfig = towerManager.GetConfig(army);
+        return new ArmyState
         {
             army = name,
-            owned = shop.HasTower(army),
-            currentDamage = shop.GetCurrentDamage(army),
-            towerRange = shop.GetCurrentRange(army),
-            towerAttackCooldown = shop.GetCurrentCooldown(army),
+            towerUnlocked = towerManager.HasTower(army),
+            currentDamage = towerManager.GetCurrentDamage(army),
+            towerRange = towerManager.GetCurrentRange(army),
+            towerAttackCooldown = towerManager.GetCurrentCooldown(army),
             canControl = canControl,
-            canPurchaseTower = canControl && shop.CanPurchase && economy != null &&
-                               economy.GetCoins(army) >= shop.GetNextCost(army),
-            coins = economy != null ? economy.GetCoins(army) : 0,
-            passiveIncomePerSecond = economy != null ? economy.GetPassiveIncomePerSecond(army) : 0f,
-            incomeSummary = string.Empty,
-            rewardPerKill = economy != null ? economy.GetEffectiveEnemyKillReward(army) : 0f,
-            rewardPerWave = economy != null ? economy.GetEffectiveWaveReward(army) : 0,
-            rewardPerBoss = economy != null ? economy.GetBossReward(army) : 0,
-            waveRewardMultiplier = game != null ? game.CurrentWaveRewardMultiplier : 1f,
             heroDamage = game != null ? game.GetHeroDamage(army) : 0f,
             heroBaseDamage = hero != null ? hero.Damage : 0f,
             heroRange = game != null ? game.GetHeroRange(army) : hero != null ? hero.Range : 0f,
@@ -1004,7 +993,7 @@ public sealed class LocalControlServer : MonoBehaviour
             heroSplashRadius = game != null ? game.GetHeroSplashRadius(army) : hero != null ? hero.SplashRadius : 0f,
             heroBaseCooldown = hero != null ? hero.AttackCooldown : 0f,
             heroBaseRange = hero != null ? hero.Range : 0f,
-            heroDamageMultiplier = game != null ? game.GetHeroIntermissionMultiplier(army) : 1f,
+            heroDamageMultiplier = game != null ? game.GetHeroUpgradeMultiplier(army) : 1f,
             heroAttackSpeedMultiplier = game != null ? game.GetHeroAttackSpeedMultiplier(army) : 1f,
             heroRangeMultiplier = game != null ? game.GetHeroRangeMultiplier(army) : 1f,
             heroSplashMultiplier = game != null ? game.GetHeroSplashMultiplier(army) : 1f,
@@ -1016,14 +1005,14 @@ public sealed class LocalControlServer : MonoBehaviour
             towerAttackRateFixedBonus = game != null ? game.GetTowerAttackRateFixedBonus(army) : 0f,
             heroName = hero != null ? hero.DisplayName : "Héroe",
             towerBaseDamage = towerConfig != null ? towerConfig.GetBaseDamage() : 0f,
-            towerDamageMultiplier = game != null ? game.GetTowerIntermissionMultiplier(army) : 1f,
+            towerDamageMultiplier = game != null ? game.GetTowerUpgradeMultiplier(army) : 1f,
             towerDamageFixedBonus = game != null ? game.GetTowerDamageFixedBonus(army) : 0f,
             towerSplashRadius = towerConfig != null && towerConfig.Hero != null ? towerConfig.Hero.SplashRadius : 0f,
             towerBaseCooldown = towerConfig != null && towerConfig.Hero != null ? towerConfig.Hero.AttackCooldown : 0f,
             towerBaseRange = towerConfig != null && towerConfig.Hero != null ? towerConfig.Hero.Range : 0f,
             towerAttackSpeedMultiplier = game != null ? game.GetTowerAttackSpeedMultiplier(army) : 1f,
             towerRangeMultiplier = game != null ? game.GetTowerRangeMultiplier(army) : 1f,
-            towerName = shop.GetTowerDisplayName(army),
+            towerName = towerManager.GetTowerDisplayName(army),
             specialAbilityName = game != null ? game.GetSpecialAbilityName(army) : "Habilidad especial",
             specialAbilityDescription = game != null ? game.GetSpecialAbilityDescription(army) : string.Empty,
             specialCooldownRemaining = game != null ? game.GetSpecialAbilityCooldownRemaining(army) : 0f,
@@ -1033,40 +1022,53 @@ public sealed class LocalControlServer : MonoBehaviour
             specialDamagePerEffect = game != null ? game.GetSpecialAbilityDamagePerEffect(army) : 0f,
             specialNormalDuration = game != null ? game.GetSpecialAbilityNormalDuration(army) : 0f,
             specialBossDuration = game != null ? game.GetSpecialAbilityBossDuration(army) : 0f,
-            hasPurchasedUpgrade = game != null && game.HasPurchasedUpgrade(army),
-            resourceChoiceMade = game != null && game.IsResourceChoiceMade(army),
-            purchaseResult = game != null ? game.GetPurchaseResult(army) : string.Empty,
-            purchaseOptions = CreatePurchaseOptions(army)
+            level = game != null ? game.GetLevel(army) : 1,
+            experience = game != null ? game.GetExperience(army) : 0f,
+            experienceNeeded = game != null ? game.GetExperienceNeeded(army) : 0f,
+            experienceMultiplier = game != null ? game.GetExperienceMultiplier(army) : 1f,
+            experienceIncrease = game != null ? game.GetExperienceIncrease(army) : 0f,
+            luckChance = game != null ? game.GetLuckChance(army) : 0f,
+            heroBossDamageBonusPercent = game != null ? game.GetHeroBossDamageBonusPercent(army) : 0f,
+            damageByHero = game != null ? game.GetDamageByHero(army) : 0f,
+            damageByTower = game != null ? game.GetDamageByTower(army) : 0f,
+            damageBySpecialAbility = game != null ? game.GetDamageBySpecialAbility(army) : 0f,
+            restartRequested = restartRequestedByArmy[(int)army],
+            hasUpgradeOffer = game != null && game.GetUpgradeOffers(army).Length > 0,
+            hasBossOffer = game != null && game.GetUpgradeOffers(army).Length > 0 && game.GetUpgradeOffers(army)[0].stars >= 3,
+            upgradeOptions = CreateUpgradeOptions(army)
         };
     }
 
     [Serializable]
-    private sealed class PurchaseUpgradeOption
+    private sealed class UpgradeOption
     {
         public string id;
+        public string offerToken;
         public string category;
         public string name;
         public string description;
-        public int price;
-        public int[] resourceCosts;
-        public string paymentMode;
         public int stars;
     }
 
-    private PurchaseUpgradeOption[] CreatePurchaseOptions(ArmyType army)
+    private int CountRestartRequests()
     {
-        if (game == null) return Array.Empty<PurchaseUpgradeOption>();
-        TriunviratoGame.PurchaseOffer[] offers = game.GetPurchaseOffers(army);
-        PurchaseUpgradeOption[] options = new PurchaseUpgradeOption[offers.Length];
+        int count = 0;
+        foreach (bool requested in restartRequestedByArmy)
+            if (requested) count++;
+        return count;
+    }
+
+    private UpgradeOption[] CreateUpgradeOptions(ArmyType army)
+    {
+        if (game == null) return Array.Empty<UpgradeOption>();
+        TriunviratoGame.UpgradeOffer[] offers = game.GetUpgradeOffers(army);
+        UpgradeOption[] options = new UpgradeOption[offers.Length];
         for (int i = 0; i < offers.Length; i++)
         {
-            TriunviratoGame.PurchaseOffer offer = offers[i];
+            TriunviratoGame.UpgradeOffer offer = offers[i];
             if (offer == null) continue;
-            int total = 0;
-            foreach (int amount in offer.resourceCosts) total += amount;
-            options[i] = new PurchaseUpgradeOption { id = offer.id, category = offer.category,
-                name = offer.name, description = offer.description, price = total,
-                resourceCosts = offer.resourceCosts, paymentMode = offer.paymentMode.ToString().ToLowerInvariant(), stars = offer.stars };
+            options[i] = new UpgradeOption { id = offer.id, offerToken = offer.offerToken, category = offer.category,
+                name = offer.name, description = offer.description, stars = offer.stars };
         }
         return options;
     }

@@ -1,0 +1,139 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 18adce0f02c74d96864759bca013f792, type: 3}
+  m_Name: UpgradeCatalog
+  m_EditorClassIdentifier: 
+  rareOfferChance: 0.1
+  luckRareChanceIncrement: 0.1
+  specialAbilityOffersAfterBoss: 1
+  definitions:
+  - id: tower_damage
+    displayName: "Ca\xF1ones reforzados"
+    category: 1
+    effect: 3
+    valueType: 0
+    normalEffect: 10
+    rareEffect: 15
+    legendaryEffect: 20
+    eligibleArmies: 
+  - id: tower_speed
+    displayName: Mecanismo veloz
+    category: 1
+    effect: 4
+    valueType: 0
+    normalEffect: 10
+    rareEffect: 15
+    legendaryEffect: 20
+    eligibleArmies: 
+  - id: tower_range
+    displayName: Mira ampliada
+    category: 1
+    effect: 5
+    valueType: 0
+    normalEffect: 10
+    rareEffect: 15
+    legendaryEffect: 20
+    eligibleArmies: 
+  - id: hero_damage
+    displayName: Golpe heroico
+    category: 2
+    effect: 6
+    valueType: 0
+    normalEffect: 10
+    rareEffect: 15
+    legendaryEffect: 20
+    eligibleArmies: 
+  - id: hero_speed
+    displayName: Reflejos heroicos
+    category: 2
+    effect: 7
+    valueType: 0
+    normalEffect: 10
+    rareEffect: 15
+    legendaryEffect: 20
+    eligibleArmies: 
+  - id: hero_range
+    displayName: "Vista de \xE1guila"
+    category: 2
+    effect: 8
+    valueType: 0
+    normalEffect: 10
+    rareEffect: 15
+    legendaryEffect: 20
+    eligibleArmies: 
+  - id: hero_splash
+    displayName: Impacto expansivo
+    category: 2
+    effect: 9
+    valueType: 0
+    normalEffect: 10
+    rareEffect: 15
+    legendaryEffect: 20
+    eligibleArmies: 
+  - id: experience_multiplier
+    displayName: Instinto de batalla
+    category: 0
+    effect: 10
+    valueType: 0
+    normalEffect: 10
+    rareEffect: 15
+    legendaryEffect: 20
+    eligibleArmies: 
+  - id: luck
+    displayName: Suerte
+    category: 0
+    effect: 11
+    valueType: 1
+    normalEffect: 1
+    rareEffect: 2
+    legendaryEffect: 3
+    eligibleArmies: 
+  - id: unlock_tower_tierra
+    displayName: Desbloqueo de torre de Tierra
+    category: 1
+    effect: 12
+    valueType: 1
+    normalEffect: 0
+    rareEffect: 0
+    legendaryEffect: 0
+    eligibleArmies:
+    - 0
+  - id: unlock_tower_aire
+    displayName: Desbloqueo de torre de Aire
+    category: 1
+    effect: 12
+    valueType: 1
+    normalEffect: 0
+    rareEffect: 0
+    legendaryEffect: 0
+    eligibleArmies:
+    - 1
+  - id: unlock_tower_mar
+    displayName: Desbloqueo de torre de Mar
+    category: 1
+    effect: 12
+    valueType: 1
+    normalEffect: 0
+    rareEffect: 0
+    legendaryEffect: 0
+    eligibleArmies:
+    - 2
+  - id: mar_boss_damage
+    displayName: Cazajefes
+    category: 2
+    effect: 13
+    valueType: 0
+    normalEffect: 10
+    rareEffect: 15
+    legendaryEffect: 20
+    eligibleArmies:
+    - 2

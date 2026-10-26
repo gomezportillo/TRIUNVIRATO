@@ -1,6 +1,6 @@
 using UnityEngine;
 
-/// <summary>Attack cadence and stats for a purchased tower; hits use the shared game projectile pipeline.</summary>
+/// <summary>Attack cadence and stats for an unlocked tower; hits use the shared game projectile pipeline.</summary>
 public sealed class DefenseTower : MonoBehaviour
 {
     public TowerConfig Config { get; private set; }
@@ -9,6 +9,7 @@ public sealed class DefenseTower : MonoBehaviour
     public float Damage { get; private set; }
     public float Cooldown { get; private set; }
     public float SplashRadius { get; private set; }
+    public Transform Cannon => transform.Find("Cannon");
 
     private TriunviratoGame game;
     private float attackTimer;
@@ -19,14 +20,14 @@ public sealed class DefenseTower : MonoBehaviour
         if (config == null || config.Hero == null)
             return;
 
-        RefreshIntermissionStats();
+        RefreshUpgradeStats();
         SplashRadius = config.Hero.SplashRadius;
         attackTimer = 0f;
     }
 
-    internal void RefreshIntermissionDamage() => RefreshIntermissionStats();
+    internal void RefreshUpgradeDamage() => RefreshUpgradeStats();
 
-    internal void RefreshIntermissionStats()
+    internal void RefreshUpgradeStats()
     {
         if (Config == null || Config.Hero == null) return;
         Range = Config.Hero.Range * (game != null ? game.GetTowerRangeMultiplier(Config.Army) : 1f) +

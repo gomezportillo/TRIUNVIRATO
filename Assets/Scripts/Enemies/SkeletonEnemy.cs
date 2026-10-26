@@ -129,13 +129,14 @@ public sealed class SkeletonEnemy : MonoBehaviour
         return renderer;
     }
 
-    /// <summary>Returns true only on the first hit that kills this instance.</summary>
-    internal bool ApplyDamage(float amount)
+    /// <summary>Returns only the damage that actually reduced health, capped by remaining health.</summary>
+    internal float ApplyDamage(float amount)
     {
         if (isDead || amount <= 0f)
-            return false;
+            return 0f;
 
-        currentHealth = Mathf.Max(0f, currentHealth - amount);
+        float appliedDamage = Mathf.Min(currentHealth, amount);
+        currentHealth = Mathf.Max(0f, currentHealth - appliedDamage);
         if (currentHealth <= 0f)
         {
             isDead = true;
@@ -145,7 +146,7 @@ public sealed class SkeletonEnemy : MonoBehaviour
             PlayState(DeathState, 1f);
             deathFallbackTimer = config.DeathAnimationFallbackSeconds;
             GameSoundManager.Instance?.PlaySkeletonDeath();
-            return true;
+            return appliedDamage;
         }
 
         if (!isTakingHit)
@@ -155,7 +156,7 @@ public sealed class SkeletonEnemy : MonoBehaviour
             if (isRooted && animator != null)
                 animator.speed = 0f;
         }
-        return false;
+        return appliedDamage;
     }
 
     internal void ApplyRooted(float duration)

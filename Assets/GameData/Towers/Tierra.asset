@@ -16,13 +16,4 @@ MonoBehaviour:
   displayName: Tierra
   army: 0
   hero: {fileID: 11400000, guid: a71d004d37b344738f574713f5240021, type: 2}
-  purchaseCost: 50
-  heroDamageMultiplier: 0.4
-  upgradeDamagePercent: 0.15
-  upgradeCostGrowthRate: 0.1
-  minimumUpgradeCostIncrease: 1
-  maximumUpgradeLevel: 5
-  armyUpgradeBaseCost: 20
-  armyUpgradeCostMultiplier: 2
-  armyDamageIncreasePerLevel: 0.1
-  armyUpgradeMaximumLevel: 5
+  baseDamage: 4

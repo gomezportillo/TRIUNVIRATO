@@ -34,6 +34,9 @@ public sealed class GameSoundManager : MonoBehaviour
     private AudioSource themeSource;
     private AudioSource effectsSource;
     private bool themeMuted;
+    private AudioClip currentThemeClip;
+    private Coroutine themeFadeCoroutine;
+    private bool playNextThemeAfterFade;
 
     private void Awake()
     {
@@ -60,12 +63,7 @@ public sealed class GameSoundManager : MonoBehaviour
             return;
         }
 
-        List<AudioClip> availableTracks = new List<AudioClip>();
-        foreach (AudioClip track in themeTracks)
-        {
-            if (track != null)
-                availableTracks.Add(track);
-        }
+        List<AudioClip> availableTracks = GetAvailableTracks();
 
         if (availableTracks.Count == 0)
         {
@@ -73,9 +71,7 @@ public sealed class GameSoundManager : MonoBehaviour
             return;
         }
 
-        themeSource.clip = availableTracks[Random.Range(0, availableTracks.Count)];
-        themeSource.loop = true;
-        themeSource.Play();
+        PlayTheme(ChooseTheme(availableTracks, null));
     }
 
     private void Update()
@@ -91,6 +87,80 @@ public sealed class GameSoundManager : MonoBehaviour
         if (themeSource != null)
             themeSource.mute = themeMuted;
         Debug.Log(themeMuted ? "Tema principal silenciado (M)." : "Tema principal activado (M).", this);
+    }
+
+    public void FadeOutTheme(float duration)
+    {
+        if (themeSource == null || !themeSource.isPlaying || themeFadeCoroutine != null)
+            return;
+        playNextThemeAfterFade = false;
+        themeFadeCoroutine = StartCoroutine(FadeTheme(Mathf.Max(0.01f, duration)));
+    }
+
+    public void PlayNextMatchTheme()
+    {
+        if (themeSource == null)
+            return;
+        if (themeFadeCoroutine != null)
+        {
+            playNextThemeAfterFade = true;
+            return;
+        }
+        List<AudioClip> availableTracks = GetAvailableTracks();
+        if (availableTracks.Count == 0)
+            return;
+        PlayTheme(ChooseTheme(availableTracks, currentThemeClip));
+    }
+
+    private IEnumerator FadeTheme(float duration)
+    {
+        float startingVolume = themeSource.volume;
+        float elapsed = 0f;
+        while (elapsed < duration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            themeSource.volume = Mathf.Lerp(startingVolume, 0f, Mathf.Clamp01(elapsed / duration));
+            yield return null;
+        }
+        themeSource.volume = 0f;
+        themeSource.Stop();
+        themeSource.volume = themeVolume;
+        themeFadeCoroutine = null;
+        if (playNextThemeAfterFade)
+        {
+            playNextThemeAfterFade = false;
+            List<AudioClip> tracks = GetAvailableTracks();
+            if (tracks.Count > 0)
+                PlayTheme(ChooseTheme(tracks, currentThemeClip));
+        }
+    }
+
+    private List<AudioClip> GetAvailableTracks()
+    {
+        List<AudioClip> tracks = new List<AudioClip>();
+        if (themeTracks != null)
+            foreach (AudioClip track in themeTracks)
+                if (track != null && !tracks.Contains(track)) tracks.Add(track);
+        return tracks;
+    }
+
+    private static AudioClip ChooseTheme(List<AudioClip> tracks, AudioClip exclude)
+    {
+        if (tracks.Count > 1 && exclude != null)
+            tracks.RemoveAll(track => track == exclude);
+        return tracks[Random.Range(0, tracks.Count)];
+    }
+
+    private void PlayTheme(AudioClip clip)
+    {
+        if (clip == null || themeSource == null)
+            return;
+        currentThemeClip = clip;
+        themeSource.clip = clip;
+        themeSource.loop = true;
+        themeSource.volume = themeVolume;
+        themeSource.mute = themeMuted;
+        themeSource.Play();
     }
 
     public void PlayAttack(ArmyType army)

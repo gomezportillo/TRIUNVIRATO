@@ -9,16 +9,12 @@ public sealed class TriunviratoGame : MonoBehaviour
 {
     private const string NormalAttackState = "Attack_Normal";
     public enum MatchStatus { WaitingForPlayers, InProgress, Finished }
+    private enum DamageCategory { Hero = 0, Tower = 1, SpecialAbility = 2 }
     private const float CastleStartHealth = 100f;
-    public const float PurchasePhaseDuration = 20f;
-    public const int ResourceChoiceReward = 20;
-    private const int NormalStars = 1;
-    private const int RareStars = 2;
     private const int SpecialAbilityStars = 3;
     [SerializeField] private Transform tierraHero;
     [SerializeField] private Transform aireHero;
     [SerializeField] private Transform marHero;
-    [SerializeField] private ArmyEconomy economy;
     [SerializeField] private HeroConfig tierraConfig;
     [SerializeField] private HeroConfig aireConfig;
     [SerializeField] private HeroConfig marConfig;
@@ -26,7 +22,7 @@ public sealed class TriunviratoGame : MonoBehaviour
     [SerializeField] private Transform castleTarget;
     [SerializeField] private EnemyConfig enemyConfig;
     [SerializeField] private Font damageFont;
-    [SerializeField] private IntermissionUpgradeCatalog intermissionCatalog;
+    [SerializeField] private UpgradeCatalog upgradeCatalog;
     [Header("Hero Special Abilities")]
     [SerializeField] private ZombieGraspAbilityConfig zombieGraspAbility;
     [SerializeField] private MeteorShowerAbilityConfig meteorShowerAbility;
@@ -41,31 +37,14 @@ public sealed class TriunviratoGame : MonoBehaviour
     private Sprite projectileSprite;
     private float castleHealth;
     private float spawnTimer;
-    private float intermissionTimer;
     private int wave;
-    private int lastRewardedWave;
-    private int lastEarlyCallWave = -2;
-    private int lastPurchaseTimerSecond = -1;
     private int remainingToSpawn;
-    private float currentWaveRewardMultiplier = 1f;
     private bool waveInProgress;
-    private bool earlyWaveCallPending;
     private bool paused;
     private bool finished;
     private bool victory;
-    private bool purchasePhase;
-    private float purchasePhaseTimer;
-    private readonly string[] purchaseResults = new string[3];
-    private readonly bool[] purchasedUpgrades = new bool[3];
-    private readonly bool[] resourceChoices = new bool[3];
-    private readonly float[] economyUpgradeMultipliers = { 1f, 1f, 1f };
     private readonly float[] towerUpgradeMultipliers = { 1f, 1f, 1f };
     private readonly float[] heroUpgradeMultipliers = { 1f, 1f, 1f };
-    private readonly float[] economyKillRewardMultipliers = { 1f, 1f, 1f };
-    private readonly float[] economyKillRewardFixedBonus = new float[3];
-    private readonly float[] economyPassiveFixedBonus = new float[3];
-    private readonly float[] economyWaveRewardFixedBonus = new float[3];
-    private readonly float[] economyWaveRewardMultipliers = { 1f, 1f, 1f };
     private readonly float[] towerSpeedMultipliers = { 1f, 1f, 1f };
     private readonly float[] towerAttackRateFixedBonus = new float[3];
     private readonly float[] towerRangeMultipliers = { 1f, 1f, 1f };
@@ -78,15 +57,32 @@ public sealed class TriunviratoGame : MonoBehaviour
     private readonly float[] heroSplashMultipliers = { 1f, 1f, 1f };
     private readonly float[] heroSplashFixedBonus = new float[3];
     private readonly float[] heroDamageFixedBonus = new float[3];
-    private readonly PurchaseOffer[,] purchaseOffers = new PurchaseOffer[3, 4];
+    private readonly float[,] damageDealt = new float[3, 3];
+    private readonly float[,] finalDamageDealt = new float[3, 3];
+    private float marBossDamageBonusPercent;
+    [Header("Progresión individual")]
+    [SerializeField, Min(1f)] private float tierraExperienceToLevel = 100f;
+    [SerializeField, Min(1f)] private float aireExperienceToLevel = 90f;
+    [SerializeField, Min(1f)] private float marExperienceToLevel = 110f;
+    [SerializeField, Min(0f)] private float initialExperienceMultiplier = 1f;
+    [SerializeField, Min(0f)] private float experienceGrowthPerLevel = 0.18f;
+    [SerializeField, Min(0f)] private float bossExperienceMultiplier = 5f;
+    [SerializeField, Min(0f)] private float tierraEnemyExperience = 10f;
+    [SerializeField, Min(0f)] private float aireEnemyExperience = 10f;
+    [SerializeField, Min(0f)] private float marEnemyExperience = 10f;
+    private readonly float[] experience = new float[3];
+    private readonly int[] levels = { 1, 1, 1 };
+    private readonly float[] experienceMultipliers = new float[3];
+    private readonly float[] experienceRemainders = new float[3];
+    private readonly int[] luckStacks = new int[3];
+    private readonly List<UpgradeOffer[]>[] queuedUpgradeOffers = { new List<UpgradeOffer[]>(), new List<UpgradeOffer[]>(), new List<UpgradeOffer[]>() };
+    private readonly List<UpgradeOffer[]>[] queuedBossOffers = { new List<UpgradeOffer[]>(), new List<UpgradeOffer[]>(), new List<UpgradeOffer[]>() };
     private readonly float[] graspNormalDurationBonus = new float[3];
     private readonly float[] graspBossDurationBonus = new float[3];
     private readonly int[] meteorCountBonus = new int[3];
     private readonly float[] meteorDamageBonus = new float[3];
     private readonly int[] lightningHitCountBonus = new int[3];
     private readonly float[] lightningDamageBonus = new float[3];
-    private bool waveHadBoss;
-    private bool purchaseOffersAreRare;
     private readonly float[] specialCooldownEndsAt = new float[3];
     private bool specialCooldownsWereRunning;
     private bool warnedMissingZombieGraspController;
@@ -95,17 +91,15 @@ public sealed class TriunviratoGame : MonoBehaviour
     private MatchStatus matchStatus = MatchStatus.WaitingForPlayers;
 
     [Serializable]
-    public sealed class PurchaseOffer
+    public sealed class UpgradeOffer
     {
         public string id;
         public string category;
         public string name;
         public string description;
         public int stars;
-        public int[] resourceCosts;
-        public IntermissionUpgradePaymentMode paymentMode;
-        public bool isTowerUnlock;
         public bool isSpecialAbility;
+        public string offerToken;
     }
 
     public MatchStatus Status => matchStatus;
@@ -114,28 +108,31 @@ public sealed class TriunviratoGame : MonoBehaviour
     public int StateRevision { get; private set; }
     public bool IsMatchInProgress => matchStatus == MatchStatus.InProgress;
     public int CurrentWave => wave;
-    public float CurrentWaveRewardMultiplier => currentWaveRewardMultiplier;
     public bool IsWaveInProgress => waveInProgress;
-    public bool IsPurchasePhase => purchasePhase;
-    public float PurchasePhaseSecondsRemaining => Mathf.Max(0f, purchasePhaseTimer);
-    public bool HasPurchasedUpgrade(ArmyType army) => IsValidArmy(army) && purchasedUpgrades[(int)army];
-    public bool IsResourceChoiceMade(ArmyType army) => IsValidArmy(army) && resourceChoices[(int)army];
-    public string GetPurchaseResult(ArmyType army) => IsValidArmy(army) ? purchaseResults[(int)army] : string.Empty;
-    public PurchaseOffer[] GetPurchaseOffers(ArmyType army)
+    public int GetLevel(ArmyType army) => IsValidArmy(army) ? levels[(int)army] : 1;
+    public float GetExperience(ArmyType army) => IsValidArmy(army) ? experience[(int)army] : 0f;
+    public float GetExperienceNeeded(ArmyType army) => IsValidArmy(army) ? ExperienceNeededFor(army, levels[(int)army]) : 100f;
+    public float GetExperienceMultiplier(ArmyType army) => IsValidArmy(army) ? experienceMultipliers[(int)army] : 1f;
+    public float GetExperienceIncrease(ArmyType army) => Mathf.Max(0f, GetExperienceMultiplier(army) - initialExperienceMultiplier);
+    public float GetLuckChance(ArmyType army) => !IsValidArmy(army) || upgradeCatalog == null ? 0f :
+        Mathf.Clamp01(upgradeCatalog.RareOfferChance + luckStacks[(int)army] * upgradeCatalog.LuckRareChanceIncrement);
+    public float GetHeroBossDamageBonusPercent(ArmyType army) => army == ArmyType.Mar ? marBossDamageBonusPercent : 0f;
+    public float GetDamageByHero(ArmyType army) => GetDamageForSummary(army, DamageCategory.Hero);
+    public float GetDamageByTower(ArmyType army) => GetDamageForSummary(army, DamageCategory.Tower);
+    public float GetDamageBySpecialAbility(ArmyType army) => GetDamageForSummary(army, DamageCategory.SpecialAbility);
+    public float GetExperienceFraction(ArmyType army) => Mathf.Clamp01(GetExperience(army) / Mathf.Max(1f, GetExperienceNeeded(army)));
+    private float ExperienceNeededFor(ArmyType army, int level) => Mathf.Max(1f, GetBaseExperienceToLevel(army) * Mathf.Pow(1f + experienceGrowthPerLevel, Mathf.Max(0, level - 1)));
+    private float GetBaseExperienceToLevel(ArmyType army) => army == ArmyType.Tierra ? tierraExperienceToLevel : army == ArmyType.Aire ? aireExperienceToLevel : marExperienceToLevel;
+    public UpgradeOffer[] GetUpgradeOffers(ArmyType army)
     {
+        if (!IsValidArmy(army)) return Array.Empty<UpgradeOffer>();
         int index = (int)army;
-        if (!IsValidArmy(army) || !purchasePhase) return Array.Empty<PurchaseOffer>();
-        List<PurchaseOffer> offers = new List<PurchaseOffer>(4);
-        for (int slot = 0; slot < 4; slot++)
-            if (purchaseOffers[index, slot] != null) offers.Add(purchaseOffers[index, slot]);
-        return offers.ToArray();
+        List<UpgradeOffer[]> queue = queuedBossOffers[index].Count > 0 ? queuedBossOffers[index] : queuedUpgradeOffers[index];
+        return queue.Count == 0 ? Array.Empty<UpgradeOffer>() : queue[0];
     }
     public bool CanCombatNow => CanCombat;
     public bool IsPaused => paused;
     public int EnemiesRemainingInWave => enemies.Count + remainingToSpawn;
-    public bool IsEarlyWaveCallPending => earlyWaveCallPending;
-    public int NextEarlyCallAvailableWave => lastEarlyCallWave + 2;
-    public bool CanCallNextWaveEarly => CanCombat && !earlyWaveCallPending && wave >= lastEarlyCallWave + 2;
     public bool HasSpecialCooldownsRunning => HasActiveSpecialCooldowns();
 
     private sealed class Defender
@@ -162,6 +159,8 @@ public sealed class TriunviratoGame : MonoBehaviour
         public float Damage;
         public Color DamageColor;
         public float SplashRadius;
+        public ArmyType Army;
+        public DamageCategory Category;
         public float Speed;
         public float RemainingLifetime;
     }
@@ -174,8 +173,8 @@ public sealed class TriunviratoGame : MonoBehaviour
 
     private void Start()
     {
-        if (intermissionCatalog == null)
-            Debug.LogError("Asigna IntermissionUpgrades desde Assets/GameData/Upgrades en el Inspector.", this);
+        if (upgradeCatalog == null)
+            Debug.LogError("Asigna UpgradeCatalog desde Assets/GameData/Upgrades en el Inspector.", this);
         if (tierraHero == null || aireHero == null || marHero == null ||
             tierraConfig == null || aireConfig == null || marConfig == null ||
             enemySpawner == null || castleTarget == null || enemyConfig == null ||
@@ -186,8 +185,6 @@ public sealed class TriunviratoGame : MonoBehaviour
             return;
         }
         damageFont.RequestCharactersInTexture("-0123456789", 48, FontStyle.Normal);
-        if (economy == null)
-            economy = FindAnyObjectByType<ArmyEconomy>();
         ResetMatch(false);
     }
 
@@ -200,12 +197,6 @@ public sealed class TriunviratoGame : MonoBehaviour
         Keyboard keyboard = Keyboard.current;
         if (keyboard != null)
         {
-            if (keyboard.rKey.wasPressedThisFrame)
-            {
-                economy?.GrantDebugResourcesToAllArmies(10);
-                return;
-            }
-
             if (keyboard.oKey.wasPressedThisFrame)
                 ForceStartNextWaveForDebug();
 
@@ -220,7 +211,7 @@ public sealed class TriunviratoGame : MonoBehaviour
             return;
 
         UpdateWaveFlow();
-        if (finished || purchasePhase)
+        if (finished)
             return;
         UpdateEnemies();
         if (finished)
@@ -249,12 +240,8 @@ public sealed class TriunviratoGame : MonoBehaviour
             if (damage.View != null) Destroy(damage.View);
         floatingDamage.Clear();
 
-        purchasePhase = false;
-        purchasePhaseTimer = 0f;
         waveInProgress = false;
         remainingToSpawn = 0;
-        earlyWaveCallPending = false;
-        currentWaveRewardMultiplier = 1f;
         StartNextWave();
         Debug.Log("Depuración: inicio forzado de la oleada " + wave + ".", this);
     }
@@ -290,33 +277,26 @@ public sealed class TriunviratoGame : MonoBehaviour
         floatingDamage.Clear();
         castleHealth = CastleStartHealth;
         spawnTimer = 1.5f;
-        intermissionTimer = 0f;
         wave = 0;
-        lastRewardedWave = 0;
-        lastEarlyCallWave = -2;
         remainingToSpawn = 0;
-        currentWaveRewardMultiplier = 1f;
         waveInProgress = false;
-        earlyWaveCallPending = false;
         paused = false;
         finished = false;
         victory = false;
         matchStatus = resumeMatch ? MatchStatus.InProgress : MatchStatus.WaitingForPlayers;
         StateRevision++;
         if (resumeMatch)
+        {
+            GameSoundManager.Instance?.PlayNextMatchTheme();
             GameSoundManager.Instance?.PlayMatchStart();
-        purchasePhase = false;
-        purchasePhaseTimer = 0f;
-        Array.Clear(purchaseResults, 0, purchaseResults.Length);
-        Array.Clear(purchasedUpgrades, 0, purchasedUpgrades.Length);
-        Array.Clear(resourceChoices, 0, resourceChoices.Length);
-        Array.Clear(economyKillRewardFixedBonus, 0, economyKillRewardFixedBonus.Length);
-        Array.Clear(economyPassiveFixedBonus, 0, economyPassiveFixedBonus.Length);
-        Array.Clear(economyWaveRewardFixedBonus, 0, economyWaveRewardFixedBonus.Length);
+        }
         Array.Clear(towerDamageFixedBonus, 0, towerDamageFixedBonus.Length);
         Array.Clear(towerAttackRateFixedBonus, 0, towerAttackRateFixedBonus.Length);
         Array.Clear(towerRangeFixedBonus, 0, towerRangeFixedBonus.Length);
         Array.Clear(heroDamageFixedBonus, 0, heroDamageFixedBonus.Length);
+        Array.Clear(damageDealt, 0, damageDealt.Length);
+        Array.Clear(finalDamageDealt, 0, finalDamageDealt.Length);
+        marBossDamageBonusPercent = 0f;
         Array.Clear(heroAttackRateFixedBonus, 0, heroAttackRateFixedBonus.Length);
         Array.Clear(heroRangeFixedBonus, 0, heroRangeFixedBonus.Length);
         Array.Clear(heroSplashFixedBonus, 0, heroSplashFixedBonus.Length);
@@ -326,21 +306,21 @@ public sealed class TriunviratoGame : MonoBehaviour
         Array.Clear(meteorDamageBonus, 0, meteorDamageBonus.Length);
         Array.Clear(lightningHitCountBonus, 0, lightningHitCountBonus.Length);
         Array.Clear(lightningDamageBonus, 0, lightningDamageBonus.Length);
+        Array.Clear(experience, 0, experience.Length);
+        Array.Clear(experienceRemainders, 0, experienceRemainders.Length);
+        Array.Clear(luckStacks, 0, luckStacks.Length);
+        for (int i = 0; i < 3; i++) { queuedUpgradeOffers[i].Clear(); queuedBossOffers[i].Clear(); }
         for (int i = 0; i < 3; i++)
         {
-            economyUpgradeMultipliers[i] = towerUpgradeMultipliers[i] = heroUpgradeMultipliers[i] = 1f;
-            economyKillRewardMultipliers[i] = 1f;
-            economyWaveRewardMultipliers[i] = 1f;
+            levels[i] = 1;
+            experienceMultipliers[i] = initialExperienceMultiplier;
+            towerUpgradeMultipliers[i] = heroUpgradeMultipliers[i] = 1f;
             towerSpeedMultipliers[i] = towerRangeMultipliers[i] = 1f;
             heroSpeedMultipliers[i] = heroRangeMultipliers[i] = heroSplashMultipliers[i] = 1f;
-            for (int category = 0; category < 4; category++) purchaseOffers[i, category] = null;
         }
-        waveHadBoss = false;
-        if (economy != null)
-            economy.ResetEconomy();
-        TowerShop towerShop = FindAnyObjectByType<TowerShop>();
-        if (towerShop != null)
-            towerShop.ResetPurchasedTowers();
+        TowerManager towerManager = FindAnyObjectByType<TowerManager>();
+        if (towerManager != null)
+            towerManager.ResetTowers();
         if (defenders == null)
         {
             defenders = new[]
@@ -384,94 +364,33 @@ public sealed class TriunviratoGame : MonoBehaviour
 
     private void UpdateWaveFlow()
     {
-        if (waveInProgress)
-        {
-            if (remainingToSpawn > 0)
-            {
-                spawnTimer -= Time.deltaTime;
-                if (spawnTimer <= 0f)
-                {
-                    SpawnEnemy(wave % 3 == 0 && remainingToSpawn == 1);
-                    remainingToSpawn--;
-                    spawnTimer = 1f;
-                }
-            }
-            else if (enemies.Count == 0)
-            {
-                waveInProgress = false;
-                if (wave > 0 && lastRewardedWave != wave)
-                {
-                    if (economy != null)
-                        economy.RewardWaveCompleted(currentWaveRewardMultiplier);
-                    lastRewardedWave = wave;
-                }
-                BeginPurchasePhase();
-                currentWaveRewardMultiplier = 1f;
-            }
-        }
-        else if (purchasePhase)
-        {
-            purchasePhaseTimer -= Time.deltaTime;
-            int timerSecond = Mathf.CeilToInt(Mathf.Max(0f, purchasePhaseTimer));
-            if (timerSecond != lastPurchaseTimerSecond)
-            {
-                lastPurchaseTimerSecond = timerSecond;
-                StateRevision++;
-            }
-            if (purchasePhaseTimer <= 0f)
-            {
-                for (int i = 0; i < purchasedUpgrades.Length; i++)
-                    if (!purchasedUpgrades[i] && !resourceChoices[i]) GrantResourceChoice((ArmyType)i);
-                FinishPurchasePhase();
-            }
-        }
-        else if (earlyWaveCallPending)
+        if (!waveInProgress)
         {
             StartNextWave();
+            return;
         }
-        else
+
+        if (remainingToSpawn > 0)
         {
-            intermissionTimer -= Time.deltaTime;
-            if (intermissionTimer <= 0f)
-                StartNextWave();
+            spawnTimer -= Time.deltaTime;
+            if (spawnTimer <= 0f)
+            {
+                SpawnEnemy(wave % 3 == 0 && remainingToSpawn == 1);
+                remainingToSpawn--;
+                spawnTimer = 1f;
+            }
         }
-    }
-
-    private void BeginPurchasePhase()
-    {
-        if (purchasePhase) return;
-        purchasePhase = true;
-        purchasePhaseTimer = PurchasePhaseDuration;
-        lastPurchaseTimerSecond = Mathf.CeilToInt(PurchasePhaseDuration);
-        Array.Clear(purchaseResults, 0, purchaseResults.Length);
-        Array.Clear(purchasedUpgrades, 0, purchasedUpgrades.Length);
-        Array.Clear(resourceChoices, 0, resourceChoices.Length);
-        purchaseOffersAreRare = waveHadBoss;
-        GeneratePurchaseOffers();
-        StateRevision++;
-    }
-
-    private void GeneratePurchaseOffers()
-    {
-        if (intermissionCatalog == null) return;
-        TowerShop towerShop = FindAnyObjectByType<TowerShop>();
-        for (int armyIndex = 0; armyIndex < 3; armyIndex++)
+        else if (enemies.Count == 0)
         {
-            ArmyType army = (ArmyType)armyIndex;
-            purchaseOffers[armyIndex, 0] = GenerateOffer(army, IntermissionUpgradeCategory.Economy, towerShop);
-            purchaseOffers[armyIndex, 1] = towerShop != null && !towerShop.HasTower(army)
-                ? CreateTowerUnlockOffer(army, towerShop)
-                : towerShop != null ? GenerateOffer(army, IntermissionUpgradeCategory.Towers, towerShop) : null;
-            purchaseOffers[armyIndex, 2] = GenerateOffer(army, IntermissionUpgradeCategory.Hero, towerShop);
-            purchaseOffers[armyIndex, 3] = purchaseOffersAreRare && intermissionCatalog.SpecialAbilityOffersAfterBoss
-                ? GenerateSpecialAbilityOffer(army) : null;
+            waveInProgress = false;
+            StartNextWave();
         }
     }
 
-    private PurchaseOffer GenerateSpecialAbilityOffer(ArmyType army)
+    private UpgradeOffer GenerateSpecialAbilityOffer(ArmyType army)
     {
         HeroSpecialAbilityConfig ability = GetSpecialAbilityConfig(army);
-        if (intermissionCatalog == null || ability == null) return null;
+        if (upgradeCatalog == null || ability == null) return null;
         string id;
         string name;
         string description;
@@ -503,176 +422,108 @@ public sealed class TriunviratoGame : MonoBehaviour
                     "Daño por impacto +" + increment.ToString("0.##");
                 break;
         }
-        int[] baseCosts = intermissionCatalog.SpecialAbilityBaseCosts;
-        int totalCost = 0;
-        float growth = Mathf.Pow(1f + intermissionCatalog.PriceGrowthPerWave, Mathf.Max(0, wave - 1));
-        foreach (int cost in baseCosts)
-            totalCost += Mathf.Max(0, Mathf.RoundToInt(cost * growth));
-        int scaledCost = totalCost;
-        int[] costs = IndividualCosts(army, scaledCost);
-        return new PurchaseOffer { id = id, category = "specialabilities", name = name, description = description,
-            stars = intermissionCatalog.SpecialAbilityStars, resourceCosts = costs,
-            paymentMode = IntermissionUpgradePaymentMode.Individual, isSpecialAbility = true };
+        return new UpgradeOffer { id = id, category = "specialabilities", name = name, description = description,
+            stars = SpecialAbilityStars, isSpecialAbility = true };
     }
 
-    private PurchaseOffer GenerateOffer(ArmyType army, IntermissionUpgradeCategory category, TowerShop towerShop)
+    public bool TrySelectUpgrade(ArmyType army, string id, string offerToken, out string message)
     {
-        List<IntermissionUpgradeCatalog.Definition> valid = new List<IntermissionUpgradeCatalog.Definition>();
-        int stars = purchaseOffersAreRare ? RareStars : NormalStars;
-        foreach (IntermissionUpgradeCatalog.Definition definition in intermissionCatalog.Definitions)
-        {
-            if (definition == null || definition.category != category || !IsOfferStillApplicable(army, definition)) continue;
-            valid.Add(definition);
-        }
-        if (valid.Count == 0) return null;
-        IntermissionUpgradeCatalog.Definition chosen = valid[UnityEngine.Random.Range(0, valid.Count)];
-        int baseCost = chosen.baseCost;
-        return MakeOffer(army, chosen.id, category, chosen.displayName,
-            IntermissionUpgradeCatalog.FormatDescription(chosen, stars), baseCost, false, chosen);
-    }
-
-    private PurchaseOffer CreateTowerUnlockOffer(ArmyType army, TowerShop towerShop)
-    {
-        TowerConfig config = towerShop != null ? towerShop.GetConfig(army) : null;
-        if (config == null || config.Army != army || config.Hero == null) return null;
-        int normalTowerUpgradeCost = int.MaxValue;
-        foreach (IntermissionUpgradeCatalog.Definition definition in intermissionCatalog.Definitions)
-            if (definition != null && definition.category == IntermissionUpgradeCategory.Towers)
-                normalTowerUpgradeCost = Mathf.Min(normalTowerUpgradeCost, definition.baseCost);
-        if (config.PurchaseCost <= normalTowerUpgradeCost) return null;
-        string name = "Desbloquear torre de " + config.DisplayName;
-        string description = "Compra y activa esta torre para defender tu ejército.";
-        return MakeOffer(army, "tower_unlock_" + army.ToString().ToLowerInvariant(),
-            IntermissionUpgradeCategory.Towers, name, description, config.PurchaseCost, true, null);
-    }
-
-    private PurchaseOffer MakeOffer(ArmyType army, string id, IntermissionUpgradeCategory category, string name,
-        string description, int baseCost, bool isTowerUnlock, IntermissionUpgradeCatalog.Definition definition)
-    {
-        int scaled = Mathf.Max(1, Mathf.RoundToInt(baseCost * Mathf.Pow(1f + intermissionCatalog.PriceGrowthPerWave,
-            Mathf.Max(0, wave - 1))));
-        IntermissionUpgradePaymentMode paymentMode = definition != null
-            ? definition.paymentMode : IntermissionUpgradePaymentMode.Individual;
-        int[] costs;
-        if (paymentMode == IntermissionUpgradePaymentMode.Cooperative && definition != null)
-        {
-            float growth = Mathf.Pow(1f + intermissionCatalog.PriceGrowthPerWave, Mathf.Max(0, wave - 1));
-            costs = new[] {
-                Mathf.RoundToInt(definition.tierraContribution * growth),
-                Mathf.RoundToInt(definition.aireContribution * growth),
-                Mathf.RoundToInt(definition.marContribution * growth)
-            };
-        }
-        else
-        {
-            // Rare offers retain their former total surcharge, charged to the army receiving the benefit.
-            if (purchaseOffersAreRare)
-                scaled += Mathf.Max(1, Mathf.RoundToInt(scaled * intermissionCatalog.RareSecondaryCostPercent));
-            costs = IndividualCosts(army, scaled);
-            paymentMode = IntermissionUpgradePaymentMode.Individual;
-        }
-        return new PurchaseOffer { id = id, category = category.ToString().ToLowerInvariant(), name = name,
-            description = description, stars = purchaseOffersAreRare ? RareStars : NormalStars,
-            resourceCosts = costs, paymentMode = paymentMode, isTowerUnlock = isTowerUnlock };
-    }
-
-    private static int[] IndividualCosts(ArmyType army, int amount)
-    {
-        int[] costs = new int[3];
-        if (IsValidArmy(army)) costs[(int)army] = amount;
-        return costs;
-    }
-
-    private void FinishPurchasePhase()
-    {
-        if (!purchasePhase) return;
-        purchasePhase = false;
-        purchasePhaseTimer = 0f;
+        message = "No hay una oferta pendiente.";
+        if (!CanCombat || !IsValidArmy(army) || string.IsNullOrEmpty(id)) return false;
+        int index = (int)army;
+        List<UpgradeOffer[]> queue = queuedBossOffers[index].Count > 0 ? queuedBossOffers[index] : queuedUpgradeOffers[index];
+        UpgradeOffer offer = queue.Count == 0 ? null : Array.Find(queue[0], item => item != null && item.id == id && !string.IsNullOrEmpty(offerToken) && item.offerToken == offerToken);
+        if (offer == null)
+        { message = "La opción no pertenece a tu oferta activa."; return false; }
+        UpgradeCatalog.Definition definition = upgradeCatalog != null ? upgradeCatalog.Find(id) : null;
+        if (offer.isSpecialAbility) ApplySpecialAbilityUpgrade(army, id);
+        else if (definition == null || !IsUpgradeApplicable(army, definition))
+        { message = "La mejora ya no está disponible."; return false; }
+        else ApplyUpgradeEffect(army, definition,
+            offer.stars >= 3 ? definition.legendaryEffect : UpgradeCatalog.GetOfferEffect(definition, offer.stars));
+        queue.RemoveAt(0);
         StateRevision++;
-        if (earlyWaveCallPending) StartNextWave();
-        else intermissionTimer = 0f;
-    }
-
-    public bool TryChooseIntermissionOption(ArmyType army, string id, out string message)
-    {
-        message = "La fase de compras no está activa.";
-        if (!purchasePhase || purchasePhaseTimer <= 0f || !IsValidArmy(army)) return false;
-        int armyIndex = (int)army;
-        if (economy == null) { message = "La economía no está disponible."; return false; }
-        if (id == "resources")
-        {
-            GrantResourceChoice(army);
-            message = purchaseResults[armyIndex];
-            return true;
-        }
-        PurchaseOffer offer = FindGeneratedOffer(army, id);
-        if (offer == null) { message = "Oferta desconocida para esta fase."; return false; }
-        TowerShop towerShop = FindAnyObjectByType<TowerShop>();
-        if (offer.isTowerUnlock && towerShop == null)
-        {
-            message = "La tienda de torres no está disponible.";
-            return false;
-        }
-        if (offer.isTowerUnlock && towerShop.HasTower(army))
-        {
-            message = "La torre ya está desbloqueada.";
-            return false;
-        }
-        if (offer.isTowerUnlock && !towerShop.CanUnlockForIntermission(army, out message))
-        {
-            return false;
-        }
-        IntermissionUpgradeCatalog.Definition definition = offer.isTowerUnlock || offer.isSpecialAbility ? null : intermissionCatalog.Find(id);
-        if (!offer.isTowerUnlock && !offer.isSpecialAbility && (definition == null || !IsOfferStillApplicable(army, definition)))
-        {
-            message = "La mejora ya no está disponible.";
-            return false;
-        }
-        int[] costs = offer.resourceCosts;
-        bool invalidCosts = costs == null || costs.Length != 3;
-        if (!invalidCosts)
-        {
-            bool hasCost = false;
-            for (int i = 0; i < costs.Length; i++)
-            {
-                hasCost |= costs[i] > 0;
-                if (costs[i] < 0 || (offer.paymentMode == IntermissionUpgradePaymentMode.Individual && i != armyIndex && costs[i] != 0))
-                    invalidCosts = true;
-            }
-            if (!hasCost) invalidCosts = true;
-        }
-        if (invalidCosts)
-        {
-            message = "Coste de compra no válido.";
-            return false;
-        }
-        if (!economy.TrySpendIntermissionResources(costs[0], costs[1], costs[2]))
-        {
-            message = BuildInsufficientPurchaseResources(costs);
-            return false;
-        }
-        if (offer.isTowerUnlock)
-        {
-            if (!towerShop.UnlockForIntermission(army, out message))
-            {
-                for (int i = 0; i < costs.Length; i++)
-                    if (costs[i] > 0) economy.Refund((ArmyType)i, costs[i]);
-                return false;
-            }
-        }
-        else if (offer.isSpecialAbility)
-        {
-            ApplySpecialAbilityUpgrade(army, offer.id);
-        }
-        else
-        {
-            ApplyIntermissionEffect(army, definition, IntermissionUpgradeCatalog.GetOfferEffect(definition, offer.stars));
-        }
-        purchasedUpgrades[armyIndex] = true;
-        purchaseResults[armyIndex] = offer.name + (offer.stars == SpecialAbilityStars ? " ⭐⭐⭐" : offer.stars == RareStars ? " ⭐⭐" : " ⭐");
-        StateRevision++;
-        message = "Comprada: " + offer.name + ".";
+        message = "Mejora aplicada: " + offer.name + ".";
         return true;
+    }
+
+    private float GetConfiguredBaseExperience(int index) => index == 0 ? tierraEnemyExperience : index == 1 ? aireEnemyExperience : marEnemyExperience;
+
+    private void GrantEnemyExperience(bool boss)
+    {
+        for (int i = 0; i < 3; i++)
+        {
+            float baseReward = GetConfiguredBaseExperience(i) * (boss ? bossExperienceMultiplier : 1f);
+            float total = baseReward * experienceMultipliers[i] + experienceRemainders[i];
+            int whole = Mathf.FloorToInt(total + 0.00001f);
+            experienceRemainders[i] = total - whole;
+            experience[i] += whole;
+            ArmyType army = (ArmyType)i;
+            while (experience[i] >= ExperienceNeededFor(army, levels[i]))
+            {
+                experience[i] -= ExperienceNeededFor(army, levels[i]);
+                levels[i]++;
+                queuedUpgradeOffers[i].Add(GenerateLevelOffer((ArmyType)i));
+            }
+        }
+        StateRevision++;
+    }
+
+    private UpgradeOffer[] GenerateLevelOffer(ArmyType army)
+    {
+        return GenerateProgressionOffer(army, 1);
+    }
+
+    private UpgradeOffer[] GenerateProgressionOffer(ArmyType army, int stars)
+    {
+        if (upgradeCatalog == null) return new[] { new UpgradeOffer { id = "unavailable", name = "Sin mejoras disponibles", stars = stars, offerToken = "unavailable" } };
+        List<UpgradeCatalog.Definition> eligible = new List<UpgradeCatalog.Definition>();
+        foreach (var definition in upgradeCatalog.Definitions)
+        {
+            if (definition == null || (definition.eligibleArmies != null && definition.eligibleArmies.Length > 0 && Array.IndexOf(definition.eligibleArmies, army) < 0))
+                continue;
+            if (definition.effect == UpgradeEffect.UnlockTower)
+            {
+                TowerManager towerManager = FindAnyObjectByType<TowerManager>();
+                if (stars < 3 || towerManager == null || towerManager.HasTower(army)) continue;
+            }
+            else if (!IsUpgradeApplicable(army, definition)) continue;
+            eligible.Add(definition);
+        }
+        List<UpgradeOffer> result = new List<UpgradeOffer>(3);
+        float rareChance = Mathf.Clamp01(upgradeCatalog.RareOfferChance + luckStacks[(int)army] * upgradeCatalog.LuckRareChanceIncrement);
+        if (stars >= 3)
+        {
+            UpgradeCatalog.Definition towerUnlock = eligible.Find(definition => definition.effect == UpgradeEffect.UnlockTower);
+            if (towerUnlock != null)
+            {
+                eligible.Remove(towerUnlock);
+                result.Add(new UpgradeOffer { id = towerUnlock.id, offerToken = Guid.NewGuid().ToString("N"), category = "towers",
+                    name = towerUnlock.displayName, description = UpgradeCatalog.FormatDescription(towerUnlock, 3), stars = 3 });
+            }
+            UpgradeOffer special = upgradeCatalog.SpecialAbilityOffersAfterBoss ? GenerateSpecialAbilityOffer(army) : null;
+            if (special != null) { special.offerToken = Guid.NewGuid().ToString("N"); special.stars = 3; result.Add(special); }
+        }
+        while (result.Count < 3 && eligible.Count > 0)
+        {
+            int pick = UnityEngine.Random.Range(0, eligible.Count);
+            var definition = eligible[pick]; eligible.RemoveAt(pick);
+            int optionStars = stars >= 3 ? 3 : (UnityEngine.Random.value < rareChance ? 2 : 1);
+            string id = definition.id;
+            string category = definition.effect == UpgradeEffect.ExperienceMultiplier || definition.effect == UpgradeEffect.Luck
+                ? "progression" : definition.category.ToString().ToLowerInvariant();
+            result.Add(new UpgradeOffer { id = id, offerToken = Guid.NewGuid().ToString("N"), category = category,
+                name = definition.displayName, description = UpgradeCatalog.FormatDescription(definition, optionStars, upgradeCatalog.LuckRareChanceIncrement), stars = optionStars });
+        }
+        if (result.Count < 3) Debug.LogWarning("Catálogo: solo hay " + result.Count + " mejoras elegibles para " + army + "; no se duplicarán.", this);
+        if (result.Count == 0) result.Add(new UpgradeOffer { id = "unavailable", offerToken = Guid.NewGuid().ToString("N"), name = "Sin mejoras elegibles", description = "Revisa el catálogo de mejoras.", stars = stars });
+        return result.ToArray();
+    }
+
+    private void QueueBossOffers()
+    {
+        for (int i = 0; i < 3; i++) queuedBossOffers[i].Add(GenerateProgressionOffer((ArmyType)i, 3));
+        StateRevision++;
     }
 
     private void ApplySpecialAbilityUpgrade(ArmyType army, string id)
@@ -689,60 +540,56 @@ public sealed class TriunviratoGame : MonoBehaviour
         }
     }
 
-    private PurchaseOffer FindGeneratedOffer(ArmyType army, string id)
+    private void ApplyUpgradeEffect(ArmyType army, UpgradeCatalog.Definition definition, float effect)
     {
         int index = (int)army;
-        if (!IsValidArmy(army) || string.IsNullOrEmpty(id)) return null;
-        for (int slot = 0; slot < 4; slot++)
-            if (purchaseOffers[index, slot] != null && purchaseOffers[index, slot].id == id) return purchaseOffers[index, slot];
-        return null;
-    }
-
-    private void ApplyIntermissionEffect(ArmyType army, IntermissionUpgradeCatalog.Definition definition, float effect)
-    {
-        int index = (int)army;
-        bool percentage = definition.valueType == IntermissionUpgradeValueType.Percentage;
+        bool percentage = definition.valueType == UpgradeValueType.Percentage;
         float multiplier = percentage ? 1f + effect / 100f : 1f;
         switch (definition.effect)
         {
-            case IntermissionUpgradeEffect.PassiveIncome: if (percentage) economyUpgradeMultipliers[index] *= multiplier; else economyPassiveFixedBonus[index] += effect; break;
-            case IntermissionUpgradeEffect.KillReward: if (percentage) economyKillRewardMultipliers[index] *= multiplier; else economyKillRewardFixedBonus[index] += effect; break;
-            case IntermissionUpgradeEffect.WaveReward: if (percentage) economyWaveRewardMultipliers[index] *= multiplier; else economyWaveRewardFixedBonus[index] += effect; break;
-            case IntermissionUpgradeEffect.TowerDamage: if (percentage) towerUpgradeMultipliers[index] *= multiplier; else towerDamageFixedBonus[index] += effect; break;
-            case IntermissionUpgradeEffect.TowerAttackSpeed: if (percentage) towerSpeedMultipliers[index] *= multiplier; else towerAttackRateFixedBonus[index] += effect; break;
-            case IntermissionUpgradeEffect.TowerRange: if (percentage) towerRangeMultipliers[index] *= multiplier; else towerRangeFixedBonus[index] += effect; break;
-            case IntermissionUpgradeEffect.HeroDamage: if (percentage) heroUpgradeMultipliers[index] *= multiplier; else heroDamageFixedBonus[index] += effect; break;
-            case IntermissionUpgradeEffect.HeroAttackSpeed: if (percentage) heroSpeedMultipliers[index] *= multiplier; else heroAttackRateFixedBonus[index] += effect; break;
-            case IntermissionUpgradeEffect.HeroRange: if (percentage) heroRangeMultipliers[index] *= multiplier; else heroRangeFixedBonus[index] += effect; break;
-            case IntermissionUpgradeEffect.HeroSplash: if (percentage) heroSplashMultipliers[index] *= multiplier; else heroSplashFixedBonus[index] += effect; break;
+            case UpgradeEffect.UnlockTower:
+                FindAnyObjectByType<TowerManager>()?.UnlockTower(army);
+                break;
+            case UpgradeEffect.HeroBossDamage:
+                if (army == ArmyType.Mar) marBossDamageBonusPercent += effect;
+                break;
+            case UpgradeEffect.TowerDamage: if (percentage) towerUpgradeMultipliers[index] *= multiplier; else towerDamageFixedBonus[index] += effect; break;
+            case UpgradeEffect.TowerAttackSpeed: if (percentage) towerSpeedMultipliers[index] *= multiplier; else towerAttackRateFixedBonus[index] += effect; break;
+            case UpgradeEffect.TowerRange: if (percentage) towerRangeMultipliers[index] *= multiplier; else towerRangeFixedBonus[index] += effect; break;
+            case UpgradeEffect.HeroDamage: if (percentage) heroUpgradeMultipliers[index] *= multiplier; else heroDamageFixedBonus[index] += effect; break;
+            case UpgradeEffect.HeroAttackSpeed: if (percentage) heroSpeedMultipliers[index] *= multiplier; else heroAttackRateFixedBonus[index] += effect; break;
+            case UpgradeEffect.HeroRange: if (percentage) heroRangeMultipliers[index] *= multiplier; else heroRangeFixedBonus[index] += effect; break;
+            case UpgradeEffect.HeroSplash: if (percentage) heroSplashMultipliers[index] *= multiplier; else heroSplashFixedBonus[index] += effect; break;
+            case UpgradeEffect.ExperienceMultiplier: experienceMultipliers[index] += effect / 100f; break;
+            case UpgradeEffect.Luck: luckStacks[index] += Mathf.Max(1, Mathf.RoundToInt(effect)); break;
         }
-        if (definition.category == IntermissionUpgradeCategory.Towers)
-            FindAnyObjectByType<TowerShop>()?.RefreshArmyIntermissionUpgrade(army);
+        if (definition.category == UpgradeCategory.Towers)
+            FindAnyObjectByType<TowerManager>()?.RefreshArmyUpgrade(army);
     }
 
-    private bool IsOfferStillApplicable(ArmyType army, IntermissionUpgradeCatalog.Definition definition)
+    private bool IsUpgradeApplicable(ArmyType army, UpgradeCatalog.Definition definition)
     {
-        if (definition.category == IntermissionUpgradeCategory.Towers)
+        if (definition.category == UpgradeCategory.Towers)
         {
-            TowerShop shop = FindAnyObjectByType<TowerShop>();
-            TowerConfig tower = shop != null ? shop.GetConfig(army) : null;
-            if (shop == null || !shop.HasTower(army) || tower == null || tower.Hero == null)
+            TowerManager towerManager = FindAnyObjectByType<TowerManager>();
+            if (definition.effect == UpgradeEffect.UnlockTower)
+                return towerManager != null && !towerManager.HasTower(army);
+            TowerConfig tower = towerManager != null ? towerManager.GetConfig(army) : null;
+            if (towerManager == null || !towerManager.HasTower(army) || tower == null || tower.Hero == null)
                 return false;
-            if (definition.effect == IntermissionUpgradeEffect.TowerRange) return tower.Hero.Range > 0f;
-            if (definition.effect == IntermissionUpgradeEffect.TowerAttackSpeed) return tower.Hero.AttackCooldown > 0f;
+            if (definition.effect == UpgradeEffect.TowerRange) return tower.Hero.Range > 0f;
+            if (definition.effect == UpgradeEffect.TowerAttackSpeed) return tower.Hero.AttackCooldown > 0f;
             return true;
         }
         HeroConfig hero = GetHeroConfig(army);
         if (hero == null) return false;
-        if (definition.effect == IntermissionUpgradeEffect.HeroSplash) return hero.SplashRadius > 0f;
-        if (definition.effect == IntermissionUpgradeEffect.HeroRange) return hero.Range > 0f;
-        if (definition.effect == IntermissionUpgradeEffect.HeroAttackSpeed) return hero.AttackCooldown > 0f;
+        if (definition.effect == UpgradeEffect.HeroBossDamage) return army == ArmyType.Mar;
+        if (definition.effect == UpgradeEffect.HeroSplash) return hero.SplashRadius > 0f;
+        if (definition.effect == UpgradeEffect.HeroRange) return hero.Range > 0f;
+        if (definition.effect == UpgradeEffect.HeroAttackSpeed) return hero.AttackCooldown > 0f;
         return true;
     }
 
-    public float GetIntermissionKillRewardMultiplier(ArmyType army) => IsValidArmy(army) ? economyKillRewardMultipliers[(int)army] : 1f;
-    public float GetIntermissionKillRewardFixedBonus(ArmyType army) => IsValidArmy(army) ? economyKillRewardFixedBonus[(int)army] : 0f;
-    public float GetIntermissionWaveRewardMultiplier(ArmyType army) => IsValidArmy(army) ? economyWaveRewardMultipliers[(int)army] : 1f;
     public float GetTowerAttackSpeedMultiplier(ArmyType army) => IsValidArmy(army) ? towerSpeedMultipliers[(int)army] : 1f;
     public float GetTowerRangeMultiplier(ArmyType army) => IsValidArmy(army) ? towerRangeMultipliers[(int)army] : 1f;
     public float GetTowerAttackRateFixedBonus(ArmyType army) => IsValidArmy(army) ? towerAttackRateFixedBonus[(int)army] : 0f;
@@ -753,71 +600,28 @@ public sealed class TriunviratoGame : MonoBehaviour
     public float GetHeroAttackRateFixedBonus(ArmyType army) => IsValidArmy(army) ? heroAttackRateFixedBonus[(int)army] : 0f;
     public float GetHeroRangeFixedBonus(ArmyType army) => IsValidArmy(army) ? heroRangeFixedBonus[(int)army] : 0f;
     public float GetHeroSplashFixedBonus(ArmyType army) => IsValidArmy(army) ? heroSplashFixedBonus[(int)army] : 0f;
-    public float GetTowerDamage(ArmyType army, float baseDamage) => baseDamage * GetTowerIntermissionMultiplier(army) + GetTowerDamageFixedBonus(army);
+    public float GetTowerDamage(ArmyType army, float baseDamage) => baseDamage * GetTowerUpgradeMultiplier(army) + GetTowerDamageFixedBonus(army);
     public float GetTowerDamageFixedBonus(ArmyType army) => IsValidArmy(army) ? towerDamageFixedBonus[(int)army] : 0f;
     public float GetHeroDamageFixedBonus(ArmyType army) => IsValidArmy(army) ? heroDamageFixedBonus[(int)army] : 0f;
-    public float GetEconomyPassiveFixedBonus(ArmyType army) => IsValidArmy(army) ? economyPassiveFixedBonus[(int)army] : 0f;
-    public float GetEconomyWaveRewardFixedBonus(ArmyType army) => IsValidArmy(army) ? economyWaveRewardFixedBonus[(int)army] : 0f;
+    public float GetTowerUpgradeMultiplier(ArmyType army) => IsValidArmy(army) ? towerUpgradeMultipliers[(int)army] : 1f;
+    public float GetHeroUpgradeMultiplier(ArmyType army) => IsValidArmy(army) ? heroUpgradeMultipliers[(int)army] : 1f;
 
-    private string BuildInsufficientPurchaseResources(int[] costs)
+    private float GetDamageForSummary(ArmyType army, DamageCategory category)
     {
-        string[] armyNames = { "Tierra", "Aire", "Mar" };
-        List<string> missing = new List<string>();
-        for (int i = 0; i < costs.Length; i++)
-        {
-            int balance = economy != null ? economy.GetCoins((ArmyType)i) : 0;
-            if (balance < costs[i]) missing.Add((costs[i] - balance) + " recursos de " + armyNames[i] + " más");
-        }
-        return "Recursos insuficientes: necesitas " + string.Join(" y ", missing) + ".";
+        if (!IsValidArmy(army)) return 0f;
+        int armyIndex = (int)army;
+        return matchStatus == MatchStatus.Finished
+            ? finalDamageDealt[armyIndex, (int)category]
+            : damageDealt[armyIndex, (int)category];
     }
-
-    private void GrantResourceChoice(ArmyType army)
-    {
-        if (!purchasePhase || !IsValidArmy(army) || resourceChoices[(int)army]) return;
-        economy?.GrantIntermissionResources(army, ResourceChoiceReward);
-        resourceChoices[(int)army] = true;
-        purchaseResults[(int)army] = "+" + ResourceChoiceReward + " recursos";
-        StateRevision++;
-    }
-
-    public float GetEconomyIntermissionMultiplier(ArmyType army) => IsValidArmy(army) ? economyUpgradeMultipliers[(int)army] : 1f;
-    public float GetTowerIntermissionMultiplier(ArmyType army) => IsValidArmy(army) ? towerUpgradeMultipliers[(int)army] : 1f;
-    public float GetHeroIntermissionMultiplier(ArmyType army) => IsValidArmy(army) ? heroUpgradeMultipliers[(int)army] : 1f;
 
     private void StartNextWave()
     {
         wave++;
-        waveHadBoss = false;
         remainingToSpawn = 4 + wave * 2;
         waveInProgress = true;
         spawnTimer = 0f;
-        if (earlyWaveCallPending)
-        {
-            currentWaveRewardMultiplier = 1.5f;
-            earlyWaveCallPending = false;
-            Debug.Log("Mar ha llamado antes a la oleada " + wave + ". Su recompensa de oleada aumenta un 50 %.", this);
-        }
         StateRevision++;
-    }
-
-    public bool TryCallNextWaveEarly(out string message)
-    {
-        if (!CanCallNextWaveEarly)
-        {
-            message = earlyWaveCallPending
-                ? "Ya hay una llamada anticipada pendiente."
-                : "Mar todavía no puede adelantar otra oleada.";
-            return false;
-        }
-
-        lastEarlyCallWave = wave;
-        earlyWaveCallPending = true;
-        StateRevision++;
-        message = waveInProgress
-            ? "Llamada aceptada: la siguiente oleada empezará en cuanto se despeje la actual."
-            : "Llamada aceptada: empieza la siguiente oleada.";
-        Debug.Log("Mar solicita adelantar la siguiente oleada desde la oleada " + wave + ".", this);
-        return true;
     }
 
     public bool TryStartMatch()
@@ -825,12 +629,12 @@ public sealed class TriunviratoGame : MonoBehaviour
         if (matchStatus != MatchStatus.WaitingForPlayers)
             return false;
         matchStatus = MatchStatus.InProgress;
-        intermissionTimer = 1.5f;
         paused = false;
         finished = false;
         StateRevision++;
         Debug.Log("Partida iniciada.", this);
         GameSoundManager.Instance?.PlayMatchStart();
+        StartNextWave();
         return true;
     }
 
@@ -849,7 +653,7 @@ public sealed class TriunviratoGame : MonoBehaviour
     {
         HeroConfig config = GetHeroConfig(army);
         return config != null
-            ? config.Damage * GetHeroIntermissionMultiplier(army) + GetHeroDamageFixedBonus(army)
+            ? config.Damage * GetHeroUpgradeMultiplier(army) + GetHeroDamageFixedBonus(army)
             : 0f;
     }
 
@@ -1178,7 +982,8 @@ public sealed class TriunviratoGame : MonoBehaviour
         {
             if (enemy == null || enemy.IsDead || Vector2.Distance(position, enemy.transform.position) > radius)
                 continue;
-            ApplyDamage(enemy, damage, aireConfig != null ? aireConfig.ProjectileColor : Color.red);
+            ApplyDamage(enemy, damage, aireConfig != null ? aireConfig.ProjectileColor : Color.red,
+                ArmyType.Aire, DamageCategory.SpecialAbility);
         }
     }
 
@@ -1276,14 +1081,15 @@ public sealed class TriunviratoGame : MonoBehaviour
             if (target == null || target.IsDead)
                 yield break;
             ApplyDamage(target, ScaleSpecialDamage(ability != null ? ability.DamagePerHit + lightningDamageBonus[(int)ArmyType.Mar] : 0f, ArmyType.Mar),
-                marConfig != null ? marConfig.ProjectileColor : Color.cyan);
+                marConfig != null ? marConfig.ProjectileColor : Color.cyan,
+                ArmyType.Mar, DamageCategory.SpecialAbility);
             if (i < hitCount - 1)
                 yield return new WaitForSeconds(ability != null ? ability.HitInterval : 0f);
         }
     }
 
     private float ScaleSpecialDamage(float baseDamage, ArmyType army) =>
-        baseDamage * GetHeroIntermissionMultiplier(army) + GetHeroDamageFixedBonus(army);
+        baseDamage * GetHeroUpgradeMultiplier(army) + GetHeroDamageFixedBonus(army);
 
     private IEnumerator HoldZombieGraspEffect(GameObject effect, float duration, float holdAt, float clipLength)
     {
@@ -1362,7 +1168,6 @@ public sealed class TriunviratoGame : MonoBehaviour
 
     private void SpawnEnemy(bool isBoss)
     {
-        if (isBoss) waveHadBoss = true;
         float randomY = UnityEngine.Random.Range(-0.25f, 0.25f);
         Vector3 spawnPosition = enemySpawner.position + Vector3.up * randomY;
 
@@ -1376,6 +1181,8 @@ public sealed class TriunviratoGame : MonoBehaviour
         enemy.transform.localScale = Vector3.one * (isBoss ? enemyConfig.BossScale : enemyConfig.NormalScale);
         enemy.Initialize(enemyConfig, this, wave, isBoss);
         enemies.Add(enemy);
+        // Refresh client-side ability availability when enemies first enter the map.
+        StateRevision++;
     }
 
     private void UpdateEnemies()
@@ -1481,18 +1288,18 @@ public sealed class TriunviratoGame : MonoBehaviour
 
     private void FireProjectile(GameObject source, string sourceName, HeroConfig config, float damage,
         float splashRadius, SkeletonEnemy target, RuntimeAnimatorController animatorController = null,
-        Vector3? launchPosition = null)
+        Vector3? launchPosition = null, DamageCategory damageCategory = DamageCategory.Hero)
     {
         if (target == null || target.IsDead)
             return;
 
         FireProjectile(source, sourceName, config, damage, splashRadius, target.transform.position, target,
-            animatorController, launchPosition);
+            animatorController, launchPosition, damageCategory);
     }
 
     private void FireProjectile(GameObject source, string sourceName, HeroConfig config, float damage,
         float splashRadius, Vector3 destination, SkeletonEnemy target, RuntimeAnimatorController animatorController = null,
-        Vector3? launchPosition = null)
+        Vector3? launchPosition = null, DamageCategory damageCategory = DamageCategory.Hero)
     {
         if (source == null || config == null)
             return;
@@ -1529,6 +1336,8 @@ public sealed class TriunviratoGame : MonoBehaviour
             Damage = damage,
             DamageColor = config.ProjectileColor,
             SplashRadius = splashRadius,
+            Army = config.Army,
+            Category = damageCategory,
             Speed = config.ProjectileSpeed,
             RemainingLifetime = config.ProjectileLifetime
         });
@@ -1622,26 +1431,38 @@ public sealed class TriunviratoGame : MonoBehaviour
             foreach (SkeletonEnemy enemy in enemies)
             {
                 if (enemy != null && !enemy.IsDead && Vector2.Distance(impactPosition, enemy.transform.position) <= projectile.SplashRadius)
-                    ApplyDamage(enemy, projectile.Damage, projectile.DamageColor);
+                    ApplyProjectileDamageToEnemy(projectile, enemy);
             }
         }
         else
         {
-            ApplyDamage(impactTarget, projectile.Damage, projectile.DamageColor);
+            ApplyProjectileDamageToEnemy(projectile, impactTarget);
         }
     }
 
-    private void ApplyDamage(SkeletonEnemy enemy, float amount, Color damageColor)
+    private void ApplyProjectileDamageToEnemy(Projectile projectile, SkeletonEnemy enemy)
     {
-        if (enemy == null || enemy.IsDead)
+        float damage = projectile.Damage;
+        if (projectile.Category == DamageCategory.Hero && projectile.Army == ArmyType.Mar && enemy.IsBoss)
+            damage *= 1f + marBossDamageBonusPercent / 100f;
+        ApplyDamage(enemy, damage, projectile.DamageColor, projectile.Army, projectile.Category);
+    }
+
+    private void ApplyDamage(SkeletonEnemy enemy, float amount, Color damageColor, ArmyType army, DamageCategory category)
+    {
+        if (!CanCombat || enemy == null || enemy.IsDead || !IsValidArmy(army))
             return;
 
-        ShowDamage(enemy, amount, damageColor);
-        if (enemy.ApplyDamage(amount) && !enemy.RewardGranted)
+        float appliedDamage = enemy.ApplyDamage(amount);
+        if (appliedDamage <= 0f)
+            return;
+        damageDealt[(int)army, (int)category] += appliedDamage;
+        ShowDamage(enemy, appliedDamage, damageColor);
+        if (enemy.IsDead && !enemy.RewardGranted)
         {
             enemy.MarkRewardGranted();
-            if (economy != null)
-                economy.RewardEnemyDefeated(enemy.IsBoss);
+            GrantEnemyExperience(enemy.IsBoss);
+            if (enemy.IsBoss) QueueBossOffers();
         }
     }
 
@@ -1712,7 +1533,7 @@ public sealed class TriunviratoGame : MonoBehaviour
         return best;
     }
 
-    internal bool CanCombat => matchStatus == MatchStatus.InProgress && waveInProgress && !paused && !finished && !purchasePhase;
+    internal bool CanCombat => matchStatus == MatchStatus.InProgress && waveInProgress && !paused && !finished;
 
     internal void ApplyCastleDamage(float amount)
     {
@@ -1725,7 +1546,7 @@ public sealed class TriunviratoGame : MonoBehaviour
             EndMatch(false);
     }
 
-    public void RestartFinishedMatch()
+    internal void RestartFinishedMatch()
     {
         if (matchStatus != MatchStatus.Finished)
             return;
@@ -1750,8 +1571,11 @@ public sealed class TriunviratoGame : MonoBehaviour
         if (target == null)
             return false;
 
+        Transform cannon = tower.Cannon;
         FireProjectile(tower.gameObject, tower.Config.DisplayName, tower.Config.Hero,
-            tower.Damage, tower.SplashRadius, target);
+            tower.Damage, tower.SplashRadius, target,
+            launchPosition: cannon != null ? cannon.position : tower.transform.position + Vector3.right * 0.2f,
+            damageCategory: DamageCategory.Tower);
         return true;
     }
 
@@ -1771,11 +1595,15 @@ public sealed class TriunviratoGame : MonoBehaviour
         if (finished)
             return;
 
+        for (int army = 0; army < 3; army++)
+            for (int category = 0; category < 3; category++)
+                finalDamageDealt[army, category] = damageDealt[army, category];
         finished = true;
         victory = didWin;
         matchStatus = MatchStatus.Finished;
         StateRevision++;
         Debug.Log(didWin ? "Partida finalizada: victoria." : "Partida finalizada: derrota.", this);
+        GameSoundManager.Instance?.FadeOutTheme(2f);
         if (!didWin)
             GameSoundManager.Instance?.PlayDefeat();
     }

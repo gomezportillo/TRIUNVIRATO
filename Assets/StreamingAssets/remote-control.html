@@ -29,22 +29,19 @@
     .red { background: #f87171; }
     .blue { background: #60a5fa; }
     .pink { background: #ff69b4; }
+    .purple { background: #c084fc; }
     .neutral { background: #cbd5e1; }
     .secondary { min-height: 44px; color: #f8fafc; background: #334155; }
     .tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
     .tabs button { min-height: 44px; padding: 7px; opacity: .68; }
     .tabs button.active { opacity: 1; outline: 2px solid white; outline-offset: 1px; }
-    .seat, .upgrade, .hero-summary, .wallet { padding: 13px; border: 1px solid #263449; border-radius: 15px; background: #121c2c; margin: 9px 0; }
+    .seat, .upgrade, .hero-summary { padding: 13px; border: 1px solid #263449; border-radius: 15px; background: #121c2c; margin: 9px 0; }
     .seat { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
     .seat-name { font-weight: 750; }
     .seat-state, .muted { color: #94a3b8; font-size: .88rem; text-align: right; }
     .army-header { display: flex; justify-content: space-between; gap: 8px; align-items: center; border-left: 4px solid var(--army); padding: 5px 0 5px 11px; }
     .army-header h2 { margin: 0; font-size: 1.2rem; }
     .wave-label { color: #94a3b8; font-size: .82rem; white-space: nowrap; }
-    .wallet { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 8px; background: #121c2c; }
-    .wallet-balance { display: flex; min-width: 0; align-items: center; justify-content: center; gap: 6px; padding: 8px 4px; border-radius: 10px; background: var(--army-soft); }
-    .wallet-icon { width: 26px; height: 26px; object-fit: contain; flex: 0 0 auto; }
-    .wallet-value { font-size: 1rem; font-weight: 800; }
     .section-tabs { position: sticky; top: 0; z-index: 2; margin: 12px 0; padding: 5px; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 5px; border-radius: 14px; background: #0b1220; }
     .section-tabs button { min-height: 42px; padding: 7px 4px; color: #cbd5e1; background: #1e293b; font-size: .88rem; }
     .section-tabs button.active { color: #07111f; background: var(--army); }
@@ -63,27 +60,32 @@
     .status-pill[data-state="insufficient"], .status-pill[data-state="waiting"] { background: #713f12; color: #fef3c7; }
     .status-pill[data-state="locked"] { background: #7f1d1d; color: #fecaca; }
     .status-pill[data-state="max"] { background: #334155; color: #e2e8f0; }
-    .description, .effect, .costline, .blocked { margin: 0; font-size: .85rem; line-height: 1.4; }
+    .description, .effect, .blocked { margin: 0; font-size: .85rem; line-height: 1.4; }
     .description { color: #aebdd0; }
     .effect { color: #e2e8f0; }
     .effect strong { color: var(--army); }
-    .costline { font-weight: 750; }
     .blocked { color: #fbbf24; }
     .upgrade button { min-height: 46px; background: var(--army); }
     .upgrade button[data-status="max"] { color: #d1d5db; background: #334155; }
     .tower-artifact { border: 1px dashed #475569; }
     .tower-damage { margin: 4px 0; font-size: 1.25rem; font-weight: 800; }
-    .purchase-card { padding: 14px; border: 2px solid #475569; border-radius: 15px; margin: 10px 0; background: #121c2c; }
-    .purchase-card[data-category="economy"] { border-color: #4ade80; }
-    .purchase-card[data-category="towers"] { border-color: #f87171; }
-    .purchase-card[data-category="hero"] { border-color: #60a5fa; }
-    .purchase-card[data-category="specialabilities"] { border-color: #ff69b4; }
+    .upgrade-card { padding: 14px; border: 2px solid #475569; border-radius: 15px; margin: 10px 0; background: #121c2c; }
+    .upgrade-card[data-category="progression"] { border-color: #c084fc; }
+    .upgrade-card[data-category="towers"] { border-color: #f87171; }
+    .upgrade-card[data-category="hero"] { border-color: #60a5fa; }
+    .upgrade-card[data-category="specialabilities"] { border-color: #ff69b4; }
     .special-card { border-color: var(--army); }
     .special-card button { color: #07111f; background: var(--army); }
-    .purchase-timer { font-size: 1.15rem; font-weight: 800; }
+    .upgrade-timer { font-size: 1.15rem; font-weight: 800; }
+    .damage-summary { width: 100%; border-collapse: collapse; margin: 12px 0 18px; font-size: .92rem; }
+    .damage-summary th, .damage-summary td { padding: 10px 6px; border-bottom: 1px solid #334155; text-align: right; }
+    .damage-summary th:first-child, .damage-summary td:first-child { text-align: left; }
+    .final-screen { border: 1px solid #475569; border-radius: 16px; padding: 16px; background: #121c2c; }
+    .final-screen h2 { margin-top: 0; }
+    .final-votes { font-weight: 800; color: #cbd5e1; }
     .lobby-actions { display: grid; gap: 2px; }
     [hidden] { display: none !important; }
-    @media (max-width: 360px) { body { padding-left: 10px; padding-right: 10px; } .section-tabs button { font-size: .8rem; } .wallet-value { font-size: 1.2rem; } }
+    @media (max-width: 360px) { body { padding-left: 10px; padding-right: 10px; } .section-tabs button { font-size: .8rem; } }
   </style>
 </head>
 <body>
@@ -113,7 +115,6 @@
         <button class="red" data-tab="aire">Aire</button>
         <button class="blue" data-tab="mar">Agua</button>
       </div>
-      <div id="wallet" class="wallet"></div>
       <nav id="section-tabs" class="section-tabs" aria-label="Secciones del ejército">
         <button data-view="statistics" class="active" aria-pressed="true">Estadísticas</button>
         <button data-view="attacks" aria-pressed="false">Ataques</button>
@@ -131,7 +132,6 @@
       const control = document.getElementById('control');
       const lobbyMessage = document.getElementById('lobby-message');
       const seatsElement = document.getElementById('seats');
-      const wallet = document.getElementById('wallet');
       const content = document.getElementById('section-content');
       const sectionTabs = document.getElementById('section-tabs');
       const developerButton = document.getElementById('developer');
@@ -141,7 +141,6 @@
       const names = { tierra: 'Tierra', aire: 'Aire', mar: 'Mar' };
       const colors = { tierra: 'green', aire: 'red', mar: 'blue' };
       const icons = { tierra: '🟢', aire: '🔴', mar: '🔵' };
-      const resourceIconPaths = { tierra: '/icons/ground_icon.png', aire: '/icons/air_icon.png', mar: '/icons/sea_icon.png' };
       const numberFormat = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 2 });
       const tokenKey = 'triunvirato-session-token';
       let token = localStorage.getItem(tokenKey);
@@ -169,7 +168,7 @@
         socket.send(JSON.stringify(message));
       }
       function feedback(text, success) {
-        result.textContent = text || (success ? 'Compra realizada.' : 'No se pudo completar la compra.');
+        result.textContent = text || (success ? 'Mejora seleccionada.' : 'No se pudo seleccionar la mejora.');
         result.dataset.kind = success ? 'success' : 'error';
       }
       function updateConnection(isConnected) {
@@ -213,47 +212,64 @@
       }
       function createCombatStatistics(army) {
         const fragments = document.createDocumentFragment();
-        fragments.append(statSection('Generación de recursos', [
-          [`${numberFormat.format(army.passiveIncomePerSecond)} recursos/s`, 'Por segundo'],
-          [`${numberFormat.format(army.rewardPerKill || 0)} recursos`, 'Por baja'],
-          [`${numberFormat.format(army.rewardPerWave || 0)} recursos`, 'Por oleada'],
-          [`${numberFormat.format(army.rewardPerBoss || 0)} recursos`, 'Por jefe']
-        ], army.waveRewardMultiplier > 1
-          ? `Valores efectivos configurados. Esta oleada incluye el multiplicador ×${numberFormat.format(army.waveRewardMultiplier)} de llamada anticipada; las fracciones de baja se acumulan hasta completar recursos enteros.`
-          : 'Valores efectivos configurados; las fracciones de baja se acumulan hasta completar recursos enteros. La llamada anticipada de Mar puede aumentar la recompensa de oleada.'));
+        fragments.append(statSection('Progreso', [
+          [`Nivel ${army.level}`, 'Nivel actual'],
+          [`${numberFormat.format(army.experience)} / ${numberFormat.format(army.experienceNeeded)} XP`, 'Experiencia'],
+          [`×${numberFormat.format(army.experienceMultiplier)}`, 'Multiplicador de EXP'],
+          [`${numberFormat.format(army.luckChance * 100)} %`, 'Suerte · mejoras de dos estrellas']
+        ]));
         const heroStats = [
-          [`${numberFormat.format(army.heroDamage)} daño`, 'Daño por ataque'],
-          [`${numberFormat.format(army.heroBaseDamage)} daño`, 'Daño base'],
-          [`${numberFormat.format(army.heroAttackCooldown)} s`, 'Tiempo entre ataques'],
-          [`${numberFormat.format(army.heroBaseCooldown)} s`, 'Tiempo entre ataques base'],
-          [attackRate(army.heroAttackCooldown), 'Velocidad de ataque'],
-          [`${numberFormat.format(army.heroRange)} u`, 'Alcance'],
-          [`${numberFormat.format(army.heroBaseRange)} u`, 'Alcance base'],
-          [`×${numberFormat.format(army.heroDamageMultiplier)} daño · +${numberFormat.format(army.heroDamageFixedBonus)}`, 'Multiplicador y bonificación de daño'],
-          [`×${numberFormat.format(army.heroAttackSpeedMultiplier)} velocidad · +${numberFormat.format(army.heroAttackRateFixedBonus)} ataques/s`, 'Mejora de velocidad'],
-          [`×${numberFormat.format(army.heroRangeMultiplier)} alcance · +${numberFormat.format(army.heroRangeFixedBonus)} u`, 'Mejora de alcance']
+          [`${numberFormat.format(army.heroDamage)}`, 'Daño por ataque'],
+          [attackRate(army.heroAttackCooldown), 'Ataques por segundo'],
+          [`${numberFormat.format(army.heroRange)} u`, 'Alcance']
         ];
-        if (army.heroSplashRadius > 0) heroStats.push([`${numberFormat.format(army.heroSplashRadius)} u · ×${numberFormat.format(army.heroSplashMultiplier)}`, 'Radio de área efectivo']);
+        if (army.army === 'aire') heroStats.push([`${numberFormat.format(army.heroSplashRadius)} u`, 'Radio de ataque de área']);
+        if (army.army === 'mar') heroStats.push([`+${numberFormat.format(army.heroBossDamageBonusPercent)} %`, 'Daño contra jefes']);
         fragments.append(statSection(`Héroe · ${army.heroName || armyLabel(army.army)}`, heroStats));
-        const towerStats = [
-          [`${numberFormat.format(army.currentDamage)} daño`, 'Daño por ataque'],
-          [`${numberFormat.format(army.towerBaseDamage)} daño`, 'Daño base antes de mejoras'],
-          [`${numberFormat.format(army.towerAttackCooldown)} s`, 'Tiempo entre ataques'],
-          [`${numberFormat.format(army.towerBaseCooldown)} s`, 'Tiempo entre ataques base'],
-          [attackRate(army.towerAttackCooldown), 'Velocidad de ataque'],
-          [`${numberFormat.format(army.towerRange)} u`, 'Alcance'],
-          [`${numberFormat.format(army.towerBaseRange)} u`, 'Alcance base'],
-          [`×${numberFormat.format(army.towerDamageMultiplier)} daño · +${numberFormat.format(army.towerDamageFixedBonus)}`, 'Multiplicador y bonificación de daño'],
-          [`×${numberFormat.format(army.towerAttackSpeedMultiplier)} velocidad · +${numberFormat.format(army.towerAttackRateFixedBonus)} ataques/s`, 'Mejora de velocidad'],
-          [`×${numberFormat.format(army.towerRangeMultiplier)} alcance · +${numberFormat.format(army.towerRangeFixedBonus)} u`, 'Mejora de alcance'],
-          [army.owned ? 'Desbloqueada' : 'Bloqueada', 'Estado']
-        ];
-        if (army.towerSplashRadius > 0) towerStats.push([`${numberFormat.format(army.towerSplashRadius)} u`, 'Radio de área']);
-        if (army.owned) fragments.append(statSection(`Torre · ${army.towerName}`, towerStats));
+        if (army.towerUnlocked) fragments.append(statSection(`Torre · ${army.towerName}`, [
+          [`${numberFormat.format(army.currentDamage)}`, 'Daño por ataque'],
+          [attackRate(army.towerAttackCooldown), 'Ataques por segundo'],
+          [`${numberFormat.format(army.towerRange)} u`, 'Alcance']
+        ]));
         return fragments;
       }
+
+      function renderFinalScreen() {
+        document.getElementById('panel-heading').textContent = 'Partida terminada';
+        document.getElementById('wave-label').textContent = '';
+        document.getElementById('dev-tabs').hidden = true;
+        sectionTabs.hidden = true;
+        const screen = document.createElement('section'); screen.className = 'final-screen';
+        const title = document.createElement('h2'); title.textContent = 'Resumen de la partida';
+        const note = document.createElement('p'); note.className = 'muted';
+        note.textContent = 'Daño que redujo la vida de los enemigos; el exceso sobre su vida restante no se cuenta.';
+        const table = document.createElement('table'); table.className = 'damage-summary';
+        table.innerHTML = '<thead><tr><th>Ejército</th><th>Héroe</th><th>Torres</th><th>Habilidades</th><th>Total</th></tr></thead>';
+        const body = document.createElement('tbody');
+        for (const army of state.armies || []) {
+          const values = [army.damageByHero || 0, army.damageByTower || 0, army.damageBySpecialAbility || 0];
+          const row = document.createElement('tr');
+          const nameCell = document.createElement('th'); nameCell.scope = 'row'; nameCell.textContent = armyLabel(army.army); row.append(nameCell);
+          for (const value of [...values.map(v => numberFormat.format(v)), numberFormat.format(values.reduce((a, b) => a + b, 0))]) {
+            const cell = document.createElement('td'); cell.textContent = value; row.append(cell);
+          }
+          body.append(row);
+        }
+        table.append(body);
+        const votes = document.createElement('p'); votes.className = 'final-votes';
+        votes.textContent = `Reinicios confirmados: ${state.restartRequestCount || 0} / 3`;
+        const ownArmy = state.armies.find(item => item.army === state.selectedArmy);
+        const button = document.createElement('button'); button.className = 'green';
+        const alreadyVoted = !!(ownArmy && ownArmy.restartRequested);
+        button.textContent = alreadyVoted ? 'Reinicio solicitado ✓' : 'Solicitar reinicio';
+        button.disabled = !connected || !sessionReady || developerMode || !ownArmy || alreadyVoted || pendingActions.has('restart');
+        button.addEventListener('click', () => request({ type: 'requestRestart' }, 'restart'));
+        const help = document.createElement('p'); help.className = 'muted'; help.textContent = 'La partida nueva comienza cuando confirmen los tres ejércitos.';
+        screen.append(title, note, table, votes, button, help);
+        content.replaceChildren(screen);
+      }
       function createSpecialAbilityCard(army) {
-        const card = document.createElement('article'); card.className = 'purchase-card special-card';
+        const card = document.createElement('article'); card.className = 'upgrade-card special-card';
         const title = document.createElement('h3'); title.textContent = 'Habilidad especial';
         const name = document.createElement('p'); name.className = 'description'; name.textContent = army.specialAbilityName || 'Habilidad especial';
         if (army.specialAbilityDescription) {
@@ -275,8 +291,7 @@
         const status = document.createElement('p'); status.className = 'muted';
         if (remaining > 0) status.textContent = `Disponible en ${numberFormat.format(remaining)} s`;
         else if (army.specialCanActivate) status.textContent = 'Lista para activar';
-        else if (state.purchasePhase || !state.waveInProgress) status.textContent = 'Disponible durante una oleada de combate';
-        else status.textContent = 'No hay enemigos vivos';
+        else status.textContent = 'No hay enemigos vivos en el mapa';
 
         const actionKey = `special:${selectedPanel}`;
         const pending = pendingActions.has(actionKey);
@@ -293,7 +308,7 @@
         return panel;
       }
       function renderPanel() {
-        if (!state || !sessionReady) return;
+        if (!state || (!sessionReady && state.status !== 'Finished')) return;
         const inMatch = state.status === 'InProgress' || state.status === 'Finished';
         if (!inMatch) {
           control.hidden = true; lobby.hidden = false;
@@ -302,11 +317,12 @@
           return;
         }
         lobby.hidden = true; control.hidden = false;
+        if (state.status === 'Finished') { renderFinalScreen(); return; }
         if (!developerMode && !state.selectedArmy) {
           document.getElementById('panel-heading').textContent = 'Partida en curso';
           document.getElementById('dev-tabs').hidden = true;
           sectionTabs.hidden = true;
-          wallet.textContent = 'Esta sesión no tiene un ejército asignado.'; content.replaceChildren(); return;
+          content.replaceChildren(); return;
         }
         if (!selectedPanel || (!developerMode && selectedPanel !== state.selectedArmy)) selectedPanel = developerMode ? 'tierra' : state.selectedArmy;
         const army = state.armies.find(item => item.army === selectedPanel); if (!army) return;
@@ -316,65 +332,31 @@
         document.getElementById('wave-label').textContent = `Oleada ${state.currentWave || 0}`;
         document.getElementById('dev-tabs').hidden = !developerMode;
         tabs.forEach(tab => tab.classList.toggle('active', tab.dataset.tab === selectedPanel));
-        wallet.replaceChildren();
-        for (const resourceArmy of state.armies) {
-          const balance = document.createElement('div'); balance.className = 'wallet-balance';
-          balance.style.setProperty('--army-soft', resourceArmy.army === 'tierra' ? '#123322' : resourceArmy.army === 'aire' ? '#3b171b' : '#172d49');
-          const resourceIcon = document.createElement('img'); resourceIcon.className = 'wallet-icon';
-          resourceIcon.src = resourceIconPaths[resourceArmy.army]; resourceIcon.alt = `${names[resourceArmy.army]} recursos`;
-          const balanceValue = document.createElement('span'); balanceValue.className = 'wallet-value';
-          balanceValue.textContent = numberFormat.format(resourceArmy.coins);
-          balance.setAttribute('aria-label', `${names[resourceArmy.army]}: ${balanceValue.textContent} recursos`);
-          balance.append(resourceIcon, balanceValue); wallet.append(balance);
-        }
+        const xpSummary = document.createElement('p'); xpSummary.className = 'muted';
+        xpSummary.textContent = `Nivel ${army.level} · ${numberFormat.format(army.experience)} / ${numberFormat.format(army.experienceNeeded)} XP · Multiplicador ×${numberFormat.format(army.experienceMultiplier)} · Suerte ${numberFormat.format(army.luckChance * 100)} % · Aumento de EXP +${numberFormat.format(army.experienceIncrease * 100)} %`;
+        content.replaceChildren(xpSummary);
 
-        if (state.purchasePhase) {
+        if (army.hasUpgradeOffer) {
           sectionTabs.hidden = true;
-          content.replaceChildren();
-          const title = document.createElement('h2'); title.textContent = `Preparad la siguiente oleada · ${Math.ceil(state.purchaseSecondsRemaining)} s`;
+          content.replaceChildren(xpSummary);
+          const title = document.createElement('h2'); title.textContent = army.hasBossOffer ? 'Recompensa de jefe · elige una mejora' : `¡Nivel ${army.level}! · elige una mejora`;
           content.append(title);
-          if (army.purchaseResult) {
-            const latest = document.createElement('p'); latest.className = 'muted';
-            latest.textContent = `Última acción: ${army.purchaseResult}. Puedes seguir comprando mientras dure la fase.`; content.append(latest);
-          }
-          for (const option of (army.purchaseOptions || [])) {
+          for (const option of (army.upgradeOptions || [])) {
             if (!option) continue;
-            const card = document.createElement('article'); card.className = 'purchase-card'; card.dataset.category = option.category;
-            const currencies = ['tierra', 'aire', 'mar'];
-            const requirements = (option.resourceCosts || []).map((amount, index) => {
-              const resourceArmy = state.armies.find(item => item.army === currencies[index]);
-              return { amount, army: currencies[index], balance: resourceArmy ? resourceArmy.coins : 0 };
-            }).filter(cost => cost.amount > 0);
-            const affordable = requirements.every(cost => cost.balance >= cost.amount);
-            const costLabel = requirements.map(cost => `${cost.amount} ${armyIcon(cost.army)} ${armyLabel(cost.army)}`).join(' + ');
-            const balanceLabel = requirements.map(cost => `${cost.balance} ${armyIcon(cost.army)} ${armyLabel(cost.army)}`).join(' + ');
-            const heading = document.createElement('h3'); heading.textContent = `${option.category === 'economy' ? '🟢 Economía' : option.category === 'towers' ? '🔴 Torres' : option.category === 'specialabilities' ? '🩷 Habilidad especial' : '🔵 Héroe'} · ${option.name}`;
+            const card = document.createElement('article'); card.className = 'upgrade-card'; card.dataset.category = option.category;
+            const heading = document.createElement('h3'); heading.textContent = `${option.category === 'progression' ? '✨ Progresión' : option.category === 'towers' ? '🔴 Torres' : option.category === 'specialabilities' ? '🩷 Habilidad especial' : '🔵 Héroe'} · ${option.name}`;
             const desc = document.createElement('p'); desc.className = 'description'; desc.textContent = option.description;
-            const cost = document.createElement('p'); cost.className = 'costline';
-            cost.textContent = option.paymentMode === 'cooperative'
-              ? `Aportación del equipo: ${costLabel} · Disponible: ${balanceLabel}`
-              : `Se descuenta del saldo ${names[selectedPanel]}: ${costLabel} · Disponible: ${balanceLabel}`;
-            const button = document.createElement('button'); button.className = option.category === 'economy' ? 'green' : option.category === 'towers' ? 'red' : option.category === 'specialabilities' ? 'pink' : 'blue';
-            button.textContent = `Comprar · ${costLabel}`;
-            const actionKey = `intermission:${selectedPanel}`; const pending = pendingActions.has(actionKey);
-            button.disabled = pending || !connected || !army.canControl || !affordable;
-            button.addEventListener('click', () => request({ type: 'buyIntermissionUpgrade', army: selectedPanel, choice: option.id }, actionKey));
+            const button = document.createElement('button'); button.className = option.category === 'progression' ? 'purple' : option.category === 'towers' ? 'red' : option.category === 'specialabilities' ? 'pink' : 'blue';
+            button.textContent = 'Elegir mejora';
+            const actionKey = `upgrade:${selectedPanel}`; const pending = pendingActions.has(actionKey);
+            button.disabled = pending || !connected || !army.canControl;
+            button.addEventListener('click', () => request({ type: 'selectUpgrade', army: selectedPanel, choice: option.id, offerToken: option.offerToken }, actionKey));
             const rarity = document.createElement('p'); rarity.className = 'muted';
             rarity.style.fontSize = '1.2rem'; rarity.style.letterSpacing = '.18em';
             rarity.textContent = '⭐'.repeat(Math.max(1, Math.min(3, option.stars || 1)));
-            card.append(heading, desc, cost, button, rarity);
-            if (!affordable) { const reason = document.createElement('p'); reason.className = 'blocked'; reason.textContent = `Saldo insuficiente para ${costLabel}.`; card.append(reason); }
+            card.append(heading, desc, button, rarity);
             content.append(card);
           }
-          const resources = document.createElement('article'); resources.className = 'purchase-card';
-          const resourceTitle = document.createElement('h3'); resourceTitle.textContent = '📦 Guardar para después';
-          const resourceDesc = document.createElement('p'); resourceDesc.className = 'description'; resourceDesc.textContent = `Recibe ${state.resourceChoiceReward} ${armyIcon(selectedPanel)} ahora.`;
-          const resourceButton = document.createElement('button'); resourceButton.className = 'neutral'; resourceButton.textContent = `Conseguir ${state.resourceChoiceReward} recursos`;
-          const resourceKey = `intermission:${selectedPanel}`; const resourcePending = pendingActions.has(resourceKey);
-          resourceButton.disabled = resourcePending || army.resourceChoiceMade || !connected || !army.canControl;
-          if (army.resourceChoiceMade) resourceButton.textContent = 'Recursos ya conseguidos';
-          resourceButton.addEventListener('click', () => request({ type: 'buyIntermissionUpgrade', army: selectedPanel, choice: 'resources' }, resourceKey));
-          resources.append(resourceTitle, resourceDesc, resourceButton); content.append(resources);
           return;
         }
         sectionTabs.hidden = false;
@@ -407,7 +389,7 @@
         socket.addEventListener('message', event => {
           try {
             const message = JSON.parse(event.data);
-            if (message.type === 'shopState') {
+            if (message.type === 'matchState') {
               if (message.revision < stateRevision) return;
               stateRevision = message.revision; state = message;
               if (sessionReady && !selectedPanel) selectedPanel = message.developerMode ? 'tierra' : message.selectedArmy;
