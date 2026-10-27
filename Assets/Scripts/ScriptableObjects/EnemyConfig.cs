@@ -12,6 +12,8 @@ public sealed class EnemyConfig : ScriptableObject
     [SerializeField, Min(0f)] private float healthGrowthPerWave = 0.05f;
     [SerializeField, Min(0f)] private float movementSpeed = 0.95f;
     [SerializeField, Min(0f)] private float speedGrowthPerWave = 0.05f;
+    [SerializeField, Min(1f), Tooltip("Límite de velocidad respecto a la velocidad base, para evitar que oleadas tardías se vuelvan incontrolables.")]
+    private float maximumSpeedMultiplier = 2f;
     [SerializeField, Min(1f)] private float bossHealthMultiplier = 5f;
     [SerializeField, Min(0f)] private float bossSpeedMultiplier = 0.579f;
     [SerializeField, Min(0f)] private float castleDamagePerAttack = 12f;
@@ -49,7 +51,8 @@ public sealed class EnemyConfig : ScriptableObject
     public float GetMovementSpeed(int wave, bool isBoss)
     {
         int waveIndex = Mathf.Max(0, wave - 1);
-        return movementSpeed * Mathf.Pow(1f + speedGrowthPerWave, waveIndex) *
+        float speedMultiplier = Mathf.Min(Mathf.Pow(1f + speedGrowthPerWave, waveIndex), maximumSpeedMultiplier);
+        return movementSpeed * speedMultiplier *
                (isBoss ? bossSpeedMultiplier : 1f);
     }
 

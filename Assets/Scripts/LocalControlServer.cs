@@ -18,6 +18,7 @@ public sealed class LocalControlServer : MonoBehaviour
     private const string WebSocketGuid = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
     private const int MaxHeaderBytes = 8192;
     private const int MaxMessageBytes = 2048;
+    public const int MaximumPlayerNameLength = 24;
 
     [SerializeField, Min(1)] private int port = 2468;
     [SerializeField] private TowerManager towerManager;
@@ -75,6 +76,7 @@ public sealed class LocalControlServer : MonoBehaviour
 #pragma warning disable 0649 // Unity's JsonUtility fills these fields from the incoming JSON.
         public string type;
         public string army;
+        public string playerName;
         public string choice;
         public string offerToken;
         public string clientToken;
@@ -167,6 +169,7 @@ public sealed class LocalControlServer : MonoBehaviour
         public float towerRangeFixedBonus;
         public float towerAttackRateFixedBonus;
         public string heroName;
+        public string playerName;
         public string towerName;
         public string specialAbilityName;
         public string specialAbilityDescription;
@@ -199,6 +202,7 @@ public sealed class LocalControlServer : MonoBehaviour
     {
         public string Token;
         public int ArmyIndex = -1;
+        public string PlayerName;
         public bool Developer;
         public bool Connected;
         public int ClientId = -1;
@@ -526,13 +530,13 @@ public sealed class LocalControlServer : MonoBehaviour
                 else if (command.type == "selectArmy")
                 {
                     response.type = "selectionResult";
-                    response.success = SelectArmy(session, command.army, out response.message);
+                    response.success = SelectArmy(session, command.army, command.playerName, out response.message);
                     stateChanged = response.success;
                 }
                 else if (command.type == "joinDeveloper")
                 {
                     response.type = "selectionResult";
-                    response.success = JoinDeveloper(session, out response.message);
+                    response.success = JoinDeveloper(session, command.playerName, out response.message);
                     stateChanged = response.success;
                 }
                 else if (command.type == "selectUpgrade")
@@ -678,7 +682,7 @@ public sealed class LocalControlServer : MonoBehaviour
         return true;
     }
 
-    private bool SelectArmy(PlayerSession session, string armyName, out string message)
+    private bool SelectArmy(PlayerSession session, string armyName, string playerName, out string message)
     {
         message = null;
         if (game == null || game.Status != TriunviratoGame.MatchStatus.WaitingForPlayers)
@@ -705,6 +709,8 @@ public sealed class LocalControlServer : MonoBehaviour
             return false;
         }
 
+        session.PlayerName = CleanPlayerName(playerName) ?? army.ToString();
+
         if (session.ArmyIndex >= 0 && session.ArmyIndex != targetIndex)
             armySeats[session.ArmyIndex] = null;
         armySeats[targetIndex] = session.Token;
@@ -725,7 +731,32 @@ public sealed class LocalControlServer : MonoBehaviour
         return true;
     }
 
-    private bool JoinDeveloper(PlayerSession session, out string message)
+    private static string CleanPlayerName(string value)
+    {
+        string trimmed = (value ?? string.Empty).Trim();
+        StringBuilder clean = new StringBuilder(Mathf.Min(trimmed.Length, MaximumPlayerNameLength));
+        foreach (char character in trimmed)
+        {
+            if (char.IsControl(character)) continue;
+            clean.Append(character);
+            if (clean.Length >= MaximumPlayerNameLength) break;
+        }
+        string result = clean.ToString().Trim();
+        return string.IsNullOrWhiteSpace(result) ? null : result;
+    }
+
+    public string GetPlayerName(ArmyType army)
+    {
+        if (developerToken != null && sessionsByToken.TryGetValue(developerToken, out PlayerSession developer) &&
+            !string.IsNullOrWhiteSpace(developer.PlayerName)) return developer.PlayerName;
+        if ((int)army < 0 || (int)army >= armySeats.Length) return army.ToString();
+        string owner = armySeats[(int)army];
+        if (owner != null && sessionsByToken.TryGetValue(owner, out PlayerSession session) &&
+            !string.IsNullOrWhiteSpace(session.PlayerName)) return session.PlayerName;
+        return army.ToString();
+    }
+
+    private bool JoinDeveloper(PlayerSession session, string playerName, out string message)
     {
         message = null;
         if (game == null || game.Status != TriunviratoGame.MatchStatus.WaitingForPlayers)
@@ -751,6 +782,7 @@ public sealed class LocalControlServer : MonoBehaviour
             armySeats[session.ArmyIndex] = null;
         session.ArmyIndex = -1;
         session.Developer = true;
+        session.PlayerName = CleanPlayerName(playerName);
         developerToken = session.Token;
         if (!game.TryStartMatch())
         {
@@ -1004,6 +1036,7 @@ public sealed class LocalControlServer : MonoBehaviour
             towerRangeFixedBonus = game != null ? game.GetTowerRangeFixedBonus(army) : 0f,
             towerAttackRateFixedBonus = game != null ? game.GetTowerAttackRateFixedBonus(army) : 0f,
             heroName = hero != null ? hero.DisplayName : "Héroe",
+            playerName = GetPlayerName(army),
             towerBaseDamage = towerConfig != null ? towerConfig.GetBaseDamage() : 0f,
             towerDamageMultiplier = game != null ? game.GetTowerUpgradeMultiplier(army) : 1f,
             towerDamageFixedBonus = game != null ? game.GetTowerDamageFixedBonus(army) : 0f,

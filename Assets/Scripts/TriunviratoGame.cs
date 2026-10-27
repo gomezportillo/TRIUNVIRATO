@@ -35,6 +35,8 @@ public sealed class TriunviratoGame : MonoBehaviour
     private readonly List<GameObject> specialEffects = new List<GameObject>();
     private Defender[] defenders;
     private Sprite projectileSprite;
+    private Sprite towerProjectileSprite;
+    private Texture2D towerProjectileTexture;
     private float castleHealth;
     private float spawnTimer;
     private int wave;
@@ -89,6 +91,11 @@ public sealed class TriunviratoGame : MonoBehaviour
     private bool warnedMissingMeteorController;
     private bool warnedMissingLightningController;
     private MatchStatus matchStatus = MatchStatus.WaitingForPlayers;
+    private const float TargetAspectRatio = 16f / 9f;
+    private Camera gameCamera;
+    private float baseOrthographicSize;
+    private int lastScreenWidth = -1;
+    private int lastScreenHeight = -1;
 
     [Serializable]
     public sealed class UpgradeOffer
@@ -147,8 +154,6 @@ public sealed class TriunviratoGame : MonoBehaviour
         public bool SpecialAnimationWarningLogged;
         public float SpecialAnimationStartedAt;
         public float PendingShotTimer;
-        public SkeletonEnemy PendingTarget;
-        public Vector3 PendingTargetPosition;
     }
 
     private sealed class Projectile
@@ -173,6 +178,10 @@ public sealed class TriunviratoGame : MonoBehaviour
 
     private void Start()
     {
+        gameCamera = Camera.main;
+        if (gameCamera != null && gameCamera.orthographic)
+            baseOrthographicSize = gameCamera.orthographicSize;
+        UpdateGameCameraViewport();
         if (upgradeCatalog == null)
             Debug.LogError("Asigna UpgradeCatalog desde Assets/GameData/Upgrades en el Inspector.", this);
         if (tierraHero == null || aireHero == null || marHero == null ||
@@ -190,6 +199,7 @@ public sealed class TriunviratoGame : MonoBehaviour
 
     private void Update()
     {
+        UpdateGameCameraViewport();
         UpdateSpecialCooldownState();
         UpdateSpecialAnimations();
         CleanupSpecialEffects();
@@ -244,6 +254,31 @@ public sealed class TriunviratoGame : MonoBehaviour
         remainingToSpawn = 0;
         StartNextWave();
         Debug.Log("Depuración: inicio forzado de la oleada " + wave + ".", this);
+    }
+
+    private void UpdateGameCameraViewport()
+    {
+        if (gameCamera == null) gameCamera = Camera.main;
+        if (gameCamera == null || Screen.width <= 0 || Screen.height <= 0 || !gameCamera.orthographic)
+            return;
+        if (baseOrthographicSize <= 0f) baseOrthographicSize = gameCamera.orthographicSize;
+        if (lastScreenWidth == Screen.width && lastScreenHeight == Screen.height) return;
+        lastScreenWidth = Screen.width;
+        lastScreenHeight = Screen.height;
+        float aspect = (float)Screen.width / Screen.height;
+        gameCamera.clearFlags = CameraClearFlags.SolidColor;
+        gameCamera.backgroundColor = Color.black;
+        if (aspect > TargetAspectRatio)
+        {
+            float viewportWidth = TargetAspectRatio / aspect;
+            gameCamera.rect = new Rect((1f - viewportWidth) * 0.5f, 0f, viewportWidth, 1f);
+            gameCamera.orthographicSize = baseOrthographicSize;
+        }
+        else
+        {
+            gameCamera.rect = new Rect(0f, 0f, 1f, 1f);
+            gameCamera.orthographicSize = baseOrthographicSize * TargetAspectRatio / aspect;
+        }
     }
 
     private void ResetMatch(bool resumeMatch)
@@ -336,8 +371,6 @@ public sealed class TriunviratoGame : MonoBehaviour
             {
                 defender.AttackTimer = 0f;
                 defender.ShotPending = false;
-                defender.PendingTarget = null;
-                defender.PendingTargetPosition = Vector3.zero;
                 defender.PendingShotTimer = 0f;
                 defender.SpecialAnimationActive = false;
             }
@@ -377,7 +410,7 @@ public sealed class TriunviratoGame : MonoBehaviour
             {
                 SpawnEnemy(wave % 3 == 0 && remainingToSpawn == 1);
                 remainingToSpawn--;
-                spawnTimer = 1f;
+                spawnTimer = GetEnemySpawnInterval();
             }
         }
         else if (enemies.Count == 0)
@@ -385,6 +418,11 @@ public sealed class TriunviratoGame : MonoBehaviour
             waveInProgress = false;
             StartNextWave();
         }
+    }
+
+    private float GetEnemySpawnInterval()
+    {
+        return Mathf.Max(0.4f, 1f / (1f + wave * 0.04f));
     }
 
     private UpgradeOffer GenerateSpecialAbilityOffer(ArmyType army)
@@ -1216,17 +1254,12 @@ public sealed class TriunviratoGame : MonoBehaviour
                 defender.PendingShotTimer -= Time.deltaTime;
                 if (defender.PendingShotTimer <= 0f)
                 {
-                    SkeletonEnemy pendingTarget = defender.PendingTarget;
-                    Vector3 pendingTargetPosition = defender.PendingTargetPosition;
                     defender.ShotPending = false;
-                    defender.PendingTarget = null;
-                    defender.PendingTargetPosition = Vector3.zero;
                     if (IsValidPendingHeroShot(defender))
                     {
-                        if (pendingTarget != null && !pendingTarget.IsDead)
-                            FireProjectile(defender, pendingTarget);
-                        else
-                            FireProjectile(defender, pendingTargetPosition);
+                        SkeletonEnemy currentTarget = FindTarget(defender);
+                        if (currentTarget != null)
+                            FireProjectile(defender, currentTarget);
                     }
                 }
                 continue;
@@ -1244,8 +1277,6 @@ public sealed class TriunviratoGame : MonoBehaviour
             if (!defender.SpecialAnimationActive && defender.Animator != null && defender.Animator.runtimeAnimatorController != null)
                 defender.Animator.Play(NormalAttackState, 0, 0f);
             defender.ShotPending = true;
-            defender.PendingTarget = target;
-            defender.PendingTargetPosition = target.transform.position;
             defender.PendingShotTimer = defender.Config.ProjectileDelay;
         }
     }
@@ -1310,15 +1341,23 @@ public sealed class TriunviratoGame : MonoBehaviour
         GameObject view = new GameObject("Proyectil - " + sourceName);
         view.transform.position = origin;
         float projectileScale = animatorController != null ? config.ProjectileSize : 0.14f;
+        if (damageCategory == DamageCategory.Tower)
+            projectileScale *= 0.8f;
         view.transform.localScale = Vector3.one * projectileScale;
         SetProjectileVisualDirection(view.transform, destination - origin);
 
         SpriteRenderer renderer = view.AddComponent<SpriteRenderer>();
         renderer.sortingOrder = 15;
-        if (animatorController != null)
+        bool towerProjectile = damageCategory == DamageCategory.Tower;
+        if (animatorController != null && !towerProjectile)
         {
             Animator animator = view.AddComponent<Animator>();
             animator.runtimeAnimatorController = animatorController;
+        }
+        else if (towerProjectile)
+        {
+            renderer.sprite = GetTowerProjectileSprite();
+            renderer.color = config.ProjectileColor;
         }
         else
         {
@@ -1341,6 +1380,31 @@ public sealed class TriunviratoGame : MonoBehaviour
             Speed = config.ProjectileSpeed,
             RemainingLifetime = config.ProjectileLifetime
         });
+    }
+
+    private Sprite GetTowerProjectileSprite()
+    {
+        if (towerProjectileSprite != null) return towerProjectileSprite;
+        const int size = 32;
+        towerProjectileTexture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+        {
+            name = "Tower Projectile Circle",
+            filterMode = FilterMode.Bilinear,
+            wrapMode = TextureWrapMode.Clamp
+        };
+        Vector2 center = new Vector2((size - 1) * 0.5f, (size - 1) * 0.5f);
+        float radius = size * 0.46f;
+        for (int y = 0; y < size; y++)
+        for (int x = 0; x < size; x++)
+        {
+            float distance = Vector2.Distance(new Vector2(x, y), center);
+            float alpha = Mathf.Clamp01(radius + 0.75f - distance);
+            towerProjectileTexture.SetPixel(x, y, new Color(1f, 1f, 1f, alpha));
+        }
+        towerProjectileTexture.Apply();
+        towerProjectileSprite = Sprite.Create(towerProjectileTexture, new Rect(0f, 0f, size, size),
+            new Vector2(0.5f, 0.5f), size);
+        return towerProjectileSprite;
     }
 
     private void UpdateProjectiles()
@@ -1457,7 +1521,7 @@ public sealed class TriunviratoGame : MonoBehaviour
         if (appliedDamage <= 0f)
             return;
         damageDealt[(int)army, (int)category] += appliedDamage;
-        ShowDamage(enemy, appliedDamage, damageColor);
+        ShowDamage(enemy, amount, damageColor);
         if (enemy.IsDead && !enemy.RewardGranted)
         {
             enemy.MarkRewardGranted();
@@ -1518,16 +1582,21 @@ public sealed class TriunviratoGame : MonoBehaviour
     private SkeletonEnemy FindTarget(Vector3 origin, float range)
     {
         SkeletonEnemy best = null;
-        float bestDistance = range;
+        float bestX = float.NegativeInfinity;
+        const float horizontalTieTolerance = 0.0001f;
         foreach (SkeletonEnemy enemy in enemies)
         {
             if (enemy == null || enemy.IsDead)
                 continue;
-            float distance = Vector2.Distance(origin, enemy.transform.position);
-            if (distance < bestDistance)
+            Vector3 enemyPosition = enemy.transform.position;
+            if (Vector2.Distance(origin, enemyPosition) > range)
+                continue;
+            float x = enemyPosition.x;
+            // Enemies are stored in spawn order, so the first enemy wins near-equal X ties.
+            if (best == null || x > bestX + horizontalTieTolerance)
             {
                 best = enemy;
-                bestDistance = distance;
+                bestX = x;
             }
         }
         return best;
@@ -1612,6 +1681,10 @@ public sealed class TriunviratoGame : MonoBehaviour
     {
         if (projectileSprite != null)
             Destroy(projectileSprite);
+        if (towerProjectileSprite != null)
+            Destroy(towerProjectileSprite);
+        if (towerProjectileTexture != null)
+            Destroy(towerProjectileTexture);
     }
 
     private static bool IsValidArmy(ArmyType army) => (int)army >= 0 && (int)army < 3;

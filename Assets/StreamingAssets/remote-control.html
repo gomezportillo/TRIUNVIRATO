@@ -84,6 +84,8 @@
     .final-screen h2 { margin-top: 0; }
     .final-votes { font-weight: 800; color: #cbd5e1; }
     .lobby-actions { display: grid; gap: 2px; }
+    .player-name-field { display: grid; gap: 6px; margin: 14px 0 8px; color: #cbd5e1; font-size: .92rem; font-weight: 650; }
+    .player-name-field input { width: 100%; min-height: 46px; border: 1px solid #40516a; border-radius: 8px; padding: 9px 11px; background: #101a29; color: #f8fafc; font: inherit; }
     [hidden] { display: none !important; }
     @media (max-width: 360px) { body { padding-left: 10px; padding-right: 10px; } .section-tabs button { font-size: .8rem; } }
   </style>
@@ -99,6 +101,9 @@
       <h2>Sala de espera</h2>
       <p id="lobby-message">Conéctate para elegir un ejército.</p>
       <div id="seats" aria-label="Estado de las plazas"></div>
+      <label class="player-name-field" for="player-name">Tu nombre (opcional, máximo 24 caracteres)
+        <input id="player-name" type="text" maxlength="24" autocomplete="nickname" placeholder="Nombre visible durante la partida">
+      </label>
       <div class="lobby-actions">
         <button class="green choose-army" data-army="tierra" disabled>Elegir Tierra</button>
         <button class="red choose-army" data-army="aire" disabled>Elegir Aire</button>
@@ -135,6 +140,7 @@
       const content = document.getElementById('section-content');
       const sectionTabs = document.getElementById('section-tabs');
       const developerButton = document.getElementById('developer');
+      const playerNameInput = document.getElementById('player-name');
       const chooseButtons = [...document.querySelectorAll('.choose-army')];
       const tabs = [...document.querySelectorAll('[data-tab]')];
       const sectionButtons = [...document.querySelectorAll('[data-view]')];
@@ -152,8 +158,34 @@
       let socket, state;
       let connected = false, sessionReady = false, developerMode = false;
       let selectedPanel = '', activeView = 'statistics', stateRevision = -1, requestCounter = 0;
+      let previousMatchStatus = null;
+      const previousArmyLevels = Object.create(null);
       const pendingRequests = new Map();
       const pendingActions = new Set();
+
+      function vibrateFor(eventName) {
+        const durations = { start: 80, end: [80, 45, 140], level: 45 };
+        if (!Object.prototype.hasOwnProperty.call(durations, eventName)) return;
+        try {
+          if (navigator.vibrate) navigator.vibrate(durations[eventName]);
+        } catch (_) { /* Unsupported devices and browser restrictions are harmless. */ }
+      }
+
+      function handleHaptics(nextState) {
+        const controlledArmies = nextState.developerMode
+          ? (nextState.armies || [])
+          : (nextState.armies || []).filter(item => item.army === nextState.selectedArmy);
+        const controlsPlayerArmy = !!nextState.developerMode || !!nextState.selectedArmy;
+        if (controlsPlayerArmy && previousMatchStatus === 'WaitingForPlayers' && nextState.status === 'InProgress') vibrateFor('start');
+        if (controlsPlayerArmy && previousMatchStatus === 'InProgress' && nextState.status === 'Finished') vibrateFor('end');
+        let leveledUp = false;
+        for (const army of controlledArmies) {
+          if (previousArmyLevels[army.army] !== undefined && army.level > previousArmyLevels[army.army]) leveledUp = true;
+          previousArmyLevels[army.army] = army.level;
+        }
+        if (leveledUp) vibrateFor('level');
+        previousMatchStatus = nextState.status;
+      }
 
       function armyIcon(army) { return icons[army] || ''; }
       function armyLabel(army) { return names[army] || army; }
@@ -328,12 +360,12 @@
         const army = state.armies.find(item => item.army === selectedPanel); if (!army) return;
         document.documentElement.style.setProperty('--army', selectedPanel === 'tierra' ? '#4ade80' : selectedPanel === 'aire' ? '#f87171' : '#60a5fa');
         document.documentElement.style.setProperty('--army-soft', selectedPanel === 'tierra' ? '#123322' : selectedPanel === 'aire' ? '#3b171b' : '#172d49');
-        document.getElementById('panel-heading').textContent = developerMode ? `Desarrollador · ${names[selectedPanel]}` : `Ejército ${names[selectedPanel]}`;
+        document.getElementById('panel-heading').textContent = developerMode ? `Desarrollador · ${names[selectedPanel]}` : `${army.playerName || names[selectedPanel]} · Nivel ${army.level}`;
         document.getElementById('wave-label').textContent = `Oleada ${state.currentWave || 0}`;
         document.getElementById('dev-tabs').hidden = !developerMode;
         tabs.forEach(tab => tab.classList.toggle('active', tab.dataset.tab === selectedPanel));
         const xpSummary = document.createElement('p'); xpSummary.className = 'muted';
-        xpSummary.textContent = `Nivel ${army.level} · ${numberFormat.format(army.experience)} / ${numberFormat.format(army.experienceNeeded)} XP · Multiplicador ×${numberFormat.format(army.experienceMultiplier)} · Suerte ${numberFormat.format(army.luckChance * 100)} % · Aumento de EXP +${numberFormat.format(army.experienceIncrease * 100)} %`;
+        xpSummary.textContent = `${army.playerName || names[selectedPanel]} · Nivel ${army.level} · ${numberFormat.format(army.experience)} / ${numberFormat.format(army.experienceNeeded)} XP · Multiplicador ×${numberFormat.format(army.experienceMultiplier)} · Suerte ${numberFormat.format(army.luckChance * 100)} % · Aumento de EXP +${numberFormat.format(army.experienceIncrease * 100)} %`;
         content.replaceChildren(xpSummary);
 
         if (army.hasUpgradeOffer) {
@@ -391,7 +423,12 @@
             const message = JSON.parse(event.data);
             if (message.type === 'matchState') {
               if (message.revision < stateRevision) return;
+              handleHaptics(message);
               stateRevision = message.revision; state = message;
+              if (sessionReady && message.selectedArmy) {
+                const ownArmy = (message.armies || []).find(item => item.army === message.selectedArmy);
+                if (ownArmy && !playerNameInput.dataset.edited) playerNameInput.value = ownArmy.playerName || '';
+              }
               if (sessionReady && !selectedPanel) selectedPanel = message.developerMode ? 'tierra' : message.selectedArmy;
               developerMode = message.developerMode; render();
             } else if (message.type === 'sessionResult') {
@@ -407,8 +444,9 @@
           } catch (_) { feedback('Unity envió una respuesta no válida.', false); }
         });
       }
-      chooseButtons.forEach(button => button.addEventListener('click', () => request({ type: 'selectArmy', army: button.dataset.army })));
-      developerButton.addEventListener('click', () => request({ type: 'joinDeveloper' }));
+      playerNameInput.addEventListener('input', () => { playerNameInput.dataset.edited = 'true'; });
+      chooseButtons.forEach(button => button.addEventListener('click', () => request({ type: 'selectArmy', army: button.dataset.army, playerName: playerNameInput.value.trim().slice(0, 24) })));
+      developerButton.addEventListener('click', () => request({ type: 'joinDeveloper', playerName: playerNameInput.value.trim().slice(0, 24) }));
       tabs.forEach(tab => tab.addEventListener('click', () => { if (developerMode) { selectedPanel = tab.dataset.tab; renderPanel(); } }));
       sectionButtons.forEach(button => button.addEventListener('click', () => { activeView = button.dataset.view; renderPanel(); }));
       document.getElementById('reconnect').addEventListener('click', connect);

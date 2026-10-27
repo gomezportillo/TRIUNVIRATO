@@ -59,7 +59,7 @@ public sealed class SceneGameHUD : MonoBehaviour
                 if (experienceLabels != null && i < experienceLabels.Length)
                     Set(experienceLabels[i], "Nv. " + game.GetLevel(army) + " · " + Mathf.FloorToInt(game.GetExperience(army)) + " / " + Mathf.CeilToInt(game.GetExperienceNeeded(army)));
                 if (experienceArmyLabels != null && i < experienceArmyLabels.Length)
-                    Set(experienceArmyLabels[i], army.ToString());
+                    Set(experienceArmyLabels[i], controlServer != null ? controlServer.GetPlayerName(army) : army.ToString());
             }
         }
 
