@@ -16,6 +16,8 @@ public sealed class TriunviratoGame : MonoBehaviour
     private const string HeroCloneAbilityId = "hero_clone";
     private const string KnightSummonAbilityId = "knight_summon";
     private const string WarBlessingAbilityId = "war_blessing";
+    private const string WaterTornadoAbilityId = "water_tornado";
+    private const string ElectricBirdAbilityId = "electric_bird";
     [SerializeField] private Transform tierraHero;
     [SerializeField] private Transform aireHero;
     [SerializeField] private Transform marHero;
@@ -35,11 +37,15 @@ public sealed class TriunviratoGame : MonoBehaviour
     [SerializeField] private HeroCloneAbilityConfig heroCloneAbility;
     [SerializeField] private KnightSummonAbilityConfig knightSummonAbility;
     [SerializeField] private WarBlessingAbilityConfig warBlessingAbility;
+    [SerializeField] private WaterTornadoAbilityConfig waterTornadoAbility;
+    [SerializeField] private ElectricBirdAbilityConfig electricBirdAbility;
     [SerializeField, Tooltip("Si se asigna, los límites del SpriteRenderer delimitan dónde caen los meteoritos.")]
     private SpriteRenderer meteorShowerArea;
     private readonly List<SkeletonEnemy> enemies = new List<SkeletonEnemy>();
     private readonly List<KnightAlly> knightAllies = new List<KnightAlly>();
     private readonly List<Projectile> projectiles = new List<Projectile>();
+    private readonly List<TornadoProjectile> tornadoProjectiles = new List<TornadoProjectile>();
+    private readonly List<ElectricBirdProjectile> electricBirdProjectiles = new List<ElectricBirdProjectile>();
     private readonly List<FloatingDamage> floatingDamage = new List<FloatingDamage>();
     private readonly List<GameObject> specialEffects = new List<GameObject>();
     private Defender[] defenders;
@@ -102,6 +108,10 @@ public sealed class TriunviratoGame : MonoBehaviour
     private int knightCooldownReductionLevel;
     private int warBlessingPowerLevel;
     private int warBlessingCooldownReductionLevel;
+    private int tornadoDamageLevel;
+    private int tornadoPushLevel;
+    private int electricBirdDurationLevel;
+    private int electricBirdCooldownLevel;
     private readonly float[] specialCooldownEndsAt = new float[3];
     private readonly Dictionary<string, float> additionalCooldownEndsAt = new Dictionary<string, float>();
     private bool specialCooldownsWereRunning;
@@ -207,6 +217,23 @@ public sealed class TriunviratoGame : MonoBehaviour
         public float RemainingLifetime;
     }
 
+    private sealed class TornadoProjectile
+    {
+        public GameObject View;
+        public HashSet<SkeletonEnemy> HitEnemies = new HashSet<SkeletonEnemy>();
+    }
+
+    private sealed class ElectricBirdProjectile
+    {
+        public GameObject View;
+        public SkeletonEnemy Target;
+        public float RemainingLifetime;
+        public float ImpactRemaining;
+        public float LaunchDelayRemaining;
+        public bool Impacted;
+        public bool Launched;
+    }
+
     private sealed class FloatingDamage
     {
         public GameObject View;
@@ -221,8 +248,9 @@ public sealed class TriunviratoGame : MonoBehaviour
         UpdateGameCameraViewport();
         if (upgradeCatalog == null)
             Debug.LogError("Asigna UpgradeCatalog desde Assets/GameData/Upgrades en el Inspector.", this);
-        if (fireRageAbility == null || heroCloneAbility == null || knightSummonAbility == null || warBlessingAbility == null)
-            Debug.LogError("Asigna las cuatro habilidades de Aire y Tierra desde Assets/GameData/SpecialAbilities en el Inspector.", this);
+        if (fireRageAbility == null || heroCloneAbility == null || knightSummonAbility == null || warBlessingAbility == null ||
+            waterTornadoAbility == null || electricBirdAbility == null)
+            Debug.LogError("Asigna las habilidades de Aire, Tierra y Agua desde Assets/GameData/SpecialAbilities en el Inspector.", this);
         if (tierraHero == null || aireHero == null || marHero == null ||
             tierraConfig == null || aireConfig == null || marConfig == null ||
             enemySpawner == null || castleTarget == null || enemyConfig == null ||
@@ -268,6 +296,7 @@ public sealed class TriunviratoGame : MonoBehaviour
         UpdateDefenders();
         UpdateKnightAllies();
         UpdateProjectiles();
+        UpdateWaterProjectiles(Time.deltaTime);
         UpdatePendingCloneSpawn();
         UpdateClone();
         UpdateFloatingDamage();
@@ -331,6 +360,7 @@ public sealed class TriunviratoGame : MonoBehaviour
         cloneSpawnRemaining = 0f;
         RemoveActiveClone();
         ClearKnightAllies();
+        ClearWaterProjectiles();
         foreach (GameObject effect in specialEffects)
         {
             if (effect != null)
@@ -398,6 +428,7 @@ public sealed class TriunviratoGame : MonoBehaviour
         knightCooldownReductionLevel = 0;
         warBlessingPowerLevel = 0;
         warBlessingCooldownReductionLevel = 0;
+        tornadoDamageLevel = tornadoPushLevel = electricBirdDurationLevel = electricBirdCooldownLevel = 0;
         Array.Clear(experience, 0, experience.Length);
         Array.Clear(experienceRemainders, 0, experienceRemainders.Length);
         Array.Clear(luckStacks, 0, luckStacks.Length);
@@ -555,7 +586,17 @@ public sealed class TriunviratoGame : MonoBehaviour
                     "Daño por meteorito +" + increment.ToString("0.##");
                 break;
             default:
-                bool moreHits = UnityEngine.Random.Range(0, 2) == 0;
+                int marPick = UnityEngine.Random.Range(0, 6);
+                if (marPick == 2 && waterTornadoAbility != null)
+                    return NewSpecialUpgrade("special_water_tornado_damage", "Huracán · potencia", "Daño del huracán +" + waterTornadoAbility.DamageUpgradePercent.ToString("0.##") + " % por nivel");
+                if (marPick == 3 && waterTornadoAbility != null)
+                    return NewSpecialUpgrade("special_water_tornado_push", "Huracán · empuje", "Distancia de empuje +" + waterTornadoAbility.PushDistanceUpgrade.ToString("0.##") + " por nivel");
+                if (marPick == 4 && electricBirdAbility != null)
+                    return NewSpecialUpgrade("special_electric_bird_duration", "Ave eléctrica · duración", "Debuff +" + electricBirdAbility.DurationUpgradeSeconds.ToString("0.##") + " s por nivel");
+                if (marPick == 5 && electricBirdAbility != null)
+                    return NewSpecialUpgrade("special_electric_bird_cooldown", "Ave eléctrica · cooldown", "Cooldown −" + electricBirdAbility.CooldownReductionSeconds.ToString("0.##") + " s por nivel");
+                if (marPick >= 2) marPick = UnityEngine.Random.Range(0, 2);
+                bool moreHits = marPick == 0;
                 id = moreHits ? "special_lightning_count" : "special_lightning_damage";
                 name = moreHits ? "Tormenta intensificada" : "Rayos devastadores";
                 increment = moreHits ? lightningStormAbility.HitCountUpgrade : lightningStormAbility.DamageUpgrade;
@@ -690,6 +731,10 @@ public sealed class TriunviratoGame : MonoBehaviour
             case "special_knight_cooldown": if (army == ArmyType.Tierra && knightSummonAbility != null) knightCooldownReductionLevel++; break;
             case "special_war_blessing_power": if (army == ArmyType.Tierra && warBlessingAbility != null) warBlessingPowerLevel++; break;
             case "special_war_blessing_cooldown": if (army == ArmyType.Tierra && warBlessingAbility != null) warBlessingCooldownReductionLevel++; break;
+            case "special_water_tornado_damage": if (army == ArmyType.Mar && waterTornadoAbility != null) tornadoDamageLevel++; break;
+            case "special_water_tornado_push": if (army == ArmyType.Mar && waterTornadoAbility != null) tornadoPushLevel++; break;
+            case "special_electric_bird_duration": if (army == ArmyType.Mar && electricBirdAbility != null) electricBirdDurationLevel++; break;
+            case "special_electric_bird_cooldown": if (army == ArmyType.Mar && electricBirdAbility != null) electricBirdCooldownLevel++; break;
         }
     }
 
@@ -884,6 +929,30 @@ public sealed class TriunviratoGame : MonoBehaviour
         (target == ArmyType.Aire || target == ArmyType.Mar) && defenders != null && defenders[(int)target] != null &&
         defenders[(int)target].View != null && (bypassCooldown || GetWarBlessingCooldownRemaining() <= 0f);
 
+    public string GetWaterTornadoName() => waterTornadoAbility != null ? waterTornadoAbility.AbilityName : "Huracán imparable";
+    public string GetWaterTornadoDescription() => waterTornadoAbility != null ? waterTornadoAbility.Description : string.Empty;
+    public float GetWaterTornadoCooldown() => waterTornadoAbility != null ? waterTornadoAbility.Cooldown : 0f;
+    public float GetWaterTornadoCooldownRemaining() => GetAdditionalCooldownRemaining(ArmyType.Mar, WaterTornadoAbilityId);
+    public float GetWaterTornadoDamage() => waterTornadoAbility != null
+        ? ScaleSpecialDamage(waterTornadoAbility.Damage * (1f + tornadoDamageLevel * waterTornadoAbility.DamageUpgradePercent / 100f), ArmyType.Mar) : 0f;
+    public float GetWaterTornadoPushDistance() => waterTornadoAbility != null
+        ? Mathf.Sign(waterTornadoAbility.PushDistance) * (Mathf.Abs(waterTornadoAbility.PushDistance) + tornadoPushLevel * waterTornadoAbility.PushDistanceUpgrade) : 0f;
+    public bool CanActivateWaterTornado(bool bypassCooldown = false) => CanCombat && waterTornadoAbility != null &&
+        waterTornadoAbility.TornadoPrefab != null && HasLivingEnemies() &&
+        (bypassCooldown || GetWaterTornadoCooldownRemaining() <= 0f);
+
+    public string GetElectricBirdName() => electricBirdAbility != null ? electricBirdAbility.AbilityName : "Ave eléctrica";
+    public string GetElectricBirdDescription() => electricBirdAbility != null ? electricBirdAbility.Description : string.Empty;
+    public float GetElectricBirdDuration() => electricBirdAbility != null
+        ? electricBirdAbility.DebuffDuration + electricBirdDurationLevel * electricBirdAbility.DurationUpgradeSeconds : 0f;
+    public float GetElectricBirdCooldown() => electricBirdAbility == null ? 0f : Mathf.Max(electricBirdAbility.MinimumCooldown,
+        electricBirdAbility.Cooldown - electricBirdCooldownLevel * electricBirdAbility.CooldownReductionSeconds);
+    public float GetElectricBirdCooldownRemaining() => GetAdditionalCooldownRemaining(ArmyType.Mar, ElectricBirdAbilityId);
+    public bool CanActivateElectricBird(bool bypassCooldown = false) => CanCombat && electricBirdAbility != null &&
+        electricBirdAbility.ProjectilePrefab != null && defenders != null && defenders[(int)ArmyType.Mar] != null &&
+        defenders[(int)ArmyType.Mar].AttackSpawn != null && SelectLightningTarget() != null &&
+        (bypassCooldown || GetElectricBirdCooldownRemaining() <= 0f);
+
     public bool TryActivateSpecial(ArmyType army, string abilityId, out string message)
         => TryActivateSpecial(army, abilityId, out message, false);
 
@@ -992,6 +1061,41 @@ public sealed class TriunviratoGame : MonoBehaviour
             StartAbilityCooldown(ArmyType.Tierra, abilityId, GetWarBlessingCooldown());
             PlayNewAbilityActivation(defenders[(int)ArmyType.Tierra], warBlessingAbility);
             message = "Acelerar aliado aplicado a " + target + ".";
+            StateRevision++;
+            return true;
+        }
+
+        if (army == ArmyType.Mar && abilityId == WaterTornadoAbilityId)
+        {
+            if (!CanActivateWaterTornado(bypassCooldown)) { message = "Huracán imparable no está disponible."; return false; }
+            Vector2 start = waterTornadoAbility.InitialWorldPosition;
+            GameObject tornado = Instantiate(waterTornadoAbility.TornadoPrefab,
+                new Vector3(start.x, start.y, 0f), Quaternion.identity);
+            tornado.name = "Huracán imparable";
+            SpriteRenderer tornadoRenderer = tornado.GetComponentInChildren<SpriteRenderer>();
+            if (tornadoRenderer != null) tornadoRenderer.sortingOrder = 16;
+            tornadoProjectiles.Add(new TornadoProjectile { View = tornado });
+            StartAbilityCooldown(ArmyType.Mar, abilityId, waterTornadoAbility.Cooldown);
+            PlayNewAbilityActivation(defenders[(int)ArmyType.Mar], waterTornadoAbility);
+            message = "Huracán imparable lanzado.";
+            StateRevision++;
+            return true;
+        }
+
+        if (army == ArmyType.Mar && abilityId == ElectricBirdAbilityId)
+        {
+            SkeletonEnemy target = SelectLightningTarget();
+            if (!CanActivateElectricBird(bypassCooldown) || target == null)
+            { message = "Ave eléctrica no tiene un objetivo válido."; return false; }
+            Defender mar = defenders[(int)ArmyType.Mar];
+            electricBirdProjectiles.Add(new ElectricBirdProjectile
+            {
+                Target = target,
+                LaunchDelayRemaining = electricBirdAbility.LaunchDelay
+            });
+            StartAbilityCooldown(ArmyType.Mar, abilityId, GetElectricBirdCooldown());
+            PlayNewAbilityActivation(mar, electricBirdAbility);
+            message = "Ave eléctrica lanzada.";
             StateRevision++;
             return true;
         }
@@ -1763,6 +1867,16 @@ public sealed class TriunviratoGame : MonoBehaviour
         knightAllies.Clear();
     }
 
+    private void ClearWaterProjectiles()
+    {
+        foreach (TornadoProjectile projectile in tornadoProjectiles)
+            if (projectile != null && projectile.View != null) Destroy(projectile.View);
+        tornadoProjectiles.Clear();
+        foreach (ElectricBirdProjectile projectile in electricBirdProjectiles)
+            if (projectile != null && projectile.View != null) Destroy(projectile.View);
+        electricBirdProjectiles.Clear();
+    }
+
     internal void ApplyKnightDamage(SkeletonEnemy enemy, float damage, KnightAlly source)
     {
         if (!CanCombat || source == null || source.IsDead || enemy == null || enemy.IsDead) return;
@@ -1966,6 +2080,149 @@ public sealed class TriunviratoGame : MonoBehaviour
                 projectiles.RemoveAt(i);
             }
         }
+    }
+
+    private void UpdateWaterProjectiles(float deltaTime)
+    {
+        Bounds worldBounds = GetWaterWorldBounds();
+        for (int i = tornadoProjectiles.Count - 1; i >= 0; i--)
+        {
+            TornadoProjectile tornado = tornadoProjectiles[i];
+            if (tornado == null || tornado.View == null)
+            { tornadoProjectiles.RemoveAt(i); continue; }
+
+            Transform view = tornado.View.transform;
+            Vector3 start = view.position;
+            view.position += Vector3.left * waterTornadoAbility.TravelSpeed * deltaTime;
+            Vector3 end = view.position;
+            float radius = waterTornadoAbility.CollisionRadius;
+            foreach (SkeletonEnemy enemy in enemies)
+            {
+                if (enemy == null || enemy.IsDead || tornado.HitEnemies.Contains(enemy)) continue;
+                if (DistanceToSegment(enemy.transform.position, start, end) > radius + GetEnemyHitRadius(enemy)) continue;
+                tornado.HitEnemies.Add(enemy);
+                ApplyDamage(enemy, GetWaterTornadoDamage(), marConfig != null ? marConfig.ProjectileColor : Color.cyan,
+                    ArmyType.Mar, DamageCategory.SpecialAbility);
+                float push = GetWaterTornadoPushDistance() * (enemy.IsBoss ? waterTornadoAbility.BossPushMultiplier : 1f);
+                enemy.TryApplyKnockback(push, waterTornadoAbility.PushSpeed,
+                    worldBounds.min.x + GetEnemyHitRadius(enemy), worldBounds.max.x - GetEnemyHitRadius(enemy));
+            }
+
+            if (view.position.x + radius < worldBounds.min.x)
+            {
+                Destroy(tornado.View);
+                tornadoProjectiles.RemoveAt(i);
+            }
+        }
+
+        for (int i = electricBirdProjectiles.Count - 1; i >= 0; i--)
+        {
+            ElectricBirdProjectile bird = electricBirdProjectiles[i];
+            if (bird == null)
+            {
+                electricBirdProjectiles.RemoveAt(i);
+                continue;
+            }
+            if (!bird.Launched)
+            {
+                bird.LaunchDelayRemaining -= deltaTime;
+                if (bird.LaunchDelayRemaining > 0f) continue;
+                if (!CanCombat || defenders == null || defenders[(int)ArmyType.Mar] == null ||
+                    defenders[(int)ArmyType.Mar].AttackSpawn == null)
+                {
+                    electricBirdProjectiles.RemoveAt(i);
+                    continue;
+                }
+                bird.Target = bird.Target != null && !bird.Target.IsDead ? bird.Target : SelectLightningTarget();
+                if (bird.Target == null) { electricBirdProjectiles.RemoveAt(i); continue; }
+                Vector3 origin = defenders[(int)ArmyType.Mar].AttackSpawn.position;
+                bird.View = Instantiate(electricBirdAbility.ProjectilePrefab, origin, Quaternion.identity);
+                bird.View.name = "Ave eléctrica";
+                SpriteRenderer visual = bird.View.GetComponentInChildren<SpriteRenderer>();
+                if (visual != null) { visual.flipX = true; visual.sortingOrder = 17; }
+                Animator flightAnimator = bird.View.GetComponentInChildren<Animator>();
+                int movingState = Animator.StringToHash("Moving");
+                if (flightAnimator != null && flightAnimator.HasState(0, movingState))
+                    flightAnimator.Play(movingState, 0, 0f);
+                bird.RemainingLifetime = Mathf.Max(1f, Vector2.Distance(origin, bird.Target.transform.position) / electricBirdAbility.ProjectileSpeed + 2f);
+                bird.Launched = true;
+            }
+            if (bird.Impacted)
+            {
+                bird.ImpactRemaining -= deltaTime;
+                if (bird.ImpactRemaining <= 0f)
+                { Destroy(bird.View); electricBirdProjectiles.RemoveAt(i); }
+                continue;
+            }
+            bird.RemainingLifetime -= deltaTime;
+            if (bird.Target == null || bird.Target.IsDead)
+                bird.Target = SelectLightningTarget();
+            if (bird.Target == null || bird.RemainingLifetime <= 0f)
+            { Destroy(bird.View); electricBirdProjectiles.RemoveAt(i); continue; }
+
+            Transform view = bird.View.transform;
+            Vector3 start = view.position;
+            Vector3 destination = bird.Target.transform.position;
+            view.position = Vector3.MoveTowards(start, destination, electricBirdAbility.ProjectileSpeed * deltaTime);
+            if (DistanceToSegment(bird.Target.transform.position, start, view.position) <=
+                electricBirdAbility.HitRadius + GetEnemyHitRadius(bird.Target))
+            {
+                bird.Target.Effects.Apply(new TimedCombatEffects.Snapshot
+                {
+                    id = ElectricBirdAbilityId,
+                    owner = ArmyType.Mar.ToString(),
+                    remaining = GetElectricBirdDuration(),
+                    damageMultiplier = 1f,
+                    attackSpeedMultiplier = 1f,
+                    movementSpeedMultiplier = 1f - electricBirdAbility.SlowPercent / 100f,
+                    incomingDamageMultiplier = electricBirdAbility.VulnerabilityMultiplier,
+                    hasTint = true,
+                    tintMultiplier = electricBirdAbility.DebuffTint
+                });
+                bird.Impacted = true;
+                Animator animator = bird.View.GetComponentInChildren<Animator>();
+                int hitState = Animator.StringToHash("ElectricBird_Hit");
+                bird.ImpactRemaining = GetAnimatorClipLength(animator, "ElectricBird_Hit", 0.2f);
+                if (animator != null && animator.HasState(0, hitState)) animator.Play(hitState, 0, 0f);
+                StateRevision++;
+            }
+        }
+    }
+
+    private Bounds GetWaterWorldBounds()
+    {
+        if (gameCamera != null && gameCamera.orthographic)
+        {
+            float halfHeight = gameCamera.orthographicSize;
+            float halfWidth = halfHeight * gameCamera.aspect;
+            Vector3 center = gameCamera.transform.position;
+            return new Bounds(center, new Vector3(halfWidth * 2f, halfHeight * 2f, 100f));
+        }
+        float left = castleTarget != null ? castleTarget.position.x - 2f : -10f;
+        float right = enemySpawner != null ? enemySpawner.position.x + 2f : 10f;
+        return new Bounds(new Vector3((left + right) * 0.5f, 0f, 0f), new Vector3(right - left, 20f, 100f));
+    }
+
+    private static float DistanceToSegment(Vector3 point, Vector3 start, Vector3 end)
+    {
+        Vector2 segment = (Vector2)(end - start);
+        float length = segment.sqrMagnitude;
+        float t = length > 0f ? Mathf.Clamp01(Vector2.Dot((Vector2)(point - start), segment) / length) : 0f;
+        return Vector2.Distance(point, (Vector2)start + segment * t);
+    }
+
+    private static float GetEnemyHitRadius(SkeletonEnemy enemy)
+    {
+        SpriteRenderer renderer = enemy != null ? enemy.GetComponentInChildren<SpriteRenderer>() : null;
+        return renderer != null ? Mathf.Max(renderer.bounds.extents.x, renderer.bounds.extents.y) : 0.2f;
+    }
+
+    private static float GetAnimatorClipLength(Animator animator, string clipName, float fallback)
+    {
+        if (animator == null || animator.runtimeAnimatorController == null) return fallback;
+        foreach (AnimationClip clip in animator.runtimeAnimatorController.animationClips)
+            if (clip != null && clip.name == clipName) return Mathf.Max(0.05f, clip.length);
+        return fallback;
     }
 
     private static void SetProjectileVisualDirection(Transform visual, Vector3 direction)
@@ -2196,6 +2453,7 @@ public sealed class TriunviratoGame : MonoBehaviour
                 finalDamageDealt[army, category] = damageDealt[army, category];
         RemoveActiveClone();
         ClearKnightAllies();
+        ClearWaterProjectiles();
         cloneSpawnPending = false;
         cloneSpawnRemaining = 0f;
         if (defenders != null)
@@ -2217,6 +2475,7 @@ public sealed class TriunviratoGame : MonoBehaviour
         cloneSpawnRemaining = 0f;
         RemoveActiveClone();
         ClearKnightAllies();
+        ClearWaterProjectiles();
         if (defenders != null)
             foreach (Defender defender in defenders) defender?.Effects?.ClearAll();
         if (projectileSprite != null)

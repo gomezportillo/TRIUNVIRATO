@@ -209,6 +209,19 @@ public sealed class LocalControlServer : MonoBehaviour
         public float warBlessingCooldownDuration;
         public bool warBlessingCanActivateAire;
         public bool warBlessingCanActivateMar;
+        public string waterTornadoAbilityName;
+        public string waterTornadoAbilityDescription;
+        public float waterTornadoDamage;
+        public float waterTornadoPushDistance;
+        public float waterTornadoCooldownRemaining;
+        public float waterTornadoCooldownDuration;
+        public bool waterTornadoCanActivate;
+        public string electricBirdAbilityName;
+        public string electricBirdAbilityDescription;
+        public float electricBirdDuration;
+        public float electricBirdCooldownRemaining;
+        public float electricBirdCooldownDuration;
+        public bool electricBirdCanActivate;
         public UpgradeOption[] upgradeOptions;
     }
 
@@ -1112,6 +1125,19 @@ public sealed class LocalControlServer : MonoBehaviour
             warBlessingCooldownDuration = game != null ? game.GetWarBlessingCooldown() : 0f,
             warBlessingCanActivateAire = canControl && game != null && game.CanActivateWarBlessing(ArmyType.Aire, session != null && session.Developer),
             warBlessingCanActivateMar = canControl && game != null && game.CanActivateWarBlessing(ArmyType.Mar, session != null && session.Developer),
+            waterTornadoAbilityName = game != null ? game.GetWaterTornadoName() : "Huracán imparable",
+            waterTornadoAbilityDescription = game != null ? game.GetWaterTornadoDescription() : string.Empty,
+            waterTornadoDamage = game != null ? game.GetWaterTornadoDamage() : 0f,
+            waterTornadoPushDistance = game != null ? game.GetWaterTornadoPushDistance() : 0f,
+            waterTornadoCooldownRemaining = game != null ? game.GetWaterTornadoCooldownRemaining() : 0f,
+            waterTornadoCooldownDuration = game != null ? game.GetWaterTornadoCooldown() : 0f,
+            waterTornadoCanActivate = canControl && game != null && game.CanActivateWaterTornado(session != null && session.Developer),
+            electricBirdAbilityName = game != null ? game.GetElectricBirdName() : "Ave eléctrica",
+            electricBirdAbilityDescription = game != null ? game.GetElectricBirdDescription() : string.Empty,
+            electricBirdDuration = game != null ? game.GetElectricBirdDuration() : 0f,
+            electricBirdCooldownRemaining = game != null ? game.GetElectricBirdCooldownRemaining() : 0f,
+            electricBirdCooldownDuration = game != null ? game.GetElectricBirdCooldown() : 0f,
+            electricBirdCanActivate = canControl && game != null && game.CanActivateElectricBird(session != null && session.Developer),
             level = game != null ? game.GetLevel(army) : 1,
             experience = game != null ? game.GetExperience(army) : 0f,
             experienceNeeded = game != null ? game.GetExperienceNeeded(army) : 0f,

@@ -28,6 +28,9 @@ public sealed class SkeletonEnemy : MonoBehaviour
     private float idleRemaining;
     private float deathFallbackTimer;
     private float rootedUntil;
+    private float knockbackTargetX;
+    private float knockbackSpeed;
+    private bool isBeingKnockedBack;
     private float animationSpeedBeforeRoot = 1f;
     private bool isRooted;
     private TimedCombatEffects combatEffects;
@@ -38,6 +41,7 @@ public sealed class SkeletonEnemy : MonoBehaviour
     public float CurrentHealth => currentHealth;
     public float MaximumHealth { get; private set; }
     public TimedCombatEffects Effects => combatEffects;
+    public bool IsRooted => isRooted || Time.time < rootedUntil;
 
     internal void Initialize(EnemyConfig enemyConfig, TriunviratoGame owner, int wave, bool boss)
     {
@@ -77,6 +81,7 @@ public sealed class SkeletonEnemy : MonoBehaviour
         {
             isDead = true;
             isTakingHit = false;
+            isBeingKnockedBack = false;
             isRooted = false;
             rootedUntil = 0f;
             combatEffects?.ClearAll();
@@ -102,6 +107,17 @@ public sealed class SkeletonEnemy : MonoBehaviour
         if (isDead || duration <= 0f)
             return;
         rootedUntil = Mathf.Max(rootedUntil, Time.time + duration);
+    }
+
+    /// <summary>Moves an enemy by a bounded horizontal impulse unless zombie grasp currently owns its movement.</summary>
+    internal bool TryApplyKnockback(float signedDistance, float speed, float minimumX, float maximumX)
+    {
+        if (isDead || IsRooted || Mathf.Abs(signedDistance) <= 0.001f || speed <= 0f) return false;
+        knockbackTargetX = Mathf.Clamp(transform.position.x + signedDistance, minimumX, maximumX);
+        if (Mathf.Abs(knockbackTargetX - transform.position.x) <= 0.001f) return false;
+        knockbackSpeed = speed;
+        isBeingKnockedBack = true;
+        return true;
     }
 
     /// <summary>Moves toward the castle and returns true after the death animation has finished.</summary>
@@ -145,6 +161,15 @@ public sealed class SkeletonEnemy : MonoBehaviour
             isTakingHit = false;
             if (hasReachedCastle)
                 PlayState(AttackState, attackAnimationSpeed);
+        }
+
+        if (isBeingKnockedBack)
+        {
+            float nextX = Mathf.MoveTowards(transform.position.x, knockbackTargetX, knockbackSpeed * deltaTime);
+            transform.position = new Vector3(nextX, transform.position.y, transform.position.z);
+            PlayState(IdleState, 1f);
+            if (Mathf.Abs(nextX - knockbackTargetX) <= 0.001f) isBeingKnockedBack = false;
+            return false;
         }
 
         if (knightTarget != null && !knightTarget.IsDead &&

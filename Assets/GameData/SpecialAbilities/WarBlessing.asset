@@ -17,7 +17,7 @@ MonoBehaviour:
   cooldown: 30
   effectController: {fileID: 0}
   effectScale: 1
-  activationSound: {fileID: 0}
+  activationSound: {fileID: 8300000, guid: 1f5bf068db5a3074fa6728548b577a1d, type: 3}
   activationSoundPlayCount: 1
   duration: 5
   bonusAttackSpeedPercent: 100

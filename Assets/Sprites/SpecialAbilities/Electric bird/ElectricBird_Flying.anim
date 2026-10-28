@@ -6,7 +6,7 @@ AnimationClip:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: ElectricBird_Moving
+  m_Name: ElectricBird_Flying
   serializedVersion: 8
   m_Legacy: 0
   m_Compressed: 0

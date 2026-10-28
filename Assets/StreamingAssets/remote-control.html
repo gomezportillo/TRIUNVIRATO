@@ -149,7 +149,21 @@
       const names = { tierra: 'Tierra', aire: 'Aire', mar: 'Mar' };
       const colors = { tierra: 'green', aire: 'red', mar: 'blue' };
       const icons = { tierra: '🟢', aire: '🔴', mar: '🔵' };
+      const legacyAbilityIcons = { tierra: '🧟', aire: '☄️', mar: '⚡' };
       const numberFormat = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 2 });
+      const specialAbilityDefinitions = {
+        aire: [
+          { id: 'fire_rage', icon: '🌋', name: 'fireRageAbilityName', fallbackName: 'Furia ígnea', description: 'fireRageAbilityDescription', remaining: 'fireRageCooldownRemaining', duration: 'fireRageCooldownDuration', canActivate: 'fireRageCanActivate', detail: a => `Daño adicional: +${numberFormat.format(a.fireRageDamageBonusPercent || 0)} % · Duración: ${numberFormat.format(a.fireRageDuration || 0)} s` },
+          { id: 'hero_clone', icon: '👥', name: 'cloneAbilityName', fallbackName: 'Clon', description: 'cloneAbilityDescription', remaining: 'cloneCooldownRemaining', duration: 'cloneCooldownDuration', canActivate: 'cloneCanActivate', detail: a => `Duración: ${numberFormat.format(a.cloneDuration || 0)} s` }
+        ],
+        tierra: [
+          { id: 'knight_summon', icon: '⚔️', name: 'knightSummonAbilityName', fallbackName: 'Invocar caballero', description: 'knightSummonAbilityDescription', remaining: 'knightSummonCooldownRemaining', duration: 'knightSummonCooldownDuration', canActivate: 'knightSummonCanActivate', detail: () => 'Invoca un caballero aliado que combate automáticamente.' }
+        ],
+        mar: [
+          { id: 'water_tornado', icon: '🌪️', name: 'waterTornadoAbilityName', fallbackName: 'Huracán imparable', description: 'waterTornadoAbilityDescription', remaining: 'waterTornadoCooldownRemaining', duration: 'waterTornadoCooldownDuration', canActivate: 'waterTornadoCanActivate', detail: a => `Daño: ${numberFormat.format(a.waterTornadoDamage || 0)} · Empuje hacia la izquierda: ${numberFormat.format(Math.abs(a.waterTornadoPushDistance || 0))}` },
+          { id: 'electric_bird', icon: '🦅', name: 'electricBirdAbilityName', fallbackName: 'Ave eléctrica', description: 'electricBirdAbilityDescription', remaining: 'electricBirdCooldownRemaining', duration: 'electricBirdCooldownDuration', canActivate: 'electricBirdCanActivate', detail: a => `Ralentiza y duplica el daño recibido durante ${numberFormat.format(a.electricBirdDuration || 0)} s.` }
+        ]
+      };
       const tokenKey = 'triunvirato-session-token';
       let token = localStorage.getItem(tokenKey);
       if (!token) {
@@ -306,7 +320,8 @@
       }
       function createSpecialAbilityCard(army) {
         const card = document.createElement('article'); card.className = 'upgrade-card special-card';
-        const title = document.createElement('h3'); title.textContent = 'Habilidad especial';
+        const icon = legacyAbilityIcons[army.army] || '✨';
+        const title = document.createElement('h3'); title.textContent = `${icon} Habilidad especial`;
         const name = document.createElement('p'); name.className = 'description'; name.textContent = army.specialAbilityName || 'Habilidad especial';
         if (army.specialAbilityDescription) {
           const description = document.createElement('p'); description.className = 'description'; description.textContent = army.specialAbilityDescription;
@@ -333,30 +348,43 @@
         const actionKey = `special:${selectedPanel}:legacy`;
         const pending = pendingActions.has(actionKey);
         const button = document.createElement('button');
-        button.textContent = remaining > 0 && !developerMode ? `${army.specialAbilityName} · ${Math.ceil(remaining)} s` : army.specialAbilityName;
+        button.textContent = remaining > 0 && !developerMode ? `${icon} ${army.specialAbilityName} · ${Math.ceil(remaining)} s` : `${icon} ${army.specialAbilityName}`;
         button.disabled = pending || !connected || !army.canControl || (!army.specialCanActivate && !developerMode);
         button.addEventListener('click', () => request({ type: 'activateSpecial', army: selectedPanel }, actionKey));
         card.append(status, button);
         return card;
       }
-      function createConfiguredAbilityCard(army, abilityId, icon, name, description, cooldownRemaining, cooldownDuration, detail, canActivate) {
+      function createConfiguredAbilityCard(army, ability) {
         const card = document.createElement('article'); card.className = 'upgrade-card special-card';
-        const title = document.createElement('h3'); title.textContent = `${icon} ${name}`;
-        const desc = document.createElement('p'); desc.className = 'description'; desc.textContent = description || '';
-        const values = document.createElement('p'); values.className = 'description'; values.textContent = detail;
-        const remaining = Math.max(0, cooldownRemaining || 0);
+        const title = document.createElement('h3'); title.textContent = `${ability.icon} ${ability.name || 'Habilidad'}`;
+        const desc = document.createElement('p'); desc.className = 'description'; desc.textContent = ability.description || '';
+        const values = document.createElement('p'); values.className = 'description'; values.textContent = ability.detail;
+        const remaining = Math.max(0, ability.cooldownRemaining || 0);
         const cooldown = document.createElement('p'); cooldown.className = 'muted';
-        cooldown.textContent = `Cooldown: ${numberFormat.format(cooldownDuration || 0)} s`;
+        cooldown.textContent = `Cooldown: ${numberFormat.format(ability.cooldownDuration || 0)} s`;
         const status = document.createElement('p'); status.className = 'muted';
         status.textContent = developerMode && remaining > 0 ? `Modo desarrollador · ignora el cooldown (${Math.ceil(remaining)} s restantes)` :
-          remaining > 0 ? `Disponible en ${numberFormat.format(remaining)} s` : developerMode || canActivate ? 'Lista para activar' : 'No disponible durante esta partida';
-        const actionKey = `special:${selectedPanel}:${abilityId}`;
+          remaining > 0 ? `Disponible en ${numberFormat.format(remaining)} s` : developerMode || ability.canActivate ? 'Lista para activar' : 'No disponible durante esta partida';
+        const actionKey = `special:${selectedPanel}:${ability.id}`;
         const button = document.createElement('button');
-        button.textContent = remaining > 0 && !developerMode ? `${icon} ${name} · ${Math.ceil(remaining)} s` : `${icon} ${name}`;
-        button.disabled = pendingActions.has(actionKey) || !connected || !army.canControl || (!canActivate && !developerMode);
-        button.addEventListener('click', () => request({ type: 'activateSpecial', army: selectedPanel, abilityId }, actionKey));
+        button.textContent = remaining > 0 && !developerMode ? `${ability.icon} ${ability.name} · ${Math.ceil(remaining)} s` : `${ability.icon} ${ability.name}`;
+        button.disabled = pendingActions.has(actionKey) || !connected || !army.canControl || (!ability.canActivate && !developerMode);
+        button.addEventListener('click', () => request({ type: 'activateSpecial', army: selectedPanel, abilityId: ability.id }, actionKey));
         card.append(title, desc, values, cooldown, status, button);
         return card;
+      }
+
+      function abilityCard(army, definition) {
+        return {
+          id: definition.id,
+          icon: definition.icon,
+          name: army[definition.name] || definition.fallbackName,
+          description: army[definition.description] || '',
+          cooldownRemaining: army[definition.remaining] || 0,
+          cooldownDuration: army[definition.duration] || 0,
+          detail: definition.detail(army),
+          canActivate: !!army[definition.canActivate]
+        };
       }
       function createWarBlessingCard(army) {
         const card = document.createElement('article'); card.className = 'upgrade-card special-card';
@@ -390,19 +418,9 @@
       function createAttacksPanel(army) {
         const panel = document.createDocumentFragment();
         panel.append(createSpecialAbilityCard(army));
-        if (army.army === 'aire') {
-          panel.append(createConfiguredAbilityCard(army, 'fire_rage', '🌋', army.fireRageAbilityName,
-            army.fireRageAbilityDescription, army.fireRageCooldownRemaining, army.fireRageCooldownDuration,
-            `Daño adicional: +${numberFormat.format(army.fireRageDamageBonusPercent)} % · Duración: ${numberFormat.format(army.fireRageDuration)} s`,
-            army.fireRageCanActivate));
-          panel.append(createConfiguredAbilityCard(army, 'hero_clone', '👥', army.cloneAbilityName,
-            army.cloneAbilityDescription, army.cloneCooldownRemaining, army.cloneCooldownDuration,
-            `Duración: ${numberFormat.format(army.cloneDuration)} s`, army.cloneCanActivate));
-        }
+        for (const definition of specialAbilityDefinitions[army.army] || [])
+          panel.append(createConfiguredAbilityCard(army, abilityCard(army, definition)));
         if (army.army === 'tierra') {
-          panel.append(createConfiguredAbilityCard(army, 'knight_summon', '⚔️', army.knightSummonAbilityName,
-            army.knightSummonAbilityDescription, army.knightSummonCooldownRemaining, army.knightSummonCooldownDuration,
-            'Invoca un caballero aliado que combate automáticamente.', army.knightSummonCanActivate));
           panel.append(createWarBlessingCard(army));
         }
         return panel;

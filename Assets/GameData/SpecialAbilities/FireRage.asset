@@ -12,12 +12,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f14e0a3b55bb4f71a987e60df7521a1b, type: 3}
   m_Name: FireRage
   m_EditorClassIdentifier: 
-  abilityName: Furia ígnea
-  description: Aumenta el daño del héroe Aire durante un tiempo limitado.
+  abilityName: "Furia \xEDgnea"
+  description: "Aumenta el da\xF1o del h\xE9roe Aire durante un tiempo limitado."
   cooldown: 30
   effectController: {fileID: 0}
   effectScale: 1
-  activationSound: {fileID: 0}
+  activationSound: {fileID: 8300000, guid: 35aa0cc4e5ff0504f807d75b2f692b0b, type: 3}
   activationSoundPlayCount: 1
   bonusDamagePercent: 100
   duration: 5
