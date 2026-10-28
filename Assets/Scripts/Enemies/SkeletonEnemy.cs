@@ -32,12 +32,14 @@ public sealed class SkeletonEnemy : MonoBehaviour
     private float rootedUntil;
     private float animationSpeedBeforeRoot = 1f;
     private bool isRooted;
+    private TimedCombatEffects combatEffects;
 
     public bool IsDead => isDead;
     public bool IsBoss => isBoss;
     public bool RewardGranted => rewardGranted;
     public float CurrentHealth => currentHealth;
     public float MaximumHealth { get; private set; }
+    public TimedCombatEffects Effects => combatEffects;
 
     internal void Initialize(EnemyConfig enemyConfig, TriunviratoGame owner, int wave, bool boss)
     {
@@ -46,6 +48,8 @@ public sealed class SkeletonEnemy : MonoBehaviour
         isBoss = boss;
         animator = GetComponent<Animator>();
         actorRenderer = GetComponentInChildren<SpriteRenderer>();
+        combatEffects = GetComponent<TimedCombatEffects>();
+        if (combatEffects == null) combatEffects = gameObject.AddComponent<TimedCombatEffects>();
         currentHealth = MaximumHealth = config.GetMaximumHealth(wave, isBoss);
         movementSpeed = config.GetMovementSpeed(wave, isBoss);
         CreateHealthBar();
@@ -135,7 +139,7 @@ public sealed class SkeletonEnemy : MonoBehaviour
         if (isDead || amount <= 0f)
             return 0f;
 
-        float appliedDamage = Mathf.Min(currentHealth, amount);
+        float appliedDamage = Mathf.Min(currentHealth, amount * (combatEffects != null ? combatEffects.IncomingDamageMultiplier : 1f));
         currentHealth = Mathf.Max(0f, currentHealth - appliedDamage);
         if (currentHealth <= 0f)
         {
@@ -143,6 +147,7 @@ public sealed class SkeletonEnemy : MonoBehaviour
             isTakingHit = false;
             isRooted = false;
             rootedUntil = 0f;
+            combatEffects?.ClearAll();
             PlayState(DeathState, 1f);
             deathFallbackTimer = config.DeathAnimationFallbackSeconds;
             GameSoundManager.Instance?.PlaySkeletonDeath();
@@ -167,7 +172,7 @@ public sealed class SkeletonEnemy : MonoBehaviour
     }
 
     /// <summary>Moves toward the castle and returns true after the death animation has finished.</summary>
-    internal bool Tick(float deltaTime, Vector3 castlePosition)
+    internal bool Tick(float deltaTime, Vector3 castlePosition, KnightAlly knightTarget = null)
     {
         if (isDead)
         {
@@ -218,6 +223,22 @@ public sealed class SkeletonEnemy : MonoBehaviour
                 PlayState(AttackState, attackAnimationSpeed);
         }
 
+        if (knightTarget != null && !knightTarget.IsDead &&
+            Vector2.Distance(transform.position, knightTarget.transform.position) <= knightTarget.EnemyEngagementRange)
+        {
+            hasReachedCastle = false;
+            castleAttackTimer -= deltaTime;
+            if (castleAttackTimer <= 0f)
+            {
+                castleAttackTimer = config.CastleAttackInterval;
+                PlayState(AttackState, attackAnimationSpeed);
+                knightTarget.ApplyDamage(config.GetCastleDamage(isBoss));
+            }
+            else if (animator != null && animator.GetCurrentAnimatorStateInfo(0).shortNameHash != AttackState)
+                PlayState(AttackState, attackAnimationSpeed);
+            return false;
+        }
+
         if (idleRemaining > 0f)
         {
             idleRemaining -= deltaTime;
@@ -231,7 +252,8 @@ public sealed class SkeletonEnemy : MonoBehaviour
             return false;
         }
 
-        transform.position = Vector3.MoveTowards(transform.position, castlePosition, movementSpeed * deltaTime);
+        float effectiveMovementSpeed = movementSpeed * (combatEffects != null ? combatEffects.MovementSpeedMultiplier : 1f);
+        transform.position = Vector3.MoveTowards(transform.position, castlePosition, effectiveMovementSpeed * deltaTime);
         if (Vector2.Distance(transform.position, castlePosition) <= 0.2f)
         {
             hasReachedCastle = true;

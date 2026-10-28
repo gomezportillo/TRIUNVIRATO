@@ -1,0 +1,34 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 98a00bd462b24a49bd2389b68f17001a, type: 3}
+  m_Name: KnightSummon
+  m_EditorClassIdentifier: 
+  abilityName: Invocar caballero
+  description: Invoca un caballero aliado que avanza y combate a los enemigos.
+  cooldown: 30
+  effectController: {fileID: 0}
+  effectScale: 1
+  activationSound: {fileID: 0}
+  activationSoundPlayCount: 1
+  knightPrefab: {fileID: 5571139587200798333, guid: 5e8168221a84d1a45b0286e1b911310d, type: 3}
+  baseHealth: 160
+  baseDamage: 18
+  attackInterval: 1.25
+  attackRange: 0.55
+  movementSpeed: 1.25
+  enemyEngagementRange: 0.65
+  healthAndDamageIncreasePerLevel: 0.25
+  cooldownReductionPerLevel: 3
+  minimumCooldown: 5
+  spawnOffset: {x: 0.55, y: 0}
+  visualScale: 0.45
+  deathAnimationFallback: 1

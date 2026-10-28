@@ -1425,6 +1425,10 @@ MonoBehaviour:
   zombieGraspAbility: {fileID: 11400000, guid: 4a7a84df65234ef0aaf27276c8f5b020, type: 2}
   meteorShowerAbility: {fileID: 11400000, guid: 4a7a84df65234ef0aaf27276c8f5b021, type: 2}
   lightningStormAbility: {fileID: 11400000, guid: 4a7a84df65234ef0aaf27276c8f5b022, type: 2}
+  fireRageAbility: {fileID: 11400000, guid: 9304a5c928bb4d208843932bb6ae162b, type: 2}
+  heroCloneAbility: {fileID: 11400000, guid: 63de5aab107646d9b9c79387612f4120, type: 2}
+  knightSummonAbility: {fileID: 11400000, guid: 93bb7d55d48b403385323c6d5d59ced1, type: 2}
+  warBlessingAbility: {fileID: 11400000, guid: 31eb1046c8364ed88e72c4649625a23b, type: 2}
   meteorShowerArea: {fileID: 1065088}
   tierraExperienceToLevel: 100
   aireExperienceToLevel: 90
@@ -2342,11 +2346,11 @@ RectTransform:
   - {fileID: 880000231}
   m_Father: {fileID: 880000001}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 1, y: 0}
-  m_AnchorMax: {x: 1, y: 0}
-  m_AnchoredPosition: {x: -1845, y: 50}
+  m_AnchorMin: {x: 0, y: 1}
+  m_AnchorMax: {x: 0, y: 1}
+  m_AnchoredPosition: {x: 70, y: -70}
   m_SizeDelta: {x: 440, y: 200}
-  m_Pivot: {x: 0, y: 0}
+  m_Pivot: {x: 0, y: 1}
 --- !u!222 &880000022
 CanvasRenderer:
   m_ObjectHideFlags: 0
@@ -2734,7 +2738,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 0, y: 0}
-  m_AnchoredPosition: {x: 30, y: 44.79999}
+  m_AnchoredPosition: {x: 30, y: 44.799988}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0, y: 0}
 --- !u!222 &880000232
@@ -5307,7 +5311,7 @@ Transform:
   m_GameObject: {fileID: 1166278731}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 2.88, y: 3.27, z: 0}
+  m_LocalPosition: {x: 2.79, y: 2.99, z: 0}
   m_LocalScale: {x: 0.2, y: 0.2, z: 0.2}
   m_ConstrainProportionsScale: 1
   m_Children:
@@ -5492,9 +5496,9 @@ RectTransform:
   - {fileID: 1988212077}
   m_Father: {fileID: 880000001}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 1}
-  m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 75, y: -50}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 0, y: 0}
+  m_AnchoredPosition: {x: 80, y: 180}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0, y: 1}
 --- !u!222 &1273085759

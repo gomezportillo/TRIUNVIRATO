@@ -76,6 +76,8 @@ public sealed class LocalControlServer : MonoBehaviour
 #pragma warning disable 0649 // Unity's JsonUtility fills these fields from the incoming JSON.
         public string type;
         public string army;
+        public string abilityId;
+        public string targetArmy;
         public string playerName;
         public string choice;
         public string offerToken;
@@ -140,6 +142,7 @@ public sealed class LocalControlServer : MonoBehaviour
         public float damageByHero;
         public float damageByTower;
         public float damageBySpecialAbility;
+        public float damageByClone;
         public bool restartRequested;
         public bool hasUpgradeOffer;
         public bool hasBossOffer;
@@ -180,6 +183,32 @@ public sealed class LocalControlServer : MonoBehaviour
         public float specialDamagePerEffect;
         public float specialNormalDuration;
         public float specialBossDuration;
+        public string fireRageAbilityName;
+        public string fireRageAbilityDescription;
+        public float fireRageDamageBonusPercent;
+        public float fireRageDuration;
+        public float fireRageCooldownRemaining;
+        public float fireRageCooldownDuration;
+        public bool fireRageCanActivate;
+        public string cloneAbilityName;
+        public string cloneAbilityDescription;
+        public float cloneDuration;
+        public float cloneCooldownRemaining;
+        public float cloneCooldownDuration;
+        public bool cloneCanActivate;
+        public string knightSummonAbilityName;
+        public string knightSummonAbilityDescription;
+        public float knightSummonCooldownRemaining;
+        public float knightSummonCooldownDuration;
+        public bool knightSummonCanActivate;
+        public string warBlessingAbilityName;
+        public string warBlessingAbilityDescription;
+        public float warBlessingBonusPercent;
+        public float warBlessingDuration;
+        public float warBlessingCooldownRemaining;
+        public float warBlessingCooldownDuration;
+        public bool warBlessingCanActivateAire;
+        public bool warBlessingCanActivateMar;
         public UpgradeOption[] upgradeOptions;
     }
 
@@ -600,7 +629,9 @@ public sealed class LocalControlServer : MonoBehaviour
                         response.message = "La partida no está disponible.";
                     else
                     {
-                        response.success = game.TryActivateSpecial(army, out response.message);
+                        response.success = string.IsNullOrEmpty(command.abilityId)
+                            ? game.TryActivateSpecial(army, out response.message, session.Developer)
+                            : game.TryActivateSpecial(army, command.abilityId, command.targetArmy, out response.message, session.Developer);
                         stateChanged = response.success;
                     }
                 }
@@ -1050,11 +1081,37 @@ public sealed class LocalControlServer : MonoBehaviour
             specialAbilityDescription = game != null ? game.GetSpecialAbilityDescription(army) : string.Empty,
             specialCooldownRemaining = game != null ? game.GetSpecialAbilityCooldownRemaining(army) : 0f,
             specialCooldownDuration = game != null ? game.GetSpecialAbilityCooldown(army) : 0f,
-            specialCanActivate = canControl && game != null && game.CanActivateSpecial(army),
+            specialCanActivate = canControl && game != null && game.CanActivateSpecial(army, session != null && session.Developer),
             specialEffectCount = game != null ? game.GetSpecialAbilityEffectCount(army) : 0,
             specialDamagePerEffect = game != null ? game.GetSpecialAbilityDamagePerEffect(army) : 0f,
             specialNormalDuration = game != null ? game.GetSpecialAbilityNormalDuration(army) : 0f,
             specialBossDuration = game != null ? game.GetSpecialAbilityBossDuration(army) : 0f,
+            fireRageAbilityName = game != null ? game.GetFireRageAbilityName() : "Furia ígnea",
+            fireRageAbilityDescription = game != null ? game.GetFireRageAbilityDescription() : string.Empty,
+            fireRageDamageBonusPercent = game != null ? game.GetFireRageDamageBonusPercent() : 0f,
+            fireRageDuration = game != null ? game.GetFireRageDuration() : 0f,
+            fireRageCooldownRemaining = game != null ? game.GetFireRageCooldownRemaining() : 0f,
+            fireRageCooldownDuration = game != null ? game.GetFireRageCooldown() : 0f,
+            fireRageCanActivate = canControl && game != null && game.CanActivateFireRage(session != null && session.Developer),
+            cloneAbilityName = game != null ? game.GetCloneAbilityName() : "Clon",
+            cloneAbilityDescription = game != null ? game.GetCloneAbilityDescription() : string.Empty,
+            cloneDuration = game != null ? game.GetCloneDuration() : 0f,
+            cloneCooldownRemaining = game != null ? game.GetCloneCooldownRemaining() : 0f,
+            cloneCooldownDuration = game != null ? game.GetCloneCooldown() : 0f,
+            cloneCanActivate = canControl && game != null && game.CanActivateClone(session != null && session.Developer),
+            knightSummonAbilityName = game != null ? game.GetKnightSummonName() : "Invocar caballero",
+            knightSummonAbilityDescription = game != null ? game.GetKnightSummonDescription() : string.Empty,
+            knightSummonCooldownRemaining = game != null ? game.GetKnightSummonCooldownRemaining() : 0f,
+            knightSummonCooldownDuration = game != null ? game.GetKnightSummonCooldown() : 0f,
+            knightSummonCanActivate = canControl && game != null && game.CanActivateKnightSummon(session != null && session.Developer),
+            warBlessingAbilityName = game != null ? game.GetWarBlessingName() : "Acelerar aliado",
+            warBlessingAbilityDescription = game != null ? game.GetWarBlessingDescription() : string.Empty,
+            warBlessingBonusPercent = game != null ? game.GetWarBlessingBonusPercent() : 0f,
+            warBlessingDuration = game != null ? game.GetWarBlessingDuration() : 0f,
+            warBlessingCooldownRemaining = game != null ? game.GetWarBlessingCooldownRemaining() : 0f,
+            warBlessingCooldownDuration = game != null ? game.GetWarBlessingCooldown() : 0f,
+            warBlessingCanActivateAire = canControl && game != null && game.CanActivateWarBlessing(ArmyType.Aire, session != null && session.Developer),
+            warBlessingCanActivateMar = canControl && game != null && game.CanActivateWarBlessing(ArmyType.Mar, session != null && session.Developer),
             level = game != null ? game.GetLevel(army) : 1,
             experience = game != null ? game.GetExperience(army) : 0f,
             experienceNeeded = game != null ? game.GetExperienceNeeded(army) : 0f,
@@ -1065,6 +1122,7 @@ public sealed class LocalControlServer : MonoBehaviour
             damageByHero = game != null ? game.GetDamageByHero(army) : 0f,
             damageByTower = game != null ? game.GetDamageByTower(army) : 0f,
             damageBySpecialAbility = game != null ? game.GetDamageBySpecialAbility(army) : 0f,
+            damageByClone = game != null ? game.GetDamageByClone(army) : 0f,
             restartRequested = restartRequestedByArmy[(int)army],
             hasUpgradeOffer = game != null && game.GetUpgradeOffers(army).Length > 0,
             hasBossOffer = game != null && game.GetUpgradeOffers(army).Length > 0 && game.GetUpgradeOffers(army)[0].stars >= 3,

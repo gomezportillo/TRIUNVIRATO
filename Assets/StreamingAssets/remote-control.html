@@ -74,10 +74,12 @@
     .upgrade-card[data-category="towers"] { border-color: #f87171; }
     .upgrade-card[data-category="hero"] { border-color: #60a5fa; }
     .upgrade-card[data-category="specialabilities"] { border-color: #ff69b4; }
+    .target-button-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
     .special-card { border-color: var(--army); }
     .special-card button { color: #07111f; background: var(--army); }
     .upgrade-timer { font-size: 1.15rem; font-weight: 800; }
-    .damage-summary { width: 100%; border-collapse: collapse; margin: 12px 0 18px; font-size: .92rem; }
+    .damage-summary-wrap { max-width: 100%; overflow-x: auto; margin: 12px 0 18px; }
+    .damage-summary { width: 100%; min-width: 520px; border-collapse: collapse; font-size: .92rem; }
     .damage-summary th, .damage-summary td { padding: 10px 6px; border-bottom: 1px solid #334155; text-align: right; }
     .damage-summary th:first-child, .damage-summary td:first-child { text-align: left; }
     .final-screen { border: 1px solid #475569; border-radius: 16px; padding: 16px; background: #121c2c; }
@@ -276,10 +278,12 @@
         const note = document.createElement('p'); note.className = 'muted';
         note.textContent = 'Daño que redujo la vida de los enemigos; el exceso sobre su vida restante no se cuenta.';
         const table = document.createElement('table'); table.className = 'damage-summary';
-        table.innerHTML = '<thead><tr><th>Ejército</th><th>Héroe</th><th>Torres</th><th>Habilidades</th><th>Total</th></tr></thead>';
+        table.innerHTML = '<thead><tr><th>Ejército</th><th>Héroe</th><th>Clon</th><th>Torres</th><th>Habilidades</th><th>Total</th></tr></thead>';
+        const tableWrap = document.createElement('div'); tableWrap.className = 'damage-summary-wrap'; tableWrap.tabIndex = 0;
+        tableWrap.setAttribute('aria-label', 'Resumen de daño; desplázate horizontalmente para ver todas las columnas');
         const body = document.createElement('tbody');
         for (const army of state.armies || []) {
-          const values = [army.damageByHero || 0, army.damageByTower || 0, army.damageBySpecialAbility || 0];
+          const values = [army.damageByHero || 0, army.damageByClone || 0, army.damageByTower || 0, army.damageBySpecialAbility || 0];
           const row = document.createElement('tr');
           const nameCell = document.createElement('th'); nameCell.scope = 'row'; nameCell.textContent = armyLabel(army.army); row.append(nameCell);
           for (const value of [...values.map(v => numberFormat.format(v)), numberFormat.format(values.reduce((a, b) => a + b, 0))]) {
@@ -287,7 +291,7 @@
           }
           body.append(row);
         }
-        table.append(body);
+        table.append(body); tableWrap.append(table);
         const votes = document.createElement('p'); votes.className = 'final-votes';
         votes.textContent = `Reinicios confirmados: ${state.restartRequestCount || 0} / 3`;
         const ownArmy = state.armies.find(item => item.army === state.selectedArmy);
@@ -297,7 +301,7 @@
         button.disabled = !connected || !sessionReady || developerMode || !ownArmy || alreadyVoted || pendingActions.has('restart');
         button.addEventListener('click', () => request({ type: 'requestRestart' }, 'restart'));
         const help = document.createElement('p'); help.className = 'muted'; help.textContent = 'La partida nueva comienza cuando confirmen los tres ejércitos.';
-        screen.append(title, note, table, votes, button, help);
+        screen.append(title, note, tableWrap, votes, button, help);
         content.replaceChildren(screen);
       }
       function createSpecialAbilityCard(army) {
@@ -321,22 +325,86 @@
         }
         card.append(detail, cooldown);
         const status = document.createElement('p'); status.className = 'muted';
-        if (remaining > 0) status.textContent = `Disponible en ${numberFormat.format(remaining)} s`;
+        if (developerMode && remaining > 0) status.textContent = `Modo desarrollador · ignora el cooldown (${Math.ceil(remaining)} s restantes)`;
+        else if (remaining > 0) status.textContent = `Disponible en ${numberFormat.format(remaining)} s`;
         else if (army.specialCanActivate) status.textContent = 'Lista para activar';
         else status.textContent = 'No hay enemigos vivos en el mapa';
 
-        const actionKey = `special:${selectedPanel}`;
+        const actionKey = `special:${selectedPanel}:legacy`;
         const pending = pendingActions.has(actionKey);
         const button = document.createElement('button');
-        button.textContent = remaining > 0 ? `${army.specialAbilityName} · ${Math.ceil(remaining)} s` : army.specialAbilityName;
-        button.disabled = pending || !connected || !army.canControl || !army.specialCanActivate;
+        button.textContent = remaining > 0 && !developerMode ? `${army.specialAbilityName} · ${Math.ceil(remaining)} s` : army.specialAbilityName;
+        button.disabled = pending || !connected || !army.canControl || (!army.specialCanActivate && !developerMode);
         button.addEventListener('click', () => request({ type: 'activateSpecial', army: selectedPanel }, actionKey));
         card.append(status, button);
+        return card;
+      }
+      function createConfiguredAbilityCard(army, abilityId, icon, name, description, cooldownRemaining, cooldownDuration, detail, canActivate) {
+        const card = document.createElement('article'); card.className = 'upgrade-card special-card';
+        const title = document.createElement('h3'); title.textContent = `${icon} ${name}`;
+        const desc = document.createElement('p'); desc.className = 'description'; desc.textContent = description || '';
+        const values = document.createElement('p'); values.className = 'description'; values.textContent = detail;
+        const remaining = Math.max(0, cooldownRemaining || 0);
+        const cooldown = document.createElement('p'); cooldown.className = 'muted';
+        cooldown.textContent = `Cooldown: ${numberFormat.format(cooldownDuration || 0)} s`;
+        const status = document.createElement('p'); status.className = 'muted';
+        status.textContent = developerMode && remaining > 0 ? `Modo desarrollador · ignora el cooldown (${Math.ceil(remaining)} s restantes)` :
+          remaining > 0 ? `Disponible en ${numberFormat.format(remaining)} s` : developerMode || canActivate ? 'Lista para activar' : 'No disponible durante esta partida';
+        const actionKey = `special:${selectedPanel}:${abilityId}`;
+        const button = document.createElement('button');
+        button.textContent = remaining > 0 && !developerMode ? `${icon} ${name} · ${Math.ceil(remaining)} s` : `${icon} ${name}`;
+        button.disabled = pendingActions.has(actionKey) || !connected || !army.canControl || (!canActivate && !developerMode);
+        button.addEventListener('click', () => request({ type: 'activateSpecial', army: selectedPanel, abilityId }, actionKey));
+        card.append(title, desc, values, cooldown, status, button);
+        return card;
+      }
+      function createWarBlessingCard(army) {
+        const card = document.createElement('article'); card.className = 'upgrade-card special-card';
+        const title = document.createElement('h3'); title.textContent = `⚡ ${army.warBlessingAbilityName || 'Acelerar aliado'}`;
+        const desc = document.createElement('p'); desc.className = 'description'; desc.textContent = army.warBlessingAbilityDescription || '';
+        const detail = document.createElement('p'); detail.className = 'description';
+        detail.textContent = `Velocidad de ataque: +${numberFormat.format(army.warBlessingBonusPercent || 0)} % · Duración: ${numberFormat.format(army.warBlessingDuration || 0)} s`;
+        const remaining = Math.max(0, army.warBlessingCooldownRemaining || 0);
+        const cooldown = document.createElement('p'); cooldown.className = 'muted';
+        cooldown.textContent = `Cooldown compartido: ${numberFormat.format(army.warBlessingCooldownDuration || 0)} s`;
+        const status = document.createElement('p'); status.className = 'muted';
+        status.textContent = developerMode && remaining > 0 ? `Modo desarrollador · ignora el cooldown (${Math.ceil(remaining)} s restantes)` :
+          remaining > 0 ? `Disponible en ${numberFormat.format(remaining)} s` : 'Selecciona el héroe aliado';
+        const row = document.createElement('div'); row.className = 'target-button-row';
+        const actionKey = `special:${selectedPanel}:war_blessing`;
+        const pending = pendingActions.has(actionKey);
+        for (const target of [
+          { armyId: 'aire', label: 'Aire', color: 'red', can: army.warBlessingCanActivateAire },
+          { armyId: 'mar', label: 'Agua', color: 'blue', can: army.warBlessingCanActivateMar }
+        ]) {
+          const button = document.createElement('button'); button.className = target.color;
+          button.textContent = remaining > 0 && !developerMode ? `${target.label} · ${Math.ceil(remaining)} s` : target.label;
+          button.disabled = pending || !connected || !army.canControl || (!target.can && !developerMode);
+          button.addEventListener('click', () => request({ type: 'activateSpecial', army: selectedPanel,
+            abilityId: 'war_blessing', targetArmy: target.armyId }, actionKey));
+          row.append(button);
+        }
+        card.append(title, desc, detail, cooldown, status, row);
         return card;
       }
       function createAttacksPanel(army) {
         const panel = document.createDocumentFragment();
         panel.append(createSpecialAbilityCard(army));
+        if (army.army === 'aire') {
+          panel.append(createConfiguredAbilityCard(army, 'fire_rage', '🌋', army.fireRageAbilityName,
+            army.fireRageAbilityDescription, army.fireRageCooldownRemaining, army.fireRageCooldownDuration,
+            `Daño adicional: +${numberFormat.format(army.fireRageDamageBonusPercent)} % · Duración: ${numberFormat.format(army.fireRageDuration)} s`,
+            army.fireRageCanActivate));
+          panel.append(createConfiguredAbilityCard(army, 'hero_clone', '👥', army.cloneAbilityName,
+            army.cloneAbilityDescription, army.cloneCooldownRemaining, army.cloneCooldownDuration,
+            `Duración: ${numberFormat.format(army.cloneDuration)} s`, army.cloneCanActivate));
+        }
+        if (army.army === 'tierra') {
+          panel.append(createConfiguredAbilityCard(army, 'knight_summon', '⚔️', army.knightSummonAbilityName,
+            army.knightSummonAbilityDescription, army.knightSummonCooldownRemaining, army.knightSummonCooldownDuration,
+            'Invoca un caballero aliado que combate automáticamente.', army.knightSummonCanActivate));
+          panel.append(createWarBlessingCard(army));
+        }
         return panel;
       }
       function renderPanel() {

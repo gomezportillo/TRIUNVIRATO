@@ -9,9 +9,13 @@ public sealed class TriunviratoGame : MonoBehaviour
 {
     private const string NormalAttackState = "Attack_Normal";
     public enum MatchStatus { WaitingForPlayers, InProgress, Finished }
-    private enum DamageCategory { Hero = 0, Tower = 1, SpecialAbility = 2 }
+    private enum DamageCategory { Hero = 0, Tower = 1, SpecialAbility = 2, Clone = 3 }
     private const float CastleStartHealth = 100f;
     private const int SpecialAbilityStars = 3;
+    private const string FireRageAbilityId = "fire_rage";
+    private const string HeroCloneAbilityId = "hero_clone";
+    private const string KnightSummonAbilityId = "knight_summon";
+    private const string WarBlessingAbilityId = "war_blessing";
     [SerializeField] private Transform tierraHero;
     [SerializeField] private Transform aireHero;
     [SerializeField] private Transform marHero;
@@ -27,9 +31,14 @@ public sealed class TriunviratoGame : MonoBehaviour
     [SerializeField] private ZombieGraspAbilityConfig zombieGraspAbility;
     [SerializeField] private MeteorShowerAbilityConfig meteorShowerAbility;
     [SerializeField] private LightningStormAbilityConfig lightningStormAbility;
+    [SerializeField] private FireRageAbilityConfig fireRageAbility;
+    [SerializeField] private HeroCloneAbilityConfig heroCloneAbility;
+    [SerializeField] private KnightSummonAbilityConfig knightSummonAbility;
+    [SerializeField] private WarBlessingAbilityConfig warBlessingAbility;
     [SerializeField, Tooltip("Si se asigna, los límites del SpriteRenderer delimitan dónde caen los meteoritos.")]
     private SpriteRenderer meteorShowerArea;
     private readonly List<SkeletonEnemy> enemies = new List<SkeletonEnemy>();
+    private readonly List<KnightAlly> knightAllies = new List<KnightAlly>();
     private readonly List<Projectile> projectiles = new List<Projectile>();
     private readonly List<FloatingDamage> floatingDamage = new List<FloatingDamage>();
     private readonly List<GameObject> specialEffects = new List<GameObject>();
@@ -59,8 +68,8 @@ public sealed class TriunviratoGame : MonoBehaviour
     private readonly float[] heroSplashMultipliers = { 1f, 1f, 1f };
     private readonly float[] heroSplashFixedBonus = new float[3];
     private readonly float[] heroDamageFixedBonus = new float[3];
-    private readonly float[,] damageDealt = new float[3, 3];
-    private readonly float[,] finalDamageDealt = new float[3, 3];
+    private readonly float[,] damageDealt = new float[3, 4];
+    private readonly float[,] finalDamageDealt = new float[3, 4];
     private float marBossDamageBonusPercent;
     [Header("Progresión individual")]
     [SerializeField, Min(1f)] private float tierraExperienceToLevel = 100f;
@@ -85,8 +94,18 @@ public sealed class TriunviratoGame : MonoBehaviour
     private readonly float[] meteorDamageBonus = new float[3];
     private readonly int[] lightningHitCountBonus = new int[3];
     private readonly float[] lightningDamageBonus = new float[3];
+    private float fireRageDamageBonusPercent;
+    private float fireRageDurationBonus;
+    private float cloneDurationBonus;
+    private float cloneCooldownReduction;
+    private int knightUpgradeLevel;
+    private int knightCooldownReductionLevel;
+    private int warBlessingPowerLevel;
+    private int warBlessingCooldownReductionLevel;
     private readonly float[] specialCooldownEndsAt = new float[3];
+    private readonly Dictionary<string, float> additionalCooldownEndsAt = new Dictionary<string, float>();
     private bool specialCooldownsWereRunning;
+    private float nextCooldownStateRefreshAt;
     private bool warnedMissingZombieGraspController;
     private bool warnedMissingMeteorController;
     private bool warnedMissingLightningController;
@@ -96,6 +115,9 @@ public sealed class TriunviratoGame : MonoBehaviour
     private float baseOrthographicSize;
     private int lastScreenWidth = -1;
     private int lastScreenHeight = -1;
+    private CloneRuntime activeClone;
+    private bool cloneSpawnPending;
+    private float cloneSpawnRemaining;
 
     [Serializable]
     public sealed class UpgradeOffer
@@ -127,6 +149,7 @@ public sealed class TriunviratoGame : MonoBehaviour
     public float GetDamageByHero(ArmyType army) => GetDamageForSummary(army, DamageCategory.Hero);
     public float GetDamageByTower(ArmyType army) => GetDamageForSummary(army, DamageCategory.Tower);
     public float GetDamageBySpecialAbility(ArmyType army) => GetDamageForSummary(army, DamageCategory.SpecialAbility);
+    public float GetDamageByClone(ArmyType army) => GetDamageForSummary(army, DamageCategory.Clone);
     public float GetExperienceFraction(ArmyType army) => Mathf.Clamp01(GetExperience(army) / Mathf.Max(1f, GetExperienceNeeded(army)));
     private float ExperienceNeededFor(ArmyType army, int level) => Mathf.Max(1f, GetBaseExperienceToLevel(army) * Mathf.Pow(1f + experienceGrowthPerLevel, Mathf.Max(0, level - 1)));
     private float GetBaseExperienceToLevel(ArmyType army) => army == ArmyType.Tierra ? tierraExperienceToLevel : army == ArmyType.Aire ? aireExperienceToLevel : marExperienceToLevel;
@@ -148,12 +171,26 @@ public sealed class TriunviratoGame : MonoBehaviour
         public HeroConfig Config;
         public Animator Animator;
         public Transform AttackSpawn;
+        public TimedCombatEffects Effects;
         public float AttackTimer;
         public bool ShotPending;
         public bool SpecialAnimationActive;
         public bool SpecialAnimationWarningLogged;
         public float SpecialAnimationStartedAt;
         public float PendingShotTimer;
+    }
+
+    private sealed class CloneRuntime
+    {
+        public GameObject View;
+        public Animator Animator;
+        public TimedCombatEffects Effects;
+        public Transform AttackSpawn;
+        public float Remaining;
+        public float AttackTimer;
+        public float PendingShotTimer;
+        public float PendingDamage;
+        public bool ShotPending;
     }
 
     private sealed class Projectile
@@ -184,6 +221,8 @@ public sealed class TriunviratoGame : MonoBehaviour
         UpdateGameCameraViewport();
         if (upgradeCatalog == null)
             Debug.LogError("Asigna UpgradeCatalog desde Assets/GameData/Upgrades en el Inspector.", this);
+        if (fireRageAbility == null || heroCloneAbility == null || knightSummonAbility == null || warBlessingAbility == null)
+            Debug.LogError("Asigna las cuatro habilidades de Aire y Tierra desde Assets/GameData/SpecialAbilities en el Inspector.", this);
         if (tierraHero == null || aireHero == null || marHero == null ||
             tierraConfig == null || aireConfig == null || marConfig == null ||
             enemySpawner == null || castleTarget == null || enemyConfig == null ||
@@ -227,9 +266,13 @@ public sealed class TriunviratoGame : MonoBehaviour
         if (finished)
             return;
         UpdateDefenders();
+        UpdateKnightAllies();
         UpdateProjectiles();
+        UpdatePendingCloneSpawn();
+        UpdateClone();
         UpdateFloatingDamage();
         RemoveFinishedEnemyDeaths();
+        TickCombatEffects(Time.deltaTime);
 
         if (castleHealth <= 0f)
             EndMatch(false);
@@ -284,6 +327,10 @@ public sealed class TriunviratoGame : MonoBehaviour
     private void ResetMatch(bool resumeMatch)
     {
         StopAllCoroutines();
+        cloneSpawnPending = false;
+        cloneSpawnRemaining = 0f;
+        RemoveActiveClone();
+        ClearKnightAllies();
         foreach (GameObject effect in specialEffects)
         {
             if (effect != null)
@@ -291,7 +338,9 @@ public sealed class TriunviratoGame : MonoBehaviour
         }
         specialEffects.Clear();
         Array.Clear(specialCooldownEndsAt, 0, specialCooldownEndsAt.Length);
+        additionalCooldownEndsAt.Clear();
         specialCooldownsWereRunning = false;
+        nextCooldownStateRefreshAt = 0f;
         foreach (SkeletonEnemy enemy in enemies)
         {
             if (enemy != null)
@@ -341,6 +390,14 @@ public sealed class TriunviratoGame : MonoBehaviour
         Array.Clear(meteorDamageBonus, 0, meteorDamageBonus.Length);
         Array.Clear(lightningHitCountBonus, 0, lightningHitCountBonus.Length);
         Array.Clear(lightningDamageBonus, 0, lightningDamageBonus.Length);
+        fireRageDamageBonusPercent = 0f;
+        fireRageDurationBonus = 0f;
+        cloneDurationBonus = 0f;
+        cloneCooldownReduction = 0f;
+        knightUpgradeLevel = 0;
+        knightCooldownReductionLevel = 0;
+        warBlessingPowerLevel = 0;
+        warBlessingCooldownReductionLevel = 0;
         Array.Clear(experience, 0, experience.Length);
         Array.Clear(experienceRemainders, 0, experienceRemainders.Length);
         Array.Clear(luckStacks, 0, luckStacks.Length);
@@ -373,6 +430,7 @@ public sealed class TriunviratoGame : MonoBehaviour
                 defender.ShotPending = false;
                 defender.PendingShotTimer = 0f;
                 defender.SpecialAnimationActive = false;
+                if (defender.Effects != null) defender.Effects.ClearAll();
             }
         }
     }
@@ -385,13 +443,16 @@ public sealed class TriunviratoGame : MonoBehaviour
             return null;
         }
         Animator animator = hero.GetComponent<Animator>();
+        TimedCombatEffects effects = hero.GetComponent<TimedCombatEffects>();
+        if (effects == null) effects = hero.gameObject.AddComponent<TimedCombatEffects>();
 
         return new Defender
         {
             View = hero.gameObject,
             Config = config,
             Animator = animator,
-            AttackSpawn = hero.Find("AttackSpawn")
+            AttackSpawn = hero.Find("AttackSpawn"),
+            Effects = effects
         };
     }
 
@@ -436,7 +497,16 @@ public sealed class TriunviratoGame : MonoBehaviour
         switch (army)
         {
             case ArmyType.Tierra:
-                bool normal = UnityEngine.Random.Range(0, 2) == 0;
+                int tierraPick = UnityEngine.Random.Range(0, 6);
+                if (tierraPick == 2 && knightSummonAbility != null)
+                    return NewSpecialUpgrade("special_knight_power", "Caballero · nivel", "+" + (knightSummonAbility.HealthAndDamageIncreasePerLevel * 100f).ToString("0.##") + " % de vida y daño para futuras invocaciones");
+                if (tierraPick == 3 && knightSummonAbility != null)
+                    return NewSpecialUpgrade("special_knight_cooldown", "Caballero · cooldown", "Cooldown −" + knightSummonAbility.CooldownReductionPerLevel.ToString("0.##") + " s");
+                if (tierraPick == 4 && warBlessingAbility != null)
+                    return NewSpecialUpgrade("special_war_blessing_power", "Acelerar aliado · potencia", "Velocidad de ataque adicional +" + warBlessingAbility.PowerUpgradePercent.ToString("0.##") + " puntos porcentuales");
+                if (tierraPick == 5 && warBlessingAbility != null)
+                    return NewSpecialUpgrade("special_war_blessing_cooldown", "Acelerar aliado · cooldown", "Cooldown −" + warBlessingAbility.CooldownReductionPerLevel.ToString("0.##") + " s");
+                bool normal = tierraPick == 0 || (tierraPick == 1 && (knightSummonAbility == null || warBlessingAbility == null));
                 id = normal ? "special_grasp_normal" : "special_grasp_boss";
                 name = normal ? "Agarre prolongado" : "Agarre contra bosses";
                 increment = normal ? zombieGraspAbility.NormalDurationUpgrade : zombieGraspAbility.BossDurationUpgrade;
@@ -444,6 +514,39 @@ public sealed class TriunviratoGame : MonoBehaviour
                     "Inmovilización contra bosses +" + increment.ToString("0.##") + " s";
                 break;
             case ArmyType.Aire:
+                int pick = UnityEngine.Random.Range(0, 6);
+                if (pick == 0 && fireRageAbility != null)
+                {
+                    return new UpgradeOffer { id = "special_fire_rage_damage", category = "specialabilities",
+                        name = "Furia ígnea · potencia", description = "Daño adicional de Furia ígnea +" + fireRageAbility.DamageUpgradePercent.ToString("0.##") + " puntos porcentuales",
+                        stars = SpecialAbilityStars, isSpecialAbility = true };
+                }
+                if (pick == 1 && fireRageAbility != null)
+                {
+                    return new UpgradeOffer { id = "special_fire_rage_duration", category = "specialabilities",
+                        name = "Furia ígnea · duración", description = "Duración de Furia ígnea +" + fireRageAbility.DurationUpgradeSeconds.ToString("0.##") + " s",
+                        stars = SpecialAbilityStars, isSpecialAbility = true };
+                }
+                if (pick == 2 && heroCloneAbility != null)
+                {
+                    return new UpgradeOffer { id = "special_clone_duration", category = "specialabilities",
+                        name = "Clon · duración", description = "Duración del clon +" + heroCloneAbility.DurationUpgradeSeconds.ToString("0.##") + " s",
+                        stars = SpecialAbilityStars, isSpecialAbility = true };
+                }
+                if (pick == 3 && heroCloneAbility != null)
+                {
+                    return new UpgradeOffer { id = "special_clone_cooldown", category = "specialabilities",
+                        name = "Clon · cooldown", description = "Cooldown del clon −" + heroCloneAbility.CooldownReductionSeconds.ToString("0.##") + " s",
+                        stars = SpecialAbilityStars, isSpecialAbility = true };
+                }
+                if (pick == 4 && meteorShowerAbility != null)
+                    return new UpgradeOffer { id = "special_meteor_count", category = "specialabilities",
+                        name = "Lluvia abundante", description = "Meteoritos por activación +" + meteorShowerAbility.MeteorCountUpgrade.ToString("0.##"),
+                        stars = SpecialAbilityStars, isSpecialAbility = true };
+                if (pick == 5 && meteorShowerAbility != null)
+                    return new UpgradeOffer { id = "special_meteor_damage", category = "specialabilities",
+                        name = "Meteoritos devastadores", description = "Daño por meteorito +" + meteorShowerAbility.DamageUpgrade.ToString("0.##"),
+                        stars = SpecialAbilityStars, isSpecialAbility = true };
                 bool moreMeteors = UnityEngine.Random.Range(0, 2) == 0;
                 id = moreMeteors ? "special_meteor_count" : "special_meteor_damage";
                 name = moreMeteors ? "Lluvia abundante" : "Meteoritos devastadores";
@@ -463,6 +566,10 @@ public sealed class TriunviratoGame : MonoBehaviour
         return new UpgradeOffer { id = id, category = "specialabilities", name = name, description = description,
             stars = SpecialAbilityStars, isSpecialAbility = true };
     }
+
+    private static UpgradeOffer NewSpecialUpgrade(string id, string name, string description) =>
+        new UpgradeOffer { id = id, category = "specialabilities", name = name, description = description,
+            stars = SpecialAbilityStars, isSpecialAbility = true };
 
     public bool TrySelectUpgrade(ArmyType army, string id, string offerToken, out string message)
     {
@@ -575,6 +682,14 @@ public sealed class TriunviratoGame : MonoBehaviour
             case "special_meteor_damage": meteorDamageBonus[index] += meteorShowerAbility.DamageUpgrade; break;
             case "special_lightning_count": lightningHitCountBonus[index] += lightningStormAbility.HitCountUpgrade; break;
             case "special_lightning_damage": lightningDamageBonus[index] += lightningStormAbility.DamageUpgrade; break;
+            case "special_fire_rage_damage": if (army == ArmyType.Aire && fireRageAbility != null) fireRageDamageBonusPercent += fireRageAbility.DamageUpgradePercent; break;
+            case "special_fire_rage_duration": if (army == ArmyType.Aire && fireRageAbility != null) fireRageDurationBonus += fireRageAbility.DurationUpgradeSeconds; break;
+            case "special_clone_duration": if (army == ArmyType.Aire && heroCloneAbility != null) cloneDurationBonus += heroCloneAbility.DurationUpgradeSeconds; break;
+            case "special_clone_cooldown": if (army == ArmyType.Aire && heroCloneAbility != null) cloneCooldownReduction += heroCloneAbility.CooldownReductionSeconds; break;
+            case "special_knight_power": if (army == ArmyType.Tierra && knightSummonAbility != null) knightUpgradeLevel++; break;
+            case "special_knight_cooldown": if (army == ArmyType.Tierra && knightSummonAbility != null) knightCooldownReductionLevel++; break;
+            case "special_war_blessing_power": if (army == ArmyType.Tierra && warBlessingAbility != null) warBlessingPowerLevel++; break;
+            case "special_war_blessing_cooldown": if (army == ArmyType.Tierra && warBlessingAbility != null) warBlessingCooldownReductionLevel++; break;
         }
     }
 
@@ -689,17 +804,34 @@ public sealed class TriunviratoGame : MonoBehaviour
 
     public float GetHeroDamage(ArmyType army)
     {
+        if (!IsValidArmy(army)) return 0f;
+        TimedCombatEffects effects = defenders != null && defenders[(int)army] != null ? defenders[(int)army].Effects : null;
+        return GetHeroDamageWithEffects(army, effects);
+    }
+
+    private float GetHeroDamageWithEffects(ArmyType army, TimedCombatEffects effects)
+    {
         HeroConfig config = GetHeroConfig(army);
-        return config != null
-            ? config.Damage * GetHeroUpgradeMultiplier(army) + GetHeroDamageFixedBonus(army)
-            : 0f;
+        if (config == null) return 0f;
+        return (config.Damage * GetHeroUpgradeMultiplier(army) + GetHeroDamageFixedBonus(army)) *
+               (effects != null ? effects.DamageMultiplier : 1f);
     }
 
     public float GetHeroAttackCooldown(ArmyType army)
     {
+        if (!IsValidArmy(army)) return 0f;
         HeroConfig config = GetHeroConfig(army);
         if (config == null) return 0f;
-        return ApplyHeroAttackSpeedToCooldown(config.AttackCooldown, army);
+        TimedCombatEffects effects = defenders != null && defenders[(int)army] != null ? defenders[(int)army].Effects : null;
+        return GetHeroAttackCooldownWithEffects(army, effects);
+    }
+
+    private float GetHeroAttackCooldownWithEffects(ArmyType army, TimedCombatEffects effects)
+    {
+        HeroConfig config = GetHeroConfig(army);
+        if (config == null) return 0f;
+        float cooldown = ApplyHeroAttackSpeedToCooldown(config.AttackCooldown, army);
+        return effects != null && effects.AttackSpeedMultiplier > 0f ? cooldown / effects.AttackSpeedMultiplier : cooldown;
     }
 
     public float GetSpecialAbilityCooldown(ArmyType army) =>
@@ -708,10 +840,165 @@ public sealed class TriunviratoGame : MonoBehaviour
     public float GetSpecialAbilityCooldownRemaining(ArmyType army) =>
         IsValidArmy(army) ? Mathf.Max(0f, specialCooldownEndsAt[(int)army] - Time.time) : 0f;
 
-    public bool CanActivateSpecial(ArmyType army) =>
+    public bool CanActivateSpecial(ArmyType army) => CanActivateSpecial(army, false);
+
+    public bool CanActivateSpecial(ArmyType army, bool bypassCooldown) =>
         CanCombat && IsValidArmy(army) && defenders != null && defenders[(int)army] != null &&
         GetSpecialAbilityConfig(army) != null &&
-        GetSpecialAbilityCooldownRemaining(army) <= 0f && HasLivingEnemies();
+        (bypassCooldown || GetSpecialAbilityCooldownRemaining(army) <= 0f) && HasLivingEnemies();
+
+    public float GetFireRageDamageBonusPercent() => fireRageAbility != null ? fireRageAbility.BonusDamagePercent + fireRageDamageBonusPercent : 0f;
+    public string GetFireRageAbilityName() => fireRageAbility != null ? fireRageAbility.AbilityName : "Furia ígnea";
+    public string GetFireRageAbilityDescription() => fireRageAbility != null ? fireRageAbility.Description : string.Empty;
+    public float GetFireRageDuration() => fireRageAbility != null ? fireRageAbility.Duration + fireRageDurationBonus : 0f;
+    public float GetFireRageCooldown() => fireRageAbility != null ? fireRageAbility.Cooldown : 0f;
+    public float GetFireRageCooldownRemaining() => GetAdditionalCooldownRemaining(ArmyType.Aire, FireRageAbilityId);
+    public bool CanActivateFireRage(bool bypassCooldown = false) => CanCombat && defenders != null && defenders[(int)ArmyType.Aire] != null &&
+        fireRageAbility != null && (bypassCooldown || GetFireRageCooldownRemaining() <= 0f);
+    public float GetCloneDuration() => heroCloneAbility != null ? heroCloneAbility.Duration + cloneDurationBonus : 0f;
+    public string GetCloneAbilityName() => heroCloneAbility != null ? heroCloneAbility.AbilityName : "Clon";
+    public string GetCloneAbilityDescription() => heroCloneAbility != null ? heroCloneAbility.Description : string.Empty;
+    public float GetCloneCooldown() => heroCloneAbility != null
+        ? Mathf.Max(heroCloneAbility.MinimumCooldown, heroCloneAbility.Cooldown - cloneCooldownReduction) : 0f;
+    public float GetCloneCooldownRemaining() => GetAdditionalCooldownRemaining(ArmyType.Aire, HeroCloneAbilityId);
+    public bool CanActivateClone(bool bypassCooldown = false) => CanCombat && defenders != null && defenders[(int)ArmyType.Aire] != null &&
+        heroCloneAbility != null && (bypassCooldown || GetCloneCooldownRemaining() <= 0f) && activeClone == null &&
+        !cloneSpawnPending && HasLivingEnemies();
+    public string GetKnightSummonName() => knightSummonAbility != null ? knightSummonAbility.AbilityName : "Invocar caballero";
+    public string GetKnightSummonDescription() => knightSummonAbility != null ? knightSummonAbility.Description : string.Empty;
+    public float GetKnightSummonCooldown() => knightSummonAbility == null ? 0f : Mathf.Max(knightSummonAbility.MinimumCooldown,
+        knightSummonAbility.Cooldown - knightCooldownReductionLevel * knightSummonAbility.CooldownReductionPerLevel);
+    public float GetKnightSummonCooldownRemaining() => GetAdditionalCooldownRemaining(ArmyType.Tierra, KnightSummonAbilityId);
+    public bool CanActivateKnightSummon(bool bypassCooldown = false) => CanCombat && knightSummonAbility != null &&
+        knightSummonAbility.KnightPrefab != null && defenders != null && defenders[(int)ArmyType.Tierra] != null &&
+        (bypassCooldown || GetKnightSummonCooldownRemaining() <= 0f);
+    public string GetWarBlessingName() => warBlessingAbility != null ? warBlessingAbility.AbilityName : "Acelerar aliado";
+    public string GetWarBlessingDescription() => warBlessingAbility != null ? warBlessingAbility.Description : string.Empty;
+    public float GetWarBlessingBonusPercent() => warBlessingAbility != null
+        ? warBlessingAbility.BonusAttackSpeedPercent + warBlessingPowerLevel * warBlessingAbility.PowerUpgradePercent : 0f;
+    public float GetWarBlessingDuration() => warBlessingAbility != null ? warBlessingAbility.Duration : 0f;
+    public float GetWarBlessingCooldown() => warBlessingAbility == null ? 0f : Mathf.Max(warBlessingAbility.MinimumCooldown,
+        warBlessingAbility.Cooldown - warBlessingCooldownReductionLevel * warBlessingAbility.CooldownReductionPerLevel);
+    public float GetWarBlessingCooldownRemaining() => GetAdditionalCooldownRemaining(ArmyType.Tierra, WarBlessingAbilityId);
+    public bool CanActivateWarBlessing(ArmyType target, bool bypassCooldown = false) => CanCombat && warBlessingAbility != null &&
+        (target == ArmyType.Aire || target == ArmyType.Mar) && defenders != null && defenders[(int)target] != null &&
+        defenders[(int)target].View != null && (bypassCooldown || GetWarBlessingCooldownRemaining() <= 0f);
+
+    public bool TryActivateSpecial(ArmyType army, string abilityId, out string message)
+        => TryActivateSpecial(army, abilityId, out message, false);
+
+    public bool TryActivateSpecial(ArmyType army, string abilityId, out string message, bool bypassCooldown)
+        => TryActivateSpecial(army, abilityId, null, out message, bypassCooldown);
+
+    public bool TryActivateSpecial(ArmyType army, string abilityId, string targetArmy, out string message, bool bypassCooldown)
+    {
+        message = string.Empty;
+        if (!IsValidArmy(army)) { message = "Ejército desconocido."; return false; }
+        if (!CanCombat) { message = "Las habilidades solo se pueden activar durante el combate."; return false; }
+        if (defenders == null || defenders[(int)army] == null || defenders[(int)army].View == null)
+        { message = "El héroe no está disponible."; return false; }
+
+        if (army == ArmyType.Aire && abilityId == FireRageAbilityId)
+        {
+            if (fireRageAbility == null) { message = "Furia ígnea no está configurada."; return false; }
+            if (!bypassCooldown && GetFireRageCooldownRemaining() > 0f) { message = "Furia ígnea aún está en cooldown."; return false; }
+            Defender aire = defenders[(int)ArmyType.Aire];
+            aire.Effects.Apply(new TimedCombatEffects.Snapshot
+            {
+                id = FireRageAbilityId,
+                owner = ArmyType.Aire.ToString(),
+                remaining = GetFireRageDuration(),
+                damageMultiplier = 1f + GetFireRageDamageBonusPercent() / 100f,
+                attackSpeedMultiplier = 1f,
+                movementSpeedMultiplier = 1f,
+                incomingDamageMultiplier = 1f,
+                visualPrefab = fireRageAbility.BuffVisualPrefab,
+                hasTint = true,
+                tintMultiplier = fireRageAbility.BuffTint
+            });
+            StartAbilityCooldown(army, abilityId, fireRageAbility.Cooldown);
+            PlayNewAbilityActivation(aire, fireRageAbility);
+            message = "Furia ígnea activada.";
+            return true;
+        }
+
+        if (army == ArmyType.Aire && abilityId == HeroCloneAbilityId)
+        {
+            if (heroCloneAbility == null) { message = "Clon no está configurado."; return false; }
+            if (!bypassCooldown && GetCloneCooldownRemaining() > 0f) { message = "Clon aún está en cooldown."; return false; }
+            if (activeClone != null || cloneSpawnPending) { message = "Ya hay un clon activo o preparándose."; return false; }
+            if (!HasLivingEnemies()) { message = "No hay enemigos vivos para el clon."; return false; }
+            StartAbilityCooldown(army, abilityId, GetCloneCooldown());
+            PlayNewAbilityActivation(defenders[(int)ArmyType.Aire], heroCloneAbility);
+            cloneSpawnPending = true;
+            cloneSpawnRemaining = heroCloneAbility.SpawnDelay;
+            if (cloneSpawnRemaining <= 0f)
+            {
+                cloneSpawnPending = false;
+                if (!CreateHeroClone()) { message = "No se pudo crear el clon."; return false; }
+            }
+            message = "Clon preparándose.";
+            StateRevision++;
+            return true;
+        }
+
+        if (army == ArmyType.Tierra && abilityId == KnightSummonAbilityId)
+        {
+            if (knightSummonAbility == null || knightSummonAbility.KnightPrefab == null)
+            { message = "Invocar caballero no está configurada correctamente."; return false; }
+            if (!bypassCooldown && GetKnightSummonCooldownRemaining() > 0f)
+            { message = "Invocar caballero aún está en cooldown."; return false; }
+            Vector2 offset = knightSummonAbility.SpawnOffset;
+            Transform hero = defenders[(int)ArmyType.Tierra].View.transform;
+            Vector3 position = new Vector3(hero.position.x + offset.x, hero.position.y + offset.y, hero.position.z);
+            GameObject view = Instantiate(knightSummonAbility.KnightPrefab, position, Quaternion.identity);
+            view.name = "Caballero de Tierra";
+            KnightAlly ally = view.GetComponent<KnightAlly>();
+            if (ally == null) ally = view.AddComponent<KnightAlly>();
+            ally.Initialize(this, knightSummonAbility, knightUpgradeLevel);
+            knightAllies.Add(ally);
+            StartAbilityCooldown(army, abilityId, GetKnightSummonCooldown());
+            PlayNewAbilityActivation(defenders[(int)ArmyType.Tierra], knightSummonAbility);
+            message = "Caballero invocado.";
+            StateRevision++;
+            return true;
+        }
+
+        if (army == ArmyType.Tierra && abilityId == WarBlessingAbilityId)
+        {
+            if (!Enum.TryParse(targetArmy, true, out ArmyType target) ||
+                (target != ArmyType.Aire && target != ArmyType.Mar))
+            { message = "Acelerar aliado solo puede dirigirse a Aire o Agua."; return false; }
+            if (warBlessingAbility == null) { message = "Acelerar aliado no está configurada."; return false; }
+            if (!bypassCooldown && GetWarBlessingCooldownRemaining() > 0f)
+            { message = "Acelerar aliado aún está en cooldown."; return false; }
+            Defender targetDefender = defenders[(int)target];
+            if (targetDefender == null || targetDefender.View == null || targetDefender.Effects == null)
+            { message = "El héroe objetivo no está disponible."; return false; }
+            float bonus = GetWarBlessingBonusPercent();
+            targetDefender.Effects.Apply(new TimedCombatEffects.Snapshot
+            {
+                id = WarBlessingAbilityId,
+                owner = ArmyType.Tierra.ToString(),
+                remaining = GetWarBlessingDuration(),
+                damageMultiplier = 1f,
+                attackSpeedMultiplier = 1f + bonus / 100f,
+                movementSpeedMultiplier = 1f,
+                incomingDamageMultiplier = 1f,
+                hasTint = true,
+                tintMultiplier = warBlessingAbility.BuffTint
+            });
+            StartAbilityCooldown(ArmyType.Tierra, abilityId, GetWarBlessingCooldown());
+            PlayNewAbilityActivation(defenders[(int)ArmyType.Tierra], warBlessingAbility);
+            message = "Acelerar aliado aplicado a " + target + ".";
+            StateRevision++;
+            return true;
+        }
+
+        if (abilityId != GetLegacySpecialAbilityId(army))
+        { message = "Habilidad desconocida para este ejército."; return false; }
+        return TryActivateLegacySpecial(army, out message, bypassCooldown);
+    }
 
     public string GetSpecialAbilityName(ArmyType army)
     {
@@ -755,6 +1042,12 @@ public sealed class TriunviratoGame : MonoBehaviour
             : 0f;
 
     public bool TryActivateSpecial(ArmyType army, out string message)
+        => TryActivateSpecial(army, GetLegacySpecialAbilityId(army), out message);
+
+    public bool TryActivateSpecial(ArmyType army, out string message, bool bypassCooldown)
+        => TryActivateSpecial(army, GetLegacySpecialAbilityId(army), out message, bypassCooldown);
+
+    private bool TryActivateLegacySpecial(ArmyType army, out string message, bool bypassCooldown)
     {
         message = string.Empty;
         if (!IsValidArmy(army))
@@ -773,7 +1066,7 @@ public sealed class TriunviratoGame : MonoBehaviour
             return false;
         }
         float remaining = GetSpecialAbilityCooldownRemaining(army);
-        if (remaining > 0f)
+        if (!bypassCooldown && remaining > 0f)
         {
             message = "Disponible en " + Mathf.CeilToInt(remaining) + " s.";
             return false;
@@ -821,6 +1114,184 @@ public sealed class TriunviratoGame : MonoBehaviour
                 break;
         }
         return true;
+    }
+
+    private static string GetLegacySpecialAbilityId(ArmyType army)
+    {
+        switch (army)
+        {
+            case ArmyType.Tierra: return "zombie_grasp";
+            case ArmyType.Aire: return "meteor_shower";
+            case ArmyType.Mar: return "lightning_storm";
+            default: return string.Empty;
+        }
+    }
+
+    private string GetCooldownKey(ArmyType army, string abilityId) => ((int)army) + ":" + abilityId;
+    private float GetAdditionalCooldownRemaining(ArmyType army, string abilityId) =>
+        additionalCooldownEndsAt.TryGetValue(GetCooldownKey(army, abilityId), out float endAt) ? Mathf.Max(0f, endAt - Time.time) : 0f;
+    private void StartAbilityCooldown(ArmyType army, string abilityId, float duration)
+    {
+        additionalCooldownEndsAt[GetCooldownKey(army, abilityId)] = Time.time + Mathf.Max(0f, duration);
+        specialCooldownsWereRunning = true;
+        StateRevision++;
+    }
+
+    private void PlayNewAbilityActivation(Defender defender, HeroSpecialAbilityConfig config)
+    {
+        GameSoundManager.Instance?.PlayAbilityEffect(config.ActivationSound, config.ActivationSoundPlayCount);
+        PlaySpecialAttackAnimation(defender);
+        StateRevision++;
+    }
+
+    private bool CreateHeroClone()
+    {
+        Defender original = defenders[(int)ArmyType.Aire];
+        HeroConfig config = original.Config;
+        if (original.View == null || config == null || heroCloneAbility == null) return false;
+        Vector3 position = original.View.transform.position + Vector3.left * heroCloneAbility.HorizontalSeparation;
+        GameObject view = Instantiate(original.View, position, original.View.transform.rotation, original.View.transform.parent);
+        view.name = "Clon temporal - " + config.DisplayName;
+        view.transform.localScale = original.View.transform.localScale;
+        Animator animator = view.GetComponent<Animator>();
+        if (animator == null) animator = view.GetComponentInChildren<Animator>();
+        TimedCombatEffects effects = view.GetComponent<TimedCombatEffects>();
+        if (effects == null) effects = view.AddComponent<TimedCombatEffects>();
+        effects.ClearAll();
+        RemoveDuplicatedEffectVisuals(view.transform);
+
+        foreach (SpriteOutlineUvBounds outline in view.GetComponentsInChildren<SpriteOutlineUvBounds>(true))
+        {
+            SpriteRenderer outlineRenderer = outline.GetComponent<SpriteRenderer>();
+            if (outlineRenderer != null)
+            {
+                MaterialPropertyBlock block = new MaterialPropertyBlock();
+                outlineRenderer.GetPropertyBlock(block);
+                block.SetFloat(Shader.PropertyToID("_OutlinePixels"), 0f);
+                block.SetFloat(Shader.PropertyToID("_OutlineLocalWidth"), 0f);
+                outlineRenderer.SetPropertyBlock(block);
+            }
+            outline.enabled = false;
+            Destroy(outline);
+        }
+
+        foreach (MonoBehaviour behaviour in view.GetComponentsInChildren<MonoBehaviour>(true))
+            if (!(behaviour is TimedCombatEffects)) behaviour.enabled = false;
+        foreach (Collider2D collider in view.GetComponentsInChildren<Collider2D>(true)) collider.enabled = false;
+        foreach (Collider collider in view.GetComponentsInChildren<Collider>(true)) collider.enabled = false;
+        foreach (SpriteRenderer renderer in view.GetComponentsInChildren<SpriteRenderer>(true))
+        {
+            renderer.color = new Color(heroCloneAbility.Tint.r, heroCloneAbility.Tint.g, heroCloneAbility.Tint.b,
+                heroCloneAbility.TintAlpha);
+            renderer.sortingOrder += 1;
+        }
+        // This is deliberately a one-time snapshot: later buffs on the real hero do not propagate to this clone.
+        // Copy after the clone tint is established so temporary tint effects restore to that clone-specific color.
+        original.Effects?.CopyActiveTo(effects);
+        Transform attackSpawn = view.transform.Find("AttackSpawn");
+        activeClone = new CloneRuntime
+        {
+            View = view,
+            Animator = animator,
+            Effects = effects,
+            AttackSpawn = attackSpawn,
+            Remaining = GetCloneDuration(),
+            AttackTimer = 0f
+        };
+        StateRevision++;
+        return true;
+    }
+
+    private void UpdatePendingCloneSpawn()
+    {
+        if (!cloneSpawnPending) return;
+        cloneSpawnRemaining -= Time.deltaTime;
+        if (cloneSpawnRemaining > 0f) return;
+        cloneSpawnPending = false;
+        cloneSpawnRemaining = 0f;
+        if (!CanCombat || activeClone != null || defenders == null || defenders[(int)ArmyType.Aire] == null)
+        {
+            StateRevision++;
+            return;
+        }
+        if (!CreateHeroClone())
+            Debug.LogWarning("No se pudo crear el clon al finalizar su retraso de aparición.", this);
+        StateRevision++;
+    }
+
+    private static void RemoveDuplicatedEffectVisuals(Transform root)
+    {
+        for (int i = root.childCount - 1; i >= 0; i--)
+        {
+            Transform child = root.GetChild(i);
+            if (child.name.StartsWith("Effect - ", StringComparison.Ordinal))
+            {
+                child.gameObject.SetActive(false);
+                Destroy(child.gameObject);
+            }
+            else RemoveDuplicatedEffectVisuals(child);
+        }
+    }
+
+    private void UpdateClone()
+    {
+        CloneRuntime clone = activeClone;
+        if (clone == null) return;
+        if (!CanCombat || clone.View == null) { RemoveActiveClone(); return; }
+        clone.Remaining -= Time.deltaTime;
+        if (clone.Remaining <= 0f) { RemoveActiveClone(); return; }
+
+        if (clone.ShotPending)
+        {
+            clone.PendingShotTimer -= Time.deltaTime;
+            if (clone.PendingShotTimer > 0f) return;
+            clone.ShotPending = false;
+            SkeletonEnemy pendingTarget = FindTarget(clone.View.transform.position, GetHeroRange(ArmyType.Aire));
+            if (pendingTarget != null)
+                FireProjectile(clone.View, aireConfig.DisplayName + " · Clon", aireConfig, clone.PendingDamage,
+                    GetHeroSplashRadius(ArmyType.Aire), pendingTarget.transform.position, pendingTarget,
+                    aireConfig.ProjectileAnimatorController, GetCloneAttackSpawnPosition(clone), DamageCategory.Clone);
+        }
+
+        clone.AttackTimer -= Time.deltaTime;
+        if (clone.AttackTimer > 0f) return;
+        SkeletonEnemy target = FindTarget(clone.View.transform.position, GetHeroRange(ArmyType.Aire));
+        if (target == null) return;
+        clone.AttackTimer = GetHeroAttackCooldownWithEffects(ArmyType.Aire, clone.Effects);
+        clone.PendingDamage = GetHeroDamageWithEffects(ArmyType.Aire, clone.Effects);
+        if (clone.Animator != null && clone.Animator.runtimeAnimatorController != null &&
+            clone.Animator.HasState(0, Animator.StringToHash(NormalAttackState)))
+            clone.Animator.Play(NormalAttackState, 0, 0f);
+        clone.ShotPending = true;
+        clone.PendingShotTimer = aireConfig.ProjectileDelay;
+    }
+
+    private static Vector3 GetCloneAttackSpawnPosition(CloneRuntime clone) => clone.AttackSpawn != null
+        ? clone.AttackSpawn.position : clone.View.transform.position + Vector3.right * 0.2f;
+
+    private void TickCombatEffects(float deltaTime)
+    {
+        if (!CanCombat || deltaTime <= 0f) return;
+        if (defenders != null)
+            foreach (Defender defender in defenders) defender?.Effects?.Tick(deltaTime);
+        foreach (SkeletonEnemy enemy in enemies) enemy?.Effects?.Tick(deltaTime);
+        activeClone?.Effects?.Tick(deltaTime);
+    }
+
+    private void RemoveActiveClone()
+    {
+        if (activeClone == null) return;
+        if (activeClone.Effects != null) activeClone.Effects.ClearAll();
+        GameObject cloneView = activeClone.View;
+        activeClone = null;
+        for (int i = projectiles.Count - 1; i >= 0; i--)
+        {
+            if (projectiles[i].Category != DamageCategory.Clone) continue;
+            if (projectiles[i].View != null) Destroy(projectiles[i].View);
+            projectiles.RemoveAt(i);
+        }
+        if (cloneView != null) Destroy(cloneView);
+        StateRevision++;
     }
 
     private float ApplyHeroAttackSpeedToCooldown(float baseCooldown, ArmyType army)
@@ -939,9 +1410,11 @@ public sealed class TriunviratoGame : MonoBehaviour
     private void UpdateSpecialCooldownState()
     {
         bool hasRunningCooldown = HasActiveSpecialCooldowns();
-        if (hasRunningCooldown != specialCooldownsWereRunning)
+        bool cooldownDisplayNeedsRefresh = hasRunningCooldown && Time.time >= nextCooldownStateRefreshAt;
+        if (hasRunningCooldown != specialCooldownsWereRunning || cooldownDisplayNeedsRefresh)
         {
             specialCooldownsWereRunning = hasRunningCooldown;
+            nextCooldownStateRefreshAt = Time.time + 1f;
             StateRevision++;
         }
     }
@@ -953,6 +1426,8 @@ public sealed class TriunviratoGame : MonoBehaviour
             if (specialCooldownEndsAt[i] > Time.time)
                 return true;
         }
+        foreach (float endAt in additionalCooldownEndsAt.Values)
+            if (endAt > Time.time) return true;
         return false;
     }
 
@@ -1234,12 +1709,56 @@ public sealed class TriunviratoGame : MonoBehaviour
                 continue;
             }
 
-            if (enemy.Tick(Time.deltaTime, castleTarget.position))
+            if (enemy.Tick(Time.deltaTime, castleTarget.position, FindKnightTargetForEnemy(enemy.transform.position)))
             {
                 Destroy(enemy.gameObject);
                 enemies.RemoveAt(i);
             }
         }
+    }
+
+    private KnightAlly FindKnightTargetForEnemy(Vector3 enemyPosition)
+    {
+        KnightAlly best = null;
+        float bestDistance = float.PositiveInfinity;
+        foreach (KnightAlly ally in knightAllies)
+        {
+            if (ally == null || ally.IsDead) continue;
+            float distance = Vector2.Distance(enemyPosition, ally.transform.position);
+            if (distance <= ally.EnemyEngagementRange && distance < bestDistance)
+            { best = ally; bestDistance = distance; }
+        }
+        return best;
+    }
+
+    private void UpdateKnightAllies()
+    {
+        float advanceTargetX = enemySpawner != null ? enemySpawner.position.x : castleTarget.position.x;
+        SkeletonEnemy[] targets = enemies.ToArray();
+        for (int i = knightAllies.Count - 1; i >= 0; i--)
+        {
+            KnightAlly ally = knightAllies[i];
+            if (ally == null)
+            { knightAllies.RemoveAt(i); continue; }
+            if (ally.Tick(Time.deltaTime, targets, advanceTargetX))
+            {
+                Destroy(ally.gameObject);
+                knightAllies.RemoveAt(i);
+            }
+        }
+    }
+
+    private void ClearKnightAllies()
+    {
+        foreach (KnightAlly ally in knightAllies)
+            if (ally != null) Destroy(ally.gameObject);
+        knightAllies.Clear();
+    }
+
+    internal void ApplyKnightDamage(SkeletonEnemy enemy, float damage, KnightAlly source)
+    {
+        if (!CanCombat || source == null || source.IsDead || enemy == null || enemy.IsDead) return;
+        ApplyDamage(enemy, damage, new Color(0.95f, 0.82f, 0.48f), ArmyType.Tierra, DamageCategory.SpecialAbility);
     }
 
     private void UpdateDefenders()
@@ -1521,7 +2040,7 @@ public sealed class TriunviratoGame : MonoBehaviour
         if (appliedDamage <= 0f)
             return;
         damageDealt[(int)army, (int)category] += appliedDamage;
-        ShowDamage(enemy, amount, damageColor);
+        ShowDamage(enemy, appliedDamage, damageColor);
         if (enemy.IsDead && !enemy.RewardGranted)
         {
             enemy.MarkRewardGranted();
@@ -1665,8 +2184,15 @@ public sealed class TriunviratoGame : MonoBehaviour
             return;
 
         for (int army = 0; army < 3; army++)
-            for (int category = 0; category < 3; category++)
+            for (int category = 0; category < 4; category++)
                 finalDamageDealt[army, category] = damageDealt[army, category];
+        RemoveActiveClone();
+        ClearKnightAllies();
+        cloneSpawnPending = false;
+        cloneSpawnRemaining = 0f;
+        if (defenders != null)
+            foreach (Defender defender in defenders) defender?.Effects?.ClearAll();
+        foreach (SkeletonEnemy enemy in enemies) enemy?.Effects?.ClearAll();
         finished = true;
         victory = didWin;
         matchStatus = MatchStatus.Finished;
@@ -1679,6 +2205,12 @@ public sealed class TriunviratoGame : MonoBehaviour
 
     private void OnDestroy()
     {
+        cloneSpawnPending = false;
+        cloneSpawnRemaining = 0f;
+        RemoveActiveClone();
+        ClearKnightAllies();
+        if (defenders != null)
+            foreach (Defender defender in defenders) defender?.Effects?.ClearAll();
         if (projectileSprite != null)
             Destroy(projectileSprite);
         if (towerProjectileSprite != null)
