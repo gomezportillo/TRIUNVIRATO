@@ -3,7 +3,6 @@ using UnityEngine;
 /// <summary>Runtime state and animation driver for one Skeleton enemy instance.</summary>
 public sealed class SkeletonEnemy : MonoBehaviour
 {
-    private static Sprite healthBarSprite;
     private static readonly int IdleState = Animator.StringToHash("Idle");
     private static readonly int WalkState = Animator.StringToHash("Walk");
     private static readonly int TakeHitState = Animator.StringToHash("Take Hit");
@@ -14,9 +13,7 @@ public sealed class SkeletonEnemy : MonoBehaviour
     private TriunviratoGame game;
     private Animator animator;
     private SpriteRenderer actorRenderer;
-    private Transform healthBarRoot;
-    private SpriteRenderer healthBarBackground;
-    private SpriteRenderer healthBarFill;
+    private WorldHealthBar healthBar;
     private bool isBoss;
     private bool isDead;
     private bool isTakingHit;
@@ -27,6 +24,7 @@ public sealed class SkeletonEnemy : MonoBehaviour
     private float attackAnimationSpeed = 1f;
     private float castleAttackImpactDelay;
     private float castleAttackTimer;
+    private float allyAttackTimer;
     private float idleRemaining;
     private float deathFallbackTimer;
     private float rootedUntil;
@@ -52,85 +50,18 @@ public sealed class SkeletonEnemy : MonoBehaviour
         if (combatEffects == null) combatEffects = gameObject.AddComponent<TimedCombatEffects>();
         currentHealth = MaximumHealth = config.GetMaximumHealth(wave, isBoss);
         movementSpeed = config.GetMovementSpeed(wave, isBoss);
-        CreateHealthBar();
+        healthBar = GetComponent<WorldHealthBar>();
+        if (healthBar == null) healthBar = gameObject.AddComponent<WorldHealthBar>();
+        healthBar.Initialize(actorRenderer, config.HealthBarLength, config.HealthBarHeight, config.HealthBarOffset);
+        healthBar.SetHealth(currentHealth, MaximumHealth);
 
         float attackClipLength = GetClipLength(AttackState, 1f);
         attackAnimationSpeed = attackClipLength / Mathf.Max(0.1f, config.CastleAttackInterval);
         castleAttackImpactDelay = GetCastleAttackImpactDelay();
+        allyAttackTimer = config.CastleAttackInterval;
         idleRemaining = config.InitialIdleDuration;
         deathFallbackTimer = config.DeathAnimationFallbackSeconds;
         PlayState(IdleState, 1f);
-    }
-
-    private void LateUpdate()
-    {
-        if (healthBarRoot == null)
-            return;
-
-        if (isDead || actorRenderer == null)
-        {
-            healthBarRoot.gameObject.SetActive(false);
-            return;
-        }
-
-        healthBarRoot.gameObject.SetActive(true);
-        Bounds bounds = actorRenderer.bounds;
-        float width = config.HealthBarLength;
-        float height = config.HealthBarHeight;
-        Vector3 position = new Vector3(bounds.center.x, bounds.max.y + config.HealthBarOffset, bounds.center.z);
-        healthBarRoot.position = position;
-
-        float parentScaleX = Mathf.Max(0.0001f, Mathf.Abs(healthBarRoot.lossyScale.x));
-        float parentScaleY = Mathf.Max(0.0001f, Mathf.Abs(healthBarRoot.lossyScale.y));
-        healthBarBackground.transform.localScale = new Vector3(width / parentScaleX, height / parentScaleY, 1f);
-
-        float healthRatio = MaximumHealth > 0f ? Mathf.Clamp01(currentHealth / MaximumHealth) : 0f;
-        healthBarFill.transform.localScale = new Vector3(width * healthRatio / parentScaleX,
-            height * 0.68f / parentScaleY, 1f);
-        healthBarFill.transform.localPosition = new Vector3(-width * (1f - healthRatio) * 0.5f / parentScaleX,
-            0f, -0.01f);
-        healthBarFill.color = healthRatio > 0.55f ? new Color(0.28f, 0.92f, 0.38f) :
-            healthRatio > 0.25f ? new Color(1f, 0.78f, 0.22f) : new Color(1f, 0.27f, 0.24f);
-    }
-
-    private void CreateHealthBar()
-    {
-        if (actorRenderer == null)
-            return;
-
-        if (healthBarSprite == null)
-        {
-            Texture2D texture = new Texture2D(1, 1, TextureFormat.RGBA32, false)
-            {
-                name = "Enemy Health Bar Pixel",
-                filterMode = FilterMode.Point,
-                wrapMode = TextureWrapMode.Clamp
-            };
-            texture.SetPixel(0, 0, Color.white);
-            texture.Apply();
-            // The sprite is scaled in world units below, so one texture pixel must map to one unit.
-            healthBarSprite = Sprite.Create(texture, new Rect(0f, 0f, 1f, 1f), new Vector2(0.5f, 0.5f), 1f);
-            healthBarSprite.name = "Enemy Health Bar Sprite";
-        }
-
-        GameObject root = new GameObject("Health Bar");
-        healthBarRoot = root.transform;
-        healthBarRoot.SetParent(transform, true);
-        healthBarBackground = CreateHealthBarLayer("Background", new Color(0.08f, 0.08f, 0.08f, 0.9f), 20);
-        healthBarFill = CreateHealthBarLayer("Fill", Color.green, 21);
-    }
-
-    private SpriteRenderer CreateHealthBarLayer(string objectName, Color color, int sortingOrderOffset)
-    {
-        GameObject layer = new GameObject(objectName);
-        Transform layerTransform = layer.transform;
-        layerTransform.SetParent(healthBarRoot, false);
-        SpriteRenderer renderer = layer.AddComponent<SpriteRenderer>();
-        renderer.sprite = healthBarSprite;
-        renderer.color = color;
-        renderer.sortingLayerID = actorRenderer.sortingLayerID;
-        renderer.sortingOrder = actorRenderer.sortingOrder + sortingOrderOffset;
-        return renderer;
     }
 
     /// <summary>Returns only the damage that actually reduced health, capped by remaining health.</summary>
@@ -141,6 +72,7 @@ public sealed class SkeletonEnemy : MonoBehaviour
 
         float appliedDamage = Mathf.Min(currentHealth, amount * (combatEffects != null ? combatEffects.IncomingDamageMultiplier : 1f));
         currentHealth = Mathf.Max(0f, currentHealth - appliedDamage);
+        healthBar?.SetHealth(currentHealth, MaximumHealth);
         if (currentHealth <= 0f)
         {
             isDead = true;
@@ -148,6 +80,7 @@ public sealed class SkeletonEnemy : MonoBehaviour
             isRooted = false;
             rootedUntil = 0f;
             combatEffects?.ClearAll();
+            healthBar?.SetVisible(false);
             PlayState(DeathState, 1f);
             deathFallbackTimer = config.DeathAnimationFallbackSeconds;
             GameSoundManager.Instance?.PlaySkeletonDeath();
@@ -203,15 +136,6 @@ public sealed class SkeletonEnemy : MonoBehaviour
                 animator.speed = animationSpeedBeforeRoot;
         }
 
-        // Castle damage is driven by a timer as well as the animation event. The timer
-        // keeps attacks working if Take Hit (or another state) interrupts the Attack clip.
-        if (hasReachedCastle)
-        {
-            castleAttackTimer -= deltaTime;
-            if (castleAttackTimer <= 0f)
-                ApplyCastleAttackDamage();
-        }
-
         if (isTakingHit)
         {
             AnimatorStateInfo hitInfo = animator != null ? animator.GetCurrentAnimatorStateInfo(0) : default;
@@ -227,16 +151,26 @@ public sealed class SkeletonEnemy : MonoBehaviour
             Vector2.Distance(transform.position, knightTarget.transform.position) <= knightTarget.EnemyEngagementRange)
         {
             hasReachedCastle = false;
-            castleAttackTimer -= deltaTime;
-            if (castleAttackTimer <= 0f)
+            allyAttackTimer -= deltaTime;
+            if (allyAttackTimer <= 0f)
             {
-                castleAttackTimer = config.CastleAttackInterval;
+                allyAttackTimer = config.CastleAttackInterval;
                 PlayState(AttackState, attackAnimationSpeed);
                 knightTarget.ApplyDamage(config.GetCastleDamage(isBoss));
             }
             else if (animator != null && animator.GetCurrentAnimatorStateInfo(0).shortNameHash != AttackState)
                 PlayState(AttackState, attackAnimationSpeed);
             return false;
+        }
+        allyAttackTimer = config.CastleAttackInterval;
+
+        // Castle damage is driven by a timer as well as the animation event. The timer
+        // keeps attacks working if Take Hit (or another state) interrupts the Attack clip.
+        if (hasReachedCastle)
+        {
+            castleAttackTimer -= deltaTime;
+            if (castleAttackTimer <= 0f)
+                ApplyCastleAttackDamage();
         }
 
         if (idleRemaining > 0f)

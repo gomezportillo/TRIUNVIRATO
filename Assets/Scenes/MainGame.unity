@@ -601,7 +601,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 1
     m_LineSpacing: 1
-  m_Text: 0.6.1
+  m_Text: 0.7
 --- !u!1 &250000030
 GameObject:
   m_ObjectHideFlags: 0
@@ -3061,7 +3061,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   overrideMaterialWidth: 0
-  outlinePixels: 1
+  outlinePixels: 4
 --- !u!1 &890000000
 GameObject:
   m_ObjectHideFlags: 0

@@ -3,18 +3,21 @@ using UnityEngine;
 /// <summary>Runtime ally unit using the imported Blademaster renderer and Animator Controller.</summary>
 public sealed class KnightAlly : MonoBehaviour
 {
-    private static readonly int AnimState = Animator.StringToHash("AnimState");
-    private static readonly int AttackTrigger = Animator.StringToHash("Attack");
-    private static readonly int HurtTrigger = Animator.StringToHash("Hurt");
-    private static readonly int DeathTrigger = Animator.StringToHash("Death");
+    private static readonly int IdleState = Animator.StringToHash("Blademaster_Idle");
+    private static readonly int RunState = Animator.StringToHash("Blademaster_Run");
+    private static readonly int AttackState = Animator.StringToHash("Blademaster_Attack");
+    private static readonly int HurtState = Animator.StringToHash("Blademaster_Hit");
+    private static readonly int DeathState = Animator.StringToHash("Blademaster_Death");
 
     private TriunviratoGame game;
     private KnightSummonAbilityConfig config;
     private Animator animator;
     private SpriteRenderer actorRenderer;
+    private WorldHealthBar healthBar;
     private float currentHealth;
     private float maximumHealth;
     private float damage;
+    private float combatLaneY;
     private float attackTimer;
     private float deathTimer;
     private bool dead;
@@ -31,17 +34,22 @@ public sealed class KnightAlly : MonoBehaviour
         float statMultiplier = Mathf.Pow(1f + ability.HealthAndDamageIncreasePerLevel, Mathf.Max(0, level));
         maximumHealth = currentHealth = ability.BaseHealth * statMultiplier;
         damage = ability.BaseDamage * statMultiplier;
+        combatLaneY = transform.position.y;
         attackTimer = 0f;
         deathTimer = ability.DeathAnimationFallback;
-        transform.localScale = Vector3.one * ability.VisualScale;
+        transform.localScale *= ability.VisualScale;
 
         foreach (MonoBehaviour behaviour in GetComponentsInChildren<MonoBehaviour>(true))
-            if (behaviour != this) behaviour.enabled = false;
+            if (behaviour != this && !(behaviour is SpriteOutlineUvBounds)) behaviour.enabled = false;
         foreach (Collider2D collider in GetComponentsInChildren<Collider2D>(true)) collider.enabled = false;
         foreach (Collider collider in GetComponentsInChildren<Collider>(true)) collider.enabled = false;
         Rigidbody2D body = GetComponent<Rigidbody2D>();
         if (body != null) body.simulated = false;
-        SetMoving(false);
+        healthBar = GetComponent<WorldHealthBar>();
+        if (healthBar == null) healthBar = gameObject.AddComponent<WorldHealthBar>();
+        healthBar.Initialize(actorRenderer, ability.HealthBarLength, ability.HealthBarHeight, ability.HealthBarOffset);
+        healthBar.SetHealth(currentHealth, maximumHealth);
+        PlayState(IdleState);
     }
 
     internal bool Tick(float deltaTime, SkeletonEnemy[] enemies, float advanceTargetX)
@@ -49,9 +57,9 @@ public sealed class KnightAlly : MonoBehaviour
         if (dead)
         {
             deathTimer -= deltaTime;
-            if (animator == null || !animator.HasState(0, Animator.StringToHash("Death"))) return deathTimer <= 0f;
+            if (animator == null || !animator.HasState(0, DeathState)) return deathTimer <= 0f;
             AnimatorStateInfo state = animator.GetCurrentAnimatorStateInfo(0);
-            return (state.shortNameHash == Animator.StringToHash("Death") && state.normalizedTime >= 1f) || deathTimer <= 0f;
+            return (state.shortNameHash == DeathState && state.normalizedTime >= 1f) || deathTimer <= 0f;
         }
 
         SkeletonEnemy target = FindTarget(enemies);
@@ -65,18 +73,20 @@ public sealed class KnightAlly : MonoBehaviour
                 if (attackTimer <= 0f)
                 {
                     attackTimer = Mathf.Max(0.05f, config.AttackInterval);
-                    if (animator != null) animator.SetTrigger(AttackTrigger);
+                    PlayState(AttackState);
                     game?.ApplyKnightDamage(target, damage, this);
                 }
                 return false;
             }
 
-            MoveToward(target.transform.position.x, deltaTime);
+            float targetY = Mathf.Clamp(target.transform.position.y,
+                combatLaneY - config.MaximumLaneYOffset, combatLaneY + config.MaximumLaneYOffset);
+            MoveToward(new Vector2(target.transform.position.x, targetY), deltaTime);
             return false;
         }
 
         if (transform.position.x < advanceTargetX - 0.05f)
-            MoveToward(advanceTargetX, deltaTime);
+            MoveToward(new Vector2(advanceTargetX, combatLaneY), deltaTime);
         else SetMoving(false);
         return false;
     }
@@ -88,11 +98,13 @@ public sealed class KnightAlly : MonoBehaviour
         if (currentHealth <= 0f)
         {
             dead = true;
-            if (animator != null) animator.SetTrigger(DeathTrigger);
+            healthBar?.SetVisible(false);
+            PlayState(DeathState);
             deathTimer = config != null ? config.DeathAnimationFallback : 1f;
             return;
         }
-        if (animator != null) animator.SetTrigger(HurtTrigger);
+        healthBar?.SetHealth(currentHealth, maximumHealth);
+        PlayState(HurtState);
     }
 
     private SkeletonEnemy FindTarget(SkeletonEnemy[] enemies)
@@ -109,17 +121,30 @@ public sealed class KnightAlly : MonoBehaviour
         return best;
     }
 
-    private void MoveToward(float x, float deltaTime)
+    private void MoveToward(Vector2 destination, float deltaTime)
     {
         SetMoving(true);
-        if (actorRenderer != null) actorRenderer.flipX = x < transform.position.x;
-        Vector3 destination = new Vector3(x, transform.position.y, transform.position.z);
-        transform.position = Vector3.MoveTowards(transform.position, destination, config.MovementSpeed * deltaTime);
+        if (actorRenderer != null) actorRenderer.flipX = destination.x < transform.position.x;
+        Vector2 current = new Vector2(transform.position.x, transform.position.y);
+        Vector2 next = Vector2.MoveTowards(current, destination, config.MovementSpeed * deltaTime);
+        transform.position = new Vector3(next.x, next.y, transform.position.z);
     }
 
     private void SetMoving(bool moving)
     {
-        if (animator != null && animator.runtimeAnimatorController != null && animator.parameters.Length > 0)
-            animator.SetFloat(AnimState, moving ? 1f : 0f);
+        if (animator == null || animator.runtimeAnimatorController == null || dead) return;
+        AnimatorStateInfo state = animator.GetCurrentAnimatorStateInfo(0);
+        if (state.shortNameHash == AttackState || state.shortNameHash == HurtState)
+        {
+            if (state.normalizedTime < 1f) return;
+        }
+        PlayState(moving ? RunState : IdleState);
+    }
+
+    private void PlayState(int stateHash)
+    {
+        if (animator == null || animator.runtimeAnimatorController == null || !animator.HasState(0, stateHash)) return;
+        if (animator.GetCurrentAnimatorStateInfo(0).shortNameHash != stateHash)
+            animator.Play(stateHash, 0, 0f);
     }
 }

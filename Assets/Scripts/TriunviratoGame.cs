@@ -953,6 +953,7 @@ public sealed class TriunviratoGame : MonoBehaviour
             Vector3 position = new Vector3(hero.position.x + offset.x, hero.position.y + offset.y, hero.position.z);
             GameObject view = Instantiate(knightSummonAbility.KnightPrefab, position, Quaternion.identity);
             view.name = "Caballero de Tierra";
+            view.tag = "Untagged";
             KnightAlly ally = view.GetComponent<KnightAlly>();
             if (ally == null) ally = view.AddComponent<KnightAlly>();
             ally.Initialize(this, knightSummonAbility, knightUpgradeLevel);
@@ -966,8 +967,8 @@ public sealed class TriunviratoGame : MonoBehaviour
 
         if (army == ArmyType.Tierra && abilityId == WarBlessingAbilityId)
         {
-            if (!Enum.TryParse(targetArmy, true, out ArmyType target) ||
-                (target != ArmyType.Aire && target != ArmyType.Mar))
+            bool parsedTarget = TryParseWarBlessingTarget(targetArmy, out ArmyType target);
+            if (!parsedTarget || (target != ArmyType.Aire && target != ArmyType.Mar))
             { message = "Acelerar aliado solo puede dirigirse a Aire o Agua."; return false; }
             if (warBlessingAbility == null) { message = "Acelerar aliado no está configurada."; return false; }
             if (!bypassCooldown && GetWarBlessingCooldownRemaining() > 0f)
@@ -1125,6 +1126,13 @@ public sealed class TriunviratoGame : MonoBehaviour
             case ArmyType.Mar: return "lightning_storm";
             default: return string.Empty;
         }
+    }
+
+    private static bool TryParseWarBlessingTarget(string value, out ArmyType target)
+    {
+        if (string.Equals(value, "agua", StringComparison.OrdinalIgnoreCase))
+        { target = ArmyType.Mar; return true; }
+        return Enum.TryParse(value, true, out target);
     }
 
     private string GetCooldownKey(ArmyType army, string abilityId) => ((int)army) + ":" + abilityId;
