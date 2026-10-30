@@ -1,13 +1,13 @@
 using UnityEngine;
 
 /// <summary>Runtime state and animation driver for one Skeleton enemy instance.</summary>
-public sealed class SkeletonEnemy : MonoBehaviour
+public class Enemy : MonoBehaviour
 {
-    private static readonly int IdleState = Animator.StringToHash("Idle");
-    private static readonly int WalkState = Animator.StringToHash("Walk");
-    private static readonly int TakeHitState = Animator.StringToHash("Take Hit");
-    private static readonly int DeathState = Animator.StringToHash("Death");
-    private static readonly int AttackState = Animator.StringToHash("Attack");
+    private int IdleState;
+    private int WalkState;
+    private int TakeHitState;
+    private int DeathState;
+    private int AttackState;
 
     private EnemyConfig config;
     private TriunviratoGame game;
@@ -49,6 +49,11 @@ public sealed class SkeletonEnemy : MonoBehaviour
         config = enemyConfig;
         game = owner;
         isBoss = boss;
+        IdleState = Animator.StringToHash(config.IdleAnimationState);
+        WalkState = Animator.StringToHash(config.WalkAnimationState);
+        TakeHitState = Animator.StringToHash(config.TakeHitAnimationState);
+        DeathState = Animator.StringToHash(config.DeathAnimationState);
+        AttackState = Animator.StringToHash(config.AttackAnimationState);
         animator = GetComponent<Animator>();
         actorRenderer = GetComponentInChildren<SpriteRenderer>();
         combatEffects = GetComponent<TimedCombatEffects>();
@@ -60,7 +65,7 @@ public sealed class SkeletonEnemy : MonoBehaviour
         healthBar.Initialize(actorRenderer, config.HealthBarLength, config.HealthBarHeight, config.HealthBarOffset);
         healthBar.SetHealth(currentHealth, MaximumHealth);
 
-        float attackClipLength = GetClipLength(AttackState, 1f);
+        float attackClipLength = GetClipLength(AttackState, config.AttackAnimationState, 1f);
         attackAnimationSpeed = attackClipLength / Mathf.Max(0.1f, config.CastleAttackInterval);
         castleAttackImpactDelay = GetCastleAttackImpactDelay();
         allyAttackTimer = config.CastleAttackInterval;
@@ -89,7 +94,7 @@ public sealed class SkeletonEnemy : MonoBehaviour
             healthBar?.SetVisible(false);
             PlayState(DeathState, 1f);
             deathFallbackTimer = config.DeathAnimationFallbackSeconds;
-            GameSoundManager.Instance?.PlaySkeletonDeath();
+            GameSoundManager.Instance?.PlayEnemyDeath(config.DeathSound);
             return appliedDamage;
         }
 
@@ -127,11 +132,12 @@ public sealed class SkeletonEnemy : MonoBehaviour
         if (isDead)
         {
             deathFallbackTimer -= deltaTime;
-            if (animator == null || !animator.HasState(0, DeathState))
+            int resolvedDeathState = ResolveStateHash(DeathState);
+            if (animator == null || !animator.HasState(0, resolvedDeathState))
                 return deathFallbackTimer <= 0f;
 
             AnimatorStateInfo deathInfo = animator.GetCurrentAnimatorStateInfo(0);
-            return (deathInfo.shortNameHash == DeathState && deathInfo.normalizedTime >= 1f) ||
+            return (deathInfo.shortNameHash == resolvedDeathState && deathInfo.normalizedTime >= 1f) ||
                    deathFallbackTimer <= 0f;
         }
 
@@ -156,7 +162,8 @@ public sealed class SkeletonEnemy : MonoBehaviour
         if (isTakingHit)
         {
             AnimatorStateInfo hitInfo = animator != null ? animator.GetCurrentAnimatorStateInfo(0) : default;
-            if (animator != null && hitInfo.shortNameHash == TakeHitState && hitInfo.normalizedTime < 1f)
+            int resolvedHitState = ResolveStateHash(TakeHitState);
+            if (animator != null && hitInfo.shortNameHash == resolvedHitState && hitInfo.normalizedTime < 1f)
                 return false;
 
             isTakingHit = false;
@@ -243,36 +250,40 @@ public sealed class SkeletonEnemy : MonoBehaviour
         if (animator == null)
             return;
 
-        int selectedState = stateHash;
-        if (!animator.HasState(0, selectedState))
-        {
-            string alias = stateHash == IdleState ? "BringerOfDeath_Idle" :
-                stateHash == WalkState ? "BringerOfDeath_Walk" :
-                stateHash == TakeHitState ? "BringerOfDeath_Hurt" :
-                stateHash == DeathState ? "BringerOfDeath_Death" : null;
-            if (string.IsNullOrEmpty(alias) || !animator.HasState(0, Animator.StringToHash(alias))) return;
-            selectedState = Animator.StringToHash(alias);
-        }
+        int selectedState = ResolveStateHash(stateHash);
+        if (!animator.HasState(0, selectedState)) return;
 
         if (animator.GetCurrentAnimatorStateInfo(0).shortNameHash != selectedState)
             animator.Play(selectedState, 0, 0f);
         animator.speed = speed;
     }
 
-    private float GetClipLength(int stateHash, float fallback)
+    private int ResolveStateHash(int stateHash)
+    {
+        if (animator == null || animator.HasState(0, stateHash))
+            return stateHash;
+
+        string alias = stateHash == IdleState ? "BringerOfDeath_Idle" :
+            stateHash == WalkState ? "BringerOfDeath_Walk" :
+            stateHash == TakeHitState ? "BringerOfDeath_Hurt" :
+            stateHash == DeathState ? "BringerOfDeath_Death" : null;
+        return string.IsNullOrEmpty(alias) ? stateHash : Animator.StringToHash(alias);
+    }
+
+    private float GetClipLength(int stateHash, string stateName, float fallback)
     {
         if (animator == null || animator.runtimeAnimatorController == null)
             return fallback;
 
         foreach (AnimationClip clip in animator.runtimeAnimatorController.animationClips)
         {
-            if (Animator.StringToHash(clip.name) == stateHash || clip.name == GetBossClipName(stateHash))
+            if (Animator.StringToHash(clip.name) == stateHash || clip.name == stateName || clip.name == GetBossClipName(stateHash))
                 return clip.length;
         }
         return fallback;
     }
 
-    private static string GetBossClipName(int stateHash)
+    private string GetBossClipName(int stateHash)
     {
         if (stateHash == IdleState) return "BringerOfDeath_Idle";
         if (stateHash == WalkState) return "BringerOfDeath_Walk";
@@ -289,7 +300,7 @@ public sealed class SkeletonEnemy : MonoBehaviour
         {
             foreach (AnimationClip clip in animator.runtimeAnimatorController.animationClips)
             {
-                if (Animator.StringToHash(clip.name) != AttackState && clip.name != GetBossClipName(AttackState) || clip.length <= 0f)
+                if (Animator.StringToHash(clip.name) != AttackState && clip.name != config.AttackAnimationState && clip.name != GetBossClipName(AttackState) || clip.length <= 0f)
                     continue;
 
                 foreach (AnimationEvent animationEvent in clip.events)

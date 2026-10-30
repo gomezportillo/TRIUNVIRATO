@@ -1,0 +1,38 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b15f0c26e01943f59de2e35d817a0001, type: 3}
+  m_Name: Wolf
+  m_EditorClassIdentifier: 
+  id: enemy-wolf
+  displayName: Wolf
+  prefab: {fileID: 8800000000000000011, guid: 3f49d6bc1e2bbd4408ca895f43844163, type: 3}
+  maximumHealth: 38
+  additionalHealthPerWave: 7
+  healthGrowthPerWave: 0.05
+  movementSpeed: 0.55
+  speedGrowthPerWave: 0.035
+  maximumSpeedMultiplier: 2
+  castleDamagePerAttack: 12
+  castleAttackInterval: 1.7
+  initialIdleDuration: 0.15
+  visualScale: 0.45
+  idleAnimationState: Wolf_Idle
+  walkAnimationState: Wolf_Run
+  takeHitAnimationState: Wolf_TakeHit
+  deathAnimationState: Wolf_Death
+  attackAnimationState: Wolf_Attack
+  experienceReward: 18
+  deathSound: {fileID: 8300000, guid: 35846afe14f70764dad8e55b4642cf51, type: 3}
+  healthBarLength: 0.38
+  healthBarHeight: 0.035
+  healthBarOffset: -0.15
+  deathAnimationFallbackSeconds: 1.1

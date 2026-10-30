@@ -52,7 +52,7 @@ public sealed class KnightAlly : MonoBehaviour
         PlayState(IdleState);
     }
 
-    internal bool Tick(float deltaTime, SkeletonEnemy[] enemies, float advanceTargetX)
+    internal bool Tick(float deltaTime, Enemy[] enemies, float advanceTargetX)
     {
         if (dead)
         {
@@ -62,7 +62,7 @@ public sealed class KnightAlly : MonoBehaviour
             return (state.shortNameHash == DeathState && state.normalizedTime >= 1f) || deathTimer <= 0f;
         }
 
-        SkeletonEnemy target = FindTarget(enemies);
+        Enemy target = FindTarget(enemies);
         if (target != null)
         {
             float distance = Vector2.Distance(transform.position, target.transform.position);
@@ -107,12 +107,12 @@ public sealed class KnightAlly : MonoBehaviour
         PlayState(HurtState);
     }
 
-    private SkeletonEnemy FindTarget(SkeletonEnemy[] enemies)
+    private Enemy FindTarget(Enemy[] enemies)
     {
-        SkeletonEnemy best = null;
+        Enemy best = null;
         float bestDistance = float.PositiveInfinity;
         if (enemies == null) return null;
-        foreach (SkeletonEnemy enemy in enemies)
+        foreach (Enemy enemy in enemies)
         {
             if (enemy == null || enemy.IsDead) continue;
             float distance = Vector2.Distance(transform.position, enemy.transform.position);

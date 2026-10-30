@@ -28,6 +28,15 @@ public sealed class TriunviratoGame : MonoBehaviour
     [SerializeField] private Transform castleTarget;
     [SerializeField] private EnemyConfig enemyConfig;
     [SerializeField] private EnemyConfig bossConfig;
+    [Header("Oleadas nocturnas")]
+    [SerializeField] private EnemyConfig nightEnemyConfig;
+    [SerializeField] private EnemyConfig nightBossConfig;
+    [SerializeField] private SpriteRenderer nightMapOverlay;
+    [SerializeField] private Animator mapFrameAnimator;
+    [SerializeField] private AudioClip nightStartSound;
+    [SerializeField, Range(0f, 1f)] private float nightStartVolume = 0.7f;
+    [SerializeField, Min(0f)] private float nightFadeInDuration = 2f;
+    [SerializeField, Min(0f)] private float nightFadeOutDuration = 2f;
     [SerializeField] private Font damageFont;
     [SerializeField] private UpgradeCatalog upgradeCatalog;
     [Header("Hero Special Abilities")]
@@ -42,7 +51,7 @@ public sealed class TriunviratoGame : MonoBehaviour
     [SerializeField] private ElectricBirdAbilityConfig electricBirdAbility;
     [SerializeField, Tooltip("Si se asigna, los límites del SpriteRenderer delimitan dónde caen los meteoritos.")]
     private SpriteRenderer meteorShowerArea;
-    private readonly List<SkeletonEnemy> enemies = new List<SkeletonEnemy>();
+    private readonly List<Enemy> enemies = new List<Enemy>();
     private readonly List<KnightAlly> knightAllies = new List<KnightAlly>();
     private readonly List<Projectile> projectiles = new List<Projectile>();
     private readonly List<TornadoProjectile> tornadoProjectiles = new List<TornadoProjectile>();
@@ -58,6 +67,9 @@ public sealed class TriunviratoGame : MonoBehaviour
     private int wave;
     private int remainingToSpawn;
     private bool waveInProgress;
+    private bool nightWaveActive;
+    private Coroutine nightFadeCoroutine;
+    private float mapFrameAnimationSpeed = 1f;
     private bool paused;
     private bool finished;
     private bool victory;
@@ -85,6 +97,10 @@ public sealed class TriunviratoGame : MonoBehaviour
     [SerializeField, Min(0f)] private float initialExperienceMultiplier = 1f;
     [SerializeField, Min(0f)] private float experienceGrowthPerLevel = 0.18f;
     [SerializeField, Min(0f)] private float bossExperienceMultiplier = 5f;
+    [SerializeField] private GameObject tierraLevelUpEffect;
+    [SerializeField] private GameObject aireLevelUpEffect;
+    [SerializeField] private GameObject marLevelUpEffect;
+    private readonly Coroutine[] levelUpEffectCoroutines = new Coroutine[3];
     [Header("Iconos de efectos")]
     [SerializeField] private GameObject fireRageIconPrefab;
     [SerializeField] private GameObject warBlessingIconPrefab;
@@ -232,7 +248,7 @@ public sealed class TriunviratoGame : MonoBehaviour
     {
         public GameObject View;
         public Vector3 Destination;
-        public SkeletonEnemy Target;
+        public Enemy Target;
         public float Damage;
         public Color DamageColor;
         public float SplashRadius;
@@ -245,13 +261,13 @@ public sealed class TriunviratoGame : MonoBehaviour
     private sealed class TornadoProjectile
     {
         public GameObject View;
-        public HashSet<SkeletonEnemy> HitEnemies = new HashSet<SkeletonEnemy>();
+        public HashSet<Enemy> HitEnemies = new HashSet<Enemy>();
     }
 
     private sealed class ElectricBirdProjectile
     {
         public GameObject View;
-        public SkeletonEnemy Target;
+        public Enemy Target;
         public float RemainingLifetime;
         public float ImpactRemaining;
         public float LaunchDelayRemaining;
@@ -271,6 +287,7 @@ public sealed class TriunviratoGame : MonoBehaviour
         if (gameCamera != null && gameCamera.orthographic)
             baseOrthographicSize = gameCamera.orthographicSize;
         UpdateGameCameraViewport();
+        if (mapFrameAnimator != null) mapFrameAnimationSpeed = mapFrameAnimator.speed;
         if (upgradeCatalog == null)
             Debug.LogError("Asigna UpgradeCatalog desde Assets/GameData/Upgrades en el Inspector.", this);
         if (fireRageAbility == null || heroCloneAbility == null || knightSummonAbility == null || warBlessingAbility == null ||
@@ -279,9 +296,10 @@ public sealed class TriunviratoGame : MonoBehaviour
         if (tierraHero == null || aireHero == null || marHero == null ||
             tierraConfig == null || aireConfig == null || marConfig == null ||
             enemySpawner == null || castleTarget == null || enemyConfig == null || bossConfig == null ||
-            enemyConfig.Prefab == null || bossConfig.Prefab == null || damageFont == null)
+            enemyConfig.Prefab == null || bossConfig.Prefab == null || damageFont == null ||
+            nightEnemyConfig == null || nightEnemyConfig.Prefab == null || nightBossConfig == null || nightBossConfig.Prefab == null)
         {
-            Debug.LogError("Asigna los tres héroes, EnemyConfig, BossConfig, EnemySpawner, CastleTarget y la fuente en el Inspector.", this);
+            Debug.LogError("Asigna los héroes, EnemyConfig, BossConfig, configuraciones nocturnas, referencias de escena, EnemySpawner, CastleTarget y la fuente en el Inspector.", this);
             enabled = false;
             return;
         }
@@ -301,6 +319,9 @@ public sealed class TriunviratoGame : MonoBehaviour
         {
             if (keyboard.oKey.wasPressedThisFrame)
                 ForceStartNextWaveForDebug();
+
+            if (keyboard.nKey.wasPressedThisFrame)
+                ForceLevelUpAllHeroesForDebug();
 
             if (keyboard.pKey.wasPressedThisFrame && !finished)
             {
@@ -337,7 +358,7 @@ public sealed class TriunviratoGame : MonoBehaviour
         if (matchStatus != MatchStatus.InProgress || finished)
             return;
 
-        foreach (SkeletonEnemy enemy in enemies)
+        foreach (Enemy enemy in enemies)
             if (enemy != null) Destroy(enemy.gameObject);
         enemies.Clear();
         foreach (Projectile projectile in projectiles)
@@ -349,6 +370,7 @@ public sealed class TriunviratoGame : MonoBehaviour
 
         waveInProgress = false;
         remainingToSpawn = 0;
+        if (nightWaveActive) EndNightWave();
         StartNextWave();
         Debug.Log("Depuración: inicio forzado de la oleada " + wave + ".", this);
     }
@@ -380,6 +402,8 @@ public sealed class TriunviratoGame : MonoBehaviour
 
     private void ResetMatch(bool resumeMatch)
     {
+        ResetLevelUpEffects();
+        ResetNightVisuals();
         StopAllCoroutines();
         cloneSpawnPending = false;
         cloneSpawnRemaining = 0f;
@@ -396,7 +420,7 @@ public sealed class TriunviratoGame : MonoBehaviour
         additionalCooldownEndsAt.Clear();
         specialCooldownsWereRunning = false;
         nextCooldownStateRefreshAt = 0f;
-        foreach (SkeletonEnemy enemy in enemies)
+        foreach (Enemy enemy in enemies)
         {
             if (enemy != null)
                 Destroy(enemy.gameObject);
@@ -532,7 +556,9 @@ public sealed class TriunviratoGame : MonoBehaviour
             spawnTimer -= Time.deltaTime;
             if (spawnTimer <= 0f)
             {
-                SpawnEnemy(wave % 3 == 0 && remainingToSpawn == 1);
+                bool isFinalEnemy = remainingToSpawn == 1;
+                bool isBossWave = wave % 3 == 0 || wave % 5 == 0;
+                SpawnEnemy(isFinalEnemy && isBossWave);
                 remainingToSpawn--;
                 spawnTimer = GetEnemySpawnInterval();
             }
@@ -540,6 +566,7 @@ public sealed class TriunviratoGame : MonoBehaviour
         else if (enemies.Count == 0)
         {
             waveInProgress = false;
+            if (nightWaveActive) EndNightWave();
             StartNextWave();
         }
     }
@@ -721,8 +748,7 @@ public sealed class TriunviratoGame : MonoBehaviour
             while (experience[i] >= ExperienceNeededFor(army, levels[i]))
             {
                 experience[i] -= ExperienceNeededFor(army, levels[i]);
-                levels[i]++;
-                queuedUpgradeOffers[i].Add(GenerateLevelOffer((ArmyType)i));
+                AdvanceHeroLevel(army);
             }
         }
         StateRevision++;
@@ -731,6 +757,104 @@ public sealed class TriunviratoGame : MonoBehaviour
     private UpgradeOffer[] GenerateLevelOffer(ArmyType army)
     {
         return GenerateProgressionOffer(army, 1);
+    }
+
+    private void AdvanceHeroLevel(ArmyType army)
+    {
+        int index = (int)army;
+        levels[index]++;
+        PlayLevelUpEffect(army);
+        queuedUpgradeOffers[index].Add(GenerateLevelOffer(army));
+    }
+
+    private void ForceLevelUpAllHeroesForDebug()
+    {
+        if (matchStatus != MatchStatus.InProgress || finished)
+            return;
+
+        for (int i = 0; i < 3; i++)
+            AdvanceHeroLevel((ArmyType)i);
+        StateRevision++;
+        Debug.Log("Depuración: Tierra, Aire y Mar subieron un nivel.", this);
+    }
+
+    private void PlayLevelUpEffect(ArmyType army)
+    {
+        GameSoundManager.Instance?.PlayLevelUp();
+        int index = (int)army;
+        GameObject effect = GetLevelUpEffect(army);
+        if (effect == null)
+            return;
+
+        Animator animator = effect.GetComponent<Animator>();
+        if (animator == null)
+            return;
+
+        if (levelUpEffectCoroutines[index] != null)
+        {
+            StopCoroutine(levelUpEffectCoroutines[index]);
+            levelUpEffectCoroutines[index] = null;
+        }
+
+        animator.enabled = false;
+        effect.SetActive(false);
+        effect.SetActive(true);
+        animator.enabled = true;
+        animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+        animator.Rebind();
+        animator.Play(Animator.StringToHash("LevelUp"), 0, 0f);
+        animator.Update(0f);
+        float lifetime = Mathf.Max(0.05f, GetEffectClipLength(animator.runtimeAnimatorController)) + 0.05f;
+        levelUpEffectCoroutines[index] = StartCoroutine(DeactivateLevelUpEffect(effect, animator, index, lifetime));
+    }
+
+    private GameObject GetLevelUpEffect(ArmyType army)
+    {
+        switch (army)
+        {
+            case ArmyType.Tierra: return tierraLevelUpEffect;
+            case ArmyType.Aire: return aireLevelUpEffect;
+            case ArmyType.Mar: return marLevelUpEffect;
+            default: return null;
+        }
+    }
+
+    private IEnumerator DeactivateLevelUpEffect(GameObject effect, Animator animator, int index, float duration)
+    {
+        float elapsed = 0f;
+        while (elapsed < duration)
+        {
+            if (!paused) elapsed += Time.deltaTime;
+            yield return null;
+        }
+
+        if (effect != null)
+        {
+            animator.enabled = false;
+            effect.SetActive(false);
+        }
+        levelUpEffectCoroutines[index] = null;
+    }
+
+    private void ResetLevelUpEffects()
+    {
+        for (int i = 0; i < levelUpEffectCoroutines.Length; i++)
+        {
+            if (levelUpEffectCoroutines[i] != null)
+            {
+                StopCoroutine(levelUpEffectCoroutines[i]);
+                levelUpEffectCoroutines[i] = null;
+            }
+        }
+
+        GameObject[] effects = { tierraLevelUpEffect, aireLevelUpEffect, marLevelUpEffect };
+        foreach (GameObject effect in effects)
+        {
+            if (effect == null) continue;
+            Animator animator = effect.GetComponent<Animator>();
+            if (animator != null) animator.enabled = false;
+            effect.SetActive(false);
+        }
     }
 
     private UpgradeOffer[] GenerateProgressionOffer(ArmyType army, int stars)
@@ -902,6 +1026,7 @@ public sealed class TriunviratoGame : MonoBehaviour
         remainingToSpawn = 4 + wave * 2;
         waveInProgress = true;
         spawnTimer = 0f;
+        if (wave % 5 == 0) BeginNightWave();
         StateRevision++;
     }
 
@@ -1196,7 +1321,7 @@ public sealed class TriunviratoGame : MonoBehaviour
         if (army == ArmyType.Mar && abilityId == ElectricBirdAbilityId)
         {
             if (!bypassCooldown && !IsAbilityUnlocked(army, abilityId)) { message = "Ave eléctrica aún no está desbloqueada."; return false; }
-            SkeletonEnemy target = SelectLightningTarget();
+            Enemy target = SelectLightningTarget();
             if (!CanActivateElectricBird(bypassCooldown) || target == null)
             { message = "Ave eléctrica no tiene un objetivo válido."; return false; }
             Defender mar = defenders[(int)ArmyType.Mar];
@@ -1303,7 +1428,7 @@ public sealed class TriunviratoGame : MonoBehaviour
             return false;
         }
 
-        SkeletonEnemy lightningTarget = army == ArmyType.Mar ? SelectLightningTarget() : null;
+        Enemy lightningTarget = army == ArmyType.Mar ? SelectLightningTarget() : null;
         if (army == ArmyType.Mar && lightningTarget == null)
         {
             message = "No hay enemigos vivos.";
@@ -1472,7 +1597,7 @@ public sealed class TriunviratoGame : MonoBehaviour
             clone.PendingShotTimer -= Time.deltaTime;
             if (clone.PendingShotTimer > 0f) return;
             clone.ShotPending = false;
-            SkeletonEnemy pendingTarget = FindTarget(clone.View.transform.position, GetHeroRange(ArmyType.Aire));
+            Enemy pendingTarget = FindTarget(clone.View.transform.position, GetHeroRange(ArmyType.Aire));
             if (pendingTarget != null)
                 FireProjectile(clone.View, aireConfig.DisplayName + " · Clon", aireConfig, clone.PendingDamage,
                     GetHeroSplashRadius(ArmyType.Aire), pendingTarget.transform.position, pendingTarget,
@@ -1481,7 +1606,7 @@ public sealed class TriunviratoGame : MonoBehaviour
 
         clone.AttackTimer -= Time.deltaTime;
         if (clone.AttackTimer > 0f) return;
-        SkeletonEnemy target = FindTarget(clone.View.transform.position, GetHeroRange(ArmyType.Aire));
+        Enemy target = FindTarget(clone.View.transform.position, GetHeroRange(ArmyType.Aire));
         if (target == null) return;
         clone.AttackTimer = GetHeroAttackCooldownWithEffects(ArmyType.Aire, clone.Effects);
         clone.PendingDamage = GetHeroDamageWithEffects(ArmyType.Aire, clone.Effects);
@@ -1500,7 +1625,7 @@ public sealed class TriunviratoGame : MonoBehaviour
         if (!CanCombat || deltaTime <= 0f) return;
         if (defenders != null)
             foreach (Defender defender in defenders) defender?.Effects?.Tick(deltaTime);
-        foreach (SkeletonEnemy enemy in enemies) enemy?.Effects?.Tick(deltaTime);
+        foreach (Enemy enemy in enemies) enemy?.Effects?.Tick(deltaTime);
         activeClone?.Effects?.Tick(deltaTime);
     }
 
@@ -1548,7 +1673,7 @@ public sealed class TriunviratoGame : MonoBehaviour
 
     private bool HasLivingEnemies()
     {
-        foreach (SkeletonEnemy enemy in enemies)
+        foreach (Enemy enemy in enemies)
         {
             if (enemy != null && !enemy.IsDead)
                 return true;
@@ -1556,11 +1681,11 @@ public sealed class TriunviratoGame : MonoBehaviour
         return false;
     }
 
-    private SkeletonEnemy SelectLightningTarget()
+    private Enemy SelectLightningTarget()
     {
-        SkeletonEnemy firstBoss = null;
-        SkeletonEnemy highestHealthEnemy = null;
-        foreach (SkeletonEnemy enemy in enemies)
+        Enemy firstBoss = null;
+        Enemy highestHealthEnemy = null;
+        foreach (Enemy enemy in enemies)
         {
             if (enemy == null || enemy.IsDead)
                 continue;
@@ -1668,7 +1793,7 @@ public sealed class TriunviratoGame : MonoBehaviour
         }
         float normalDuration = ability != null ? Mathf.Max(0f, ability.NormalEnemyDuration + graspNormalDurationBonus[(int)ArmyType.Tierra]) : 0f;
         float bossDuration = ability != null ? Mathf.Min(normalDuration, Mathf.Max(0f, ability.BossDuration + graspBossDurationBonus[(int)ArmyType.Tierra])) : 0f;
-        foreach (SkeletonEnemy enemy in enemies)
+        foreach (Enemy enemy in enemies)
         {
             if (enemy == null || enemy.IsDead)
                 continue;
@@ -1717,7 +1842,7 @@ public sealed class TriunviratoGame : MonoBehaviour
 
         float damage = ScaleSpecialDamage(ability != null ? ability.Damage + meteorDamageBonus[(int)ArmyType.Aire] : 0f, ArmyType.Aire);
         float radius = ability != null ? Mathf.Max(0f, ability.Radius) : 0f;
-        foreach (SkeletonEnemy enemy in enemies)
+        foreach (Enemy enemy in enemies)
         {
             if (enemy == null || enemy.IsDead || Vector2.Distance(position, enemy.transform.position) > radius)
                 continue;
@@ -1798,7 +1923,7 @@ public sealed class TriunviratoGame : MonoBehaviour
         return meteorShowerArea;
     }
 
-    private IEnumerator PerformLightningStorm(SkeletonEnemy target)
+    private IEnumerator PerformLightningStorm(Enemy target)
     {
         LightningStormAbilityConfig ability = lightningStormAbility;
         if (ability == null || ability.EffectController == null)
@@ -1910,8 +2035,10 @@ public sealed class TriunviratoGame : MonoBehaviour
         float randomY = UnityEngine.Random.Range(-0.25f, 0.25f);
         Vector3 spawnPosition = enemySpawner.position + Vector3.up * randomY;
 
-        EnemyConfig selectedConfig = isBoss ? bossConfig : enemyConfig;
-        SkeletonEnemy enemy = Instantiate(
+        EnemyConfig selectedConfig = isBoss
+            ? (nightWaveActive ? nightBossConfig : bossConfig)
+            : (nightWaveActive ? nightEnemyConfig : enemyConfig);
+        Enemy enemy = Instantiate(
             selectedConfig.Prefab,
             spawnPosition,
             Quaternion.identity
@@ -1925,11 +2052,72 @@ public sealed class TriunviratoGame : MonoBehaviour
         StateRevision++;
     }
 
+    private void BeginNightWave()
+    {
+        nightWaveActive = true;
+        if (mapFrameAnimator != null) mapFrameAnimator.speed = 0f;
+        if (nightMapOverlay != null && !nightMapOverlay.gameObject.activeSelf)
+            nightMapOverlay.gameObject.SetActive(true);
+        if (nightFadeCoroutine != null) StopCoroutine(nightFadeCoroutine);
+        if (nightMapOverlay != null) nightFadeCoroutine = StartCoroutine(FadeNightOverlay(1f, nightFadeInDuration));
+        GameSoundManager.Instance?.PlayNightHowl(nightStartSound, nightStartVolume);
+    }
+
+    private void EndNightWave()
+    {
+        nightWaveActive = false;
+        if (mapFrameAnimator != null) mapFrameAnimator.speed = mapFrameAnimationSpeed;
+        if (nightFadeCoroutine != null) StopCoroutine(nightFadeCoroutine);
+        if (nightMapOverlay != null) nightFadeCoroutine = StartCoroutine(FadeNightOverlay(0f, nightFadeOutDuration));
+    }
+
+    private IEnumerator FadeNightOverlay(float targetAlpha, float duration)
+    {
+        Color color = nightMapOverlay.color;
+        float startAlpha = color.a;
+        if (duration <= 0f)
+        {
+            color.a = targetAlpha;
+            nightMapOverlay.color = color;
+            nightFadeCoroutine = null;
+            yield break;
+        }
+        float elapsed = 0f;
+        while (elapsed < duration)
+        {
+            if (!paused) elapsed += Time.deltaTime;
+            color.a = Mathf.Lerp(startAlpha, targetAlpha, Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(elapsed / duration)));
+            nightMapOverlay.color = color;
+            yield return null;
+        }
+        color.a = targetAlpha;
+        nightMapOverlay.color = color;
+        nightFadeCoroutine = null;
+    }
+
+    private void ResetNightVisuals()
+    {
+        if (nightFadeCoroutine != null)
+        {
+            StopCoroutine(nightFadeCoroutine);
+            nightFadeCoroutine = null;
+        }
+        nightWaveActive = false;
+        if (nightMapOverlay != null)
+        {
+            if (!nightMapOverlay.gameObject.activeSelf) nightMapOverlay.gameObject.SetActive(true);
+            Color color = nightMapOverlay.color;
+            color.a = 0f;
+            nightMapOverlay.color = color;
+        }
+        if (mapFrameAnimator != null) mapFrameAnimator.speed = mapFrameAnimationSpeed;
+    }
+
     private void UpdateEnemies()
     {
         for (int i = enemies.Count - 1; i >= 0; i--)
         {
-            SkeletonEnemy enemy = enemies[i];
+            Enemy enemy = enemies[i];
             if (enemy == null)
             {
                 enemies.RemoveAt(i);
@@ -1961,7 +2149,7 @@ public sealed class TriunviratoGame : MonoBehaviour
     private void UpdateKnightAllies()
     {
         float advanceTargetX = enemySpawner != null ? enemySpawner.position.x : castleTarget.position.x;
-        SkeletonEnemy[] targets = enemies.ToArray();
+        Enemy[] targets = enemies.ToArray();
         for (int i = knightAllies.Count - 1; i >= 0; i--)
         {
             KnightAlly ally = knightAllies[i];
@@ -1992,7 +2180,7 @@ public sealed class TriunviratoGame : MonoBehaviour
         electricBirdProjectiles.Clear();
     }
 
-    internal void ApplyKnightDamage(SkeletonEnemy enemy, float damage, KnightAlly source)
+    internal void ApplyKnightDamage(Enemy enemy, float damage, KnightAlly source)
     {
         if (!CanCombat || source == null || source.IsDead || enemy == null || enemy.IsDead) return;
         ApplyDamage(enemy, damage, new Color(0.95f, 0.82f, 0.48f), ArmyType.Tierra, DamageCategory.SpecialAbility);
@@ -2013,7 +2201,7 @@ public sealed class TriunviratoGame : MonoBehaviour
                     defender.ShotPending = false;
                     if (IsValidPendingHeroShot(defender))
                     {
-                        SkeletonEnemy currentTarget = FindTarget(defender);
+                        Enemy currentTarget = FindTarget(defender);
                         if (currentTarget != null)
                             FireProjectile(defender, currentTarget);
                     }
@@ -2025,7 +2213,7 @@ public sealed class TriunviratoGame : MonoBehaviour
             if (defender.AttackTimer > 0f)
                 continue;
 
-            SkeletonEnemy target = FindTarget(defender);
+            Enemy target = FindTarget(defender);
             if (target == null)
                 continue;
 
@@ -2044,7 +2232,7 @@ public sealed class TriunviratoGame : MonoBehaviour
         return CanCombat && defender != null && defender.View != null && defender.Config != null;
     }
 
-    private void FireProjectile(Defender defender, SkeletonEnemy target)
+    private void FireProjectile(Defender defender, Enemy target)
     {
         if (target == null || target.IsDead)
             return;
@@ -2074,7 +2262,7 @@ public sealed class TriunviratoGame : MonoBehaviour
     }
 
     private void FireProjectile(GameObject source, string sourceName, HeroConfig config, float damage,
-        float splashRadius, SkeletonEnemy target, RuntimeAnimatorController animatorController = null,
+        float splashRadius, Enemy target, RuntimeAnimatorController animatorController = null,
         Vector3? launchPosition = null, DamageCategory damageCategory = DamageCategory.Hero)
     {
         if (target == null || target.IsDead)
@@ -2085,7 +2273,7 @@ public sealed class TriunviratoGame : MonoBehaviour
     }
 
     private void FireProjectile(GameObject source, string sourceName, HeroConfig config, float damage,
-        float splashRadius, Vector3 destination, SkeletonEnemy target, RuntimeAnimatorController animatorController = null,
+        float splashRadius, Vector3 destination, Enemy target, RuntimeAnimatorController animatorController = null,
         Vector3? launchPosition = null, DamageCategory damageCategory = DamageCategory.Hero)
     {
         if (source == null || config == null)
@@ -2182,7 +2370,7 @@ public sealed class TriunviratoGame : MonoBehaviour
             view.position = Vector3.MoveTowards(view.position, projectile.Destination, projectile.Speed * Time.deltaTime);
             SetProjectileVisualDirection(view, view.position - previousPosition);
             projectile.RemainingLifetime -= Time.deltaTime;
-            SkeletonEnemy hit = FindProjectileImpact(previousPosition, view.position);
+            Enemy hit = FindProjectileImpact(previousPosition, view.position);
             if (hit != null)
             {
                 ApplyProjectileDamage(projectile, hit);
@@ -2211,7 +2399,7 @@ public sealed class TriunviratoGame : MonoBehaviour
             view.position += Vector3.left * waterTornadoAbility.TravelSpeed * deltaTime;
             Vector3 end = view.position;
             float radius = waterTornadoAbility.CollisionRadius;
-            foreach (SkeletonEnemy enemy in enemies)
+            foreach (Enemy enemy in enemies)
             {
                 if (enemy == null || enemy.IsDead || tornado.HitEnemies.Contains(enemy)) continue;
                 if (DistanceToSegment(enemy.transform.position, start, end) > radius + GetEnemyHitRadius(enemy)) continue;
@@ -2335,7 +2523,7 @@ public sealed class TriunviratoGame : MonoBehaviour
         return Vector2.Distance(point, (Vector2)start + segment * t);
     }
 
-    private static float GetEnemyHitRadius(SkeletonEnemy enemy)
+    private static float GetEnemyHitRadius(Enemy enemy)
     {
         SpriteRenderer renderer = enemy != null ? enemy.GetComponentInChildren<SpriteRenderer>() : null;
         return renderer != null ? Mathf.Max(renderer.bounds.extents.x, renderer.bounds.extents.y) : 0.2f;
@@ -2358,15 +2546,15 @@ public sealed class TriunviratoGame : MonoBehaviour
         visual.rotation = Quaternion.Euler(0f, 0f, angle);
     }
 
-    private SkeletonEnemy FindProjectileImpact(Vector3 start, Vector3 end)
+    private Enemy FindProjectileImpact(Vector3 start, Vector3 end)
     {
         Vector2 start2D = start;
         Vector2 segment = (Vector2)end - start2D;
         float segmentLengthSquared = segment.sqrMagnitude;
         float firstImpact = float.MaxValue;
-        SkeletonEnemy hit = null;
+        Enemy hit = null;
 
-        foreach (SkeletonEnemy enemy in enemies)
+        foreach (Enemy enemy in enemies)
         {
             if (enemy == null || enemy.IsDead)
                 continue;
@@ -2392,7 +2580,7 @@ public sealed class TriunviratoGame : MonoBehaviour
         return hit;
     }
 
-    private void ApplyProjectileDamage(Projectile projectile, SkeletonEnemy impactTarget)
+    private void ApplyProjectileDamage(Projectile projectile, Enemy impactTarget)
     {
         if (impactTarget == null || impactTarget.IsDead)
             return;
@@ -2400,7 +2588,7 @@ public sealed class TriunviratoGame : MonoBehaviour
         if (projectile.SplashRadius > 0f)
         {
             Vector3 impactPosition = impactTarget.transform.position;
-            foreach (SkeletonEnemy enemy in enemies)
+            foreach (Enemy enemy in enemies)
             {
                 if (enemy != null && !enemy.IsDead && Vector2.Distance(impactPosition, enemy.transform.position) <= projectile.SplashRadius)
                     ApplyProjectileDamageToEnemy(projectile, enemy);
@@ -2412,7 +2600,7 @@ public sealed class TriunviratoGame : MonoBehaviour
         }
     }
 
-    private void ApplyProjectileDamageToEnemy(Projectile projectile, SkeletonEnemy enemy)
+    private void ApplyProjectileDamageToEnemy(Projectile projectile, Enemy enemy)
     {
         float damage = projectile.Damage;
         if (projectile.Category == DamageCategory.Hero && projectile.Army == ArmyType.Mar && enemy.IsBoss)
@@ -2420,7 +2608,7 @@ public sealed class TriunviratoGame : MonoBehaviour
         ApplyDamage(enemy, damage, projectile.DamageColor, projectile.Army, projectile.Category);
     }
 
-    private void ApplyDamage(SkeletonEnemy enemy, float amount, Color damageColor, ArmyType army, DamageCategory category)
+    private void ApplyDamage(Enemy enemy, float amount, Color damageColor, ArmyType army, DamageCategory category)
     {
         if (!CanCombat || enemy == null || enemy.IsDead || !IsValidArmy(army))
             return;
@@ -2438,7 +2626,7 @@ public sealed class TriunviratoGame : MonoBehaviour
         }
     }
 
-    private void ShowDamage(SkeletonEnemy enemy, float amount, Color damageColor, ArmyType army)
+    private void ShowDamage(Enemy enemy, float amount, Color damageColor, ArmyType army)
     {
         if (enemy == null)
             return;
@@ -2485,18 +2673,18 @@ public sealed class TriunviratoGame : MonoBehaviour
         }
     }
 
-    private SkeletonEnemy FindTarget(Defender defender)
+    private Enemy FindTarget(Defender defender)
     {
         return defender == null || defender.View == null || defender.Config == null
             ? null : FindTarget(defender.View.transform.position, GetHeroRange(defender.Config.Army));
     }
 
-    private SkeletonEnemy FindTarget(Vector3 origin, float range)
+    private Enemy FindTarget(Vector3 origin, float range)
     {
-        SkeletonEnemy best = null;
+        Enemy best = null;
         float bestX = float.NegativeInfinity;
         const float horizontalTieTolerance = 0.0001f;
-        foreach (SkeletonEnemy enemy in enemies)
+        foreach (Enemy enemy in enemies)
         {
             if (enemy == null || enemy.IsDead)
                 continue;
@@ -2548,7 +2736,7 @@ public sealed class TriunviratoGame : MonoBehaviour
         if (!CanCombat || tower == null)
             return false;
 
-        SkeletonEnemy target = FindTarget(tower.transform.position, tower.Range);
+        Enemy target = FindTarget(tower.transform.position, tower.Range);
         if (target == null)
             return false;
 
@@ -2576,6 +2764,8 @@ public sealed class TriunviratoGame : MonoBehaviour
         if (finished)
             return;
 
+        if (nightWaveActive) EndNightWave();
+
         for (int army = 0; army < 3; army++)
             for (int category = 0; category < 4; category++)
                 finalDamageDealt[army, category] = damageDealt[army, category];
@@ -2586,7 +2776,7 @@ public sealed class TriunviratoGame : MonoBehaviour
         cloneSpawnRemaining = 0f;
         if (defenders != null)
             foreach (Defender defender in defenders) defender?.Effects?.ClearAll();
-        foreach (SkeletonEnemy enemy in enemies) enemy?.Effects?.ClearAll();
+        foreach (Enemy enemy in enemies) enemy?.Effects?.ClearAll();
         finished = true;
         victory = didWin;
         matchStatus = MatchStatus.Finished;

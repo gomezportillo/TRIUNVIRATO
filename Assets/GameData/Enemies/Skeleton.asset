@@ -25,7 +25,13 @@ MonoBehaviour:
   castleAttackInterval: 2
   initialIdleDuration: 0.15
   visualScale: 0.8
-  experienceReward: 14
+  idleAnimationState: Idle
+  walkAnimationState: Walk
+  takeHitAnimationState: Take Hit
+  deathAnimationState: Death
+  attackAnimationState: Attack
+  experienceReward: 15
+  deathSound: {fileID: 8300000, guid: ec593acee6d4ec2459b33a157ff80767, type: 3}
   healthBarLength: 0.35
   healthBarHeight: 0.035
   healthBarOffset: -0.15

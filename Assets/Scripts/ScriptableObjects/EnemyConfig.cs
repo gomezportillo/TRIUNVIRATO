@@ -1,12 +1,12 @@
 using UnityEngine;
 
-/// <summary>Shared design values for a wave enemy. Runtime health belongs to each SkeletonEnemy.</summary>
+/// <summary>Shared design values for a wave enemy. Runtime health belongs to each Enemy.</summary>
 [CreateAssetMenu(fileName = "EnemyConfig", menuName = "TRIUNVIRATO/Combat/Enemy Config")]
 public sealed class EnemyConfig : ScriptableObject
 {
     [SerializeField] private string id;
     [SerializeField] private string displayName;
-    [SerializeField] private SkeletonEnemy prefab;
+    [SerializeField] private Enemy prefab;
     [SerializeField, Min(0.1f)] private float maximumHealth = 25f;
     [SerializeField, Min(0f)] private float additionalHealthPerWave = 7f;
     [SerializeField, Min(0f)] private float healthGrowthPerWave = 0.05f;
@@ -18,8 +18,16 @@ public sealed class EnemyConfig : ScriptableObject
     [SerializeField, Min(0.1f)] private float castleAttackInterval = 2f;
     [SerializeField, Min(0f)] private float initialIdleDuration = 0.15f;
     [SerializeField, Min(0.01f)] private float visualScale = 0.5f;
+    [Header("Animación")]
+    [SerializeField] private string idleAnimationState = "Idle";
+    [SerializeField] private string walkAnimationState = "Walk";
+    [SerializeField] private string takeHitAnimationState = "Take Hit";
+    [SerializeField] private string deathAnimationState = "Death";
+    [SerializeField] private string attackAnimationState = "Attack";
     [SerializeField, Min(0f), Tooltip("Experiencia base concedida por este enemigo a cada héroe.")]
     private float experienceReward = 10f;
+    [SerializeField, Tooltip("Sonido reproducido una sola vez cuando este enemigo muere.")]
+    private AudioClip deathSound;
     [Header("Barra de vida")]
     [SerializeField, Min(0.01f), Tooltip("Longitud de la barra en unidades de mundo.")] private float healthBarLength = 0.3f;
     [SerializeField, Min(0.001f), Tooltip("Altura de la barra en unidades de mundo.")] private float healthBarHeight = 0.03f;
@@ -28,11 +36,17 @@ public sealed class EnemyConfig : ScriptableObject
 
     public string Id => id;
     public string DisplayName => displayName;
-    public SkeletonEnemy Prefab => prefab;
+    public Enemy Prefab => prefab;
     public float CastleAttackInterval => castleAttackInterval;
     public float InitialIdleDuration => initialIdleDuration;
     public float VisualScale => visualScale;
+    public string IdleAnimationState => idleAnimationState;
+    public string WalkAnimationState => walkAnimationState;
+    public string TakeHitAnimationState => takeHitAnimationState;
+    public string DeathAnimationState => deathAnimationState;
+    public string AttackAnimationState => attackAnimationState;
     public float ExperienceReward => experienceReward;
+    public AudioClip DeathSound => deathSound;
     public float HealthBarLength => healthBarLength;
     public float HealthBarHeight => healthBarHeight;
     public float HealthBarOffset => healthBarOffset;

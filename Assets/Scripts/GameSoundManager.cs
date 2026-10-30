@@ -30,6 +30,8 @@ public sealed class GameSoundManager : MonoBehaviour
     [SerializeField, Range(0f, 1f)] private float matchStartVolume = 0.3f;
     [SerializeField] private AudioClip towerBuilt;
     [SerializeField, Range(0f, 1f)] private float towerBuiltVolume = 0.3f;
+    [SerializeField] private AudioClip levelUp;
+    [SerializeField, Range(0f, 1f)] private float levelUpVolume = 0.5f;
 
     private AudioSource themeSource;
     private AudioSource effectsSource;
@@ -174,9 +176,12 @@ public sealed class GameSoundManager : MonoBehaviour
     }
 
     public void PlaySkeletonDeath() => PlayEffect(skeletonDeath, skeletonDeathVolume);
+    public void PlayEnemyDeath(AudioClip clip) => PlayEffect(clip != null ? clip : skeletonDeath, skeletonDeathVolume);
+    public void PlayNightHowl(AudioClip clip, float volume) => PlayEffect(clip, effectsVolume * Mathf.Clamp01(volume));
     public void PlayDefeat() => PlayEffect(defeat, defeatVolume);
     public void PlayMatchStart() => PlayEffect(matchStart, matchStartVolume);
     public void PlayTowerBuilt() => PlayEffect(towerBuilt, towerBuiltVolume);
+    public void PlayLevelUp() => PlayEffect(levelUp, levelUpVolume);
     public void PlayAbilityEffect(AudioClip clip, int playCount)
     {
         if (clip != null && effectsSource != null)
