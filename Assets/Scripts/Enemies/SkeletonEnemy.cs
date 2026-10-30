@@ -40,6 +40,7 @@ public sealed class SkeletonEnemy : MonoBehaviour
     public bool RewardGranted => rewardGranted;
     public float CurrentHealth => currentHealth;
     public float MaximumHealth { get; private set; }
+    public float ExperienceReward => config != null ? config.ExperienceReward : 0f;
     public TimedCombatEffects Effects => combatEffects;
     public bool IsRooted => isRooted || Time.time < rootedUntil;
 
@@ -52,8 +53,8 @@ public sealed class SkeletonEnemy : MonoBehaviour
         actorRenderer = GetComponentInChildren<SpriteRenderer>();
         combatEffects = GetComponent<TimedCombatEffects>();
         if (combatEffects == null) combatEffects = gameObject.AddComponent<TimedCombatEffects>();
-        currentHealth = MaximumHealth = config.GetMaximumHealth(wave, isBoss);
-        movementSpeed = config.GetMovementSpeed(wave, isBoss);
+        currentHealth = MaximumHealth = config.GetMaximumHealth(wave);
+        movementSpeed = config.GetMovementSpeed(wave);
         healthBar = GetComponent<WorldHealthBar>();
         if (healthBar == null) healthBar = gameObject.AddComponent<WorldHealthBar>();
         healthBar.Initialize(actorRenderer, config.HealthBarLength, config.HealthBarHeight, config.HealthBarOffset);
@@ -181,7 +182,7 @@ public sealed class SkeletonEnemy : MonoBehaviour
             {
                 allyAttackTimer = config.CastleAttackInterval;
                 PlayState(AttackState, attackAnimationSpeed);
-                knightTarget.ApplyDamage(config.GetCastleDamage(isBoss));
+                knightTarget.ApplyDamage(config.GetCastleDamage());
             }
             else if (animator != null && animator.GetCurrentAnimatorStateInfo(0).shortNameHash != AttackState)
                 PlayState(AttackState, attackAnimationSpeed);
@@ -239,11 +240,22 @@ public sealed class SkeletonEnemy : MonoBehaviour
 
     private void PlayState(int stateHash, float speed)
     {
-        if (animator == null || !animator.HasState(0, stateHash))
+        if (animator == null)
             return;
 
-        if (animator.GetCurrentAnimatorStateInfo(0).shortNameHash != stateHash)
-            animator.Play(stateHash, 0, 0f);
+        int selectedState = stateHash;
+        if (!animator.HasState(0, selectedState))
+        {
+            string alias = stateHash == IdleState ? "BringerOfDeath_Idle" :
+                stateHash == WalkState ? "BringerOfDeath_Walk" :
+                stateHash == TakeHitState ? "BringerOfDeath_Hurt" :
+                stateHash == DeathState ? "BringerOfDeath_Death" : null;
+            if (string.IsNullOrEmpty(alias) || !animator.HasState(0, Animator.StringToHash(alias))) return;
+            selectedState = Animator.StringToHash(alias);
+        }
+
+        if (animator.GetCurrentAnimatorStateInfo(0).shortNameHash != selectedState)
+            animator.Play(selectedState, 0, 0f);
         animator.speed = speed;
     }
 
@@ -254,10 +266,20 @@ public sealed class SkeletonEnemy : MonoBehaviour
 
         foreach (AnimationClip clip in animator.runtimeAnimatorController.animationClips)
         {
-            if (Animator.StringToHash(clip.name) == stateHash)
+            if (Animator.StringToHash(clip.name) == stateHash || clip.name == GetBossClipName(stateHash))
                 return clip.length;
         }
         return fallback;
+    }
+
+    private static string GetBossClipName(int stateHash)
+    {
+        if (stateHash == IdleState) return "BringerOfDeath_Idle";
+        if (stateHash == WalkState) return "BringerOfDeath_Walk";
+        if (stateHash == TakeHitState) return "BringerOfDeath_Hurt";
+        if (stateHash == DeathState) return "BringerOfDeath_Death";
+        if (stateHash == AttackState) return "BringerOfDeath_Attack";
+        return null;
     }
 
     private float GetCastleAttackImpactDelay()
@@ -267,7 +289,7 @@ public sealed class SkeletonEnemy : MonoBehaviour
         {
             foreach (AnimationClip clip in animator.runtimeAnimatorController.animationClips)
             {
-                if (Animator.StringToHash(clip.name) != AttackState || clip.length <= 0f)
+                if (Animator.StringToHash(clip.name) != AttackState && clip.name != GetBossClipName(AttackState) || clip.length <= 0f)
                     continue;
 
                 foreach (AnimationEvent animationEvent in clip.events)
@@ -286,7 +308,7 @@ public sealed class SkeletonEnemy : MonoBehaviour
         if (isDead || !hasReachedCastle || game == null)
             return;
 
-        game.ApplyCastleDamage(config.GetCastleDamage(isBoss));
+        game.ApplyCastleDamage(config.GetCastleDamage());
         castleAttackTimer = config.CastleAttackInterval;
     }
 }

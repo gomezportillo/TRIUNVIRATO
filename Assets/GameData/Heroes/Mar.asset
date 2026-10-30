@@ -15,10 +15,10 @@ MonoBehaviour:
   id: hero-mar
   displayName: Mar
   army: 2
-  damage: 22
+  damage: 16
   attackCooldown: 1.5
   range: 9
-  splashRadius: 0
+  splashRadius: 0.3
   projectileColor: {r: 0.2, g: 0.65, b: 1, a: 1}
   projectileAnimatorController: {fileID: 9100000, guid: 77808df6f85631a41b791b4a514154bc, type: 2}
   projectileSize: 0.4

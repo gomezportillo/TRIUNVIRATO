@@ -74,7 +74,7 @@
     .upgrade-card[data-category="towers"] { border-color: #f87171; }
     .upgrade-card[data-category="hero"] { border-color: #60a5fa; }
     .upgrade-card[data-category="specialabilities"] { border-color: #ff69b4; }
-    .target-button-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .target-button-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
     .special-card { border-color: var(--army); }
     .special-card button { color: #07111f; background: var(--army); }
     .upgrade-timer { font-size: 1.15rem; font-weight: 800; }
@@ -153,15 +153,15 @@
       const numberFormat = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 2 });
       const specialAbilityDefinitions = {
         aire: [
-          { id: 'fire_rage', icon: '🌋', name: 'fireRageAbilityName', fallbackName: 'Furia ígnea', description: 'fireRageAbilityDescription', remaining: 'fireRageCooldownRemaining', duration: 'fireRageCooldownDuration', canActivate: 'fireRageCanActivate', detail: a => `Daño adicional: +${numberFormat.format(a.fireRageDamageBonusPercent || 0)} % · Duración: ${numberFormat.format(a.fireRageDuration || 0)} s` },
-          { id: 'hero_clone', icon: '👥', name: 'cloneAbilityName', fallbackName: 'Clon', description: 'cloneAbilityDescription', remaining: 'cloneCooldownRemaining', duration: 'cloneCooldownDuration', canActivate: 'cloneCanActivate', detail: a => `Duración: ${numberFormat.format(a.cloneDuration || 0)} s` }
+          { id: 'fire_rage', icon: '🌋', name: 'fireRageAbilityName', fallbackName: 'Furia ígnea', description: 'fireRageAbilityDescription', remaining: 'fireRageCooldownRemaining', duration: 'fireRageCooldownDuration', canActivate: 'fireRageCanActivate', unlocked: 'fireRageUnlocked', detail: a => `Daño adicional: +${numberFormat.format(a.fireRageDamageBonusPercent || 0)} % · Duración: ${numberFormat.format(a.fireRageDuration || 0)} s` },
+          { id: 'hero_clone', icon: '👥', name: 'cloneAbilityName', fallbackName: 'Clon', description: 'cloneAbilityDescription', remaining: 'cloneCooldownRemaining', duration: 'cloneCooldownDuration', canActivate: 'cloneCanActivate', unlocked: 'cloneUnlocked', detail: a => `Duración: ${numberFormat.format(a.cloneDuration || 0)} s` }
         ],
         tierra: [
-          { id: 'knight_summon', icon: '⚔️', name: 'knightSummonAbilityName', fallbackName: 'Invocar caballero', description: 'knightSummonAbilityDescription', remaining: 'knightSummonCooldownRemaining', duration: 'knightSummonCooldownDuration', canActivate: 'knightSummonCanActivate', detail: () => 'Invoca un caballero aliado que combate automáticamente.' }
+          { id: 'knight_summon', icon: '⚔️', name: 'knightSummonAbilityName', fallbackName: 'Invocar caballero', description: 'knightSummonAbilityDescription', remaining: 'knightSummonCooldownRemaining', duration: 'knightSummonCooldownDuration', canActivate: 'knightSummonCanActivate', unlocked: 'knightSummonUnlocked', detail: () => 'Invoca un caballero aliado que combate automáticamente.' }
         ],
         mar: [
-          { id: 'water_tornado', icon: '🌪️', name: 'waterTornadoAbilityName', fallbackName: 'Huracán imparable', description: 'waterTornadoAbilityDescription', remaining: 'waterTornadoCooldownRemaining', duration: 'waterTornadoCooldownDuration', canActivate: 'waterTornadoCanActivate', detail: a => `Daño: ${numberFormat.format(a.waterTornadoDamage || 0)} · Empuje hacia la izquierda: ${numberFormat.format(Math.abs(a.waterTornadoPushDistance || 0))}` },
-          { id: 'electric_bird', icon: '🦅', name: 'electricBirdAbilityName', fallbackName: 'Ave eléctrica', description: 'electricBirdAbilityDescription', remaining: 'electricBirdCooldownRemaining', duration: 'electricBirdCooldownDuration', canActivate: 'electricBirdCanActivate', detail: a => `Ralentiza y duplica el daño recibido durante ${numberFormat.format(a.electricBirdDuration || 0)} s.` }
+          { id: 'water_tornado', icon: '🌪️', name: 'waterTornadoAbilityName', fallbackName: 'Huracán imparable', description: 'waterTornadoAbilityDescription', remaining: 'waterTornadoCooldownRemaining', duration: 'waterTornadoCooldownDuration', canActivate: 'waterTornadoCanActivate', unlocked: 'waterTornadoUnlocked', detail: a => `Daño: ${numberFormat.format(a.waterTornadoDamage || 0)} · Empuje hacia la izquierda: ${numberFormat.format(Math.abs(a.waterTornadoPushDistance || 0))}` },
+          { id: 'electric_bird', icon: '🦅', name: 'electricBirdAbilityName', fallbackName: 'Ave eléctrica', description: 'electricBirdAbilityDescription', remaining: 'electricBirdCooldownRemaining', duration: 'electricBirdCooldownDuration', canActivate: 'electricBirdCanActivate', unlocked: 'electricBirdUnlocked', detail: a => `Ralentiza y duplica el daño recibido durante ${numberFormat.format(a.electricBirdDuration || 0)} s.` }
         ]
       };
       const tokenKey = 'triunvirato-session-token';
@@ -173,7 +173,7 @@
       }
       let socket, state;
       let connected = false, sessionReady = false, developerMode = false;
-      let selectedPanel = '', activeView = 'statistics', stateRevision = -1, requestCounter = 0;
+      let selectedPanel = '', activeView = 'attacks', stateRevision = -1, requestCounter = 0;
       let previousMatchStatus = null;
       const previousArmyLevels = Object.create(null);
       const pendingRequests = new Map();
@@ -193,6 +193,7 @@
           : (nextState.armies || []).filter(item => item.army === nextState.selectedArmy);
         const controlsPlayerArmy = !!nextState.developerMode || !!nextState.selectedArmy;
         if (controlsPlayerArmy && previousMatchStatus === 'WaitingForPlayers' && nextState.status === 'InProgress') vibrateFor('start');
+        if (previousMatchStatus === 'WaitingForPlayers' && nextState.status === 'InProgress') activeView = 'attacks';
         if (controlsPlayerArmy && previousMatchStatus === 'InProgress' && nextState.status === 'Finished') vibrateFor('end');
         let leveledUp = false;
         for (const army of controlledArmies) {
@@ -328,6 +329,7 @@
           card.append(title, name, description);
         } else card.append(title, name);
         const remaining = Math.max(0, army.specialCooldownRemaining || 0);
+        const unlocked = !!army.legacySpecialUnlocked;
         const cooldown = document.createElement('p'); cooldown.className = 'muted';
         cooldown.textContent = `Cooldown: ${numberFormat.format(army.specialCooldownDuration || 0)} s`;
         const detail = document.createElement('p'); detail.className = 'description';
@@ -342,14 +344,15 @@
         const status = document.createElement('p'); status.className = 'muted';
         if (developerMode && remaining > 0) status.textContent = `Modo desarrollador · ignora el cooldown (${Math.ceil(remaining)} s restantes)`;
         else if (remaining > 0) status.textContent = `Disponible en ${numberFormat.format(remaining)} s`;
-        else if (army.specialCanActivate) status.textContent = 'Lista para activar';
+        else if (!unlocked && !developerMode) status.textContent = 'Bloqueada · se desbloquea en una recompensa de boss';
+        else if (army.specialCanActivate || developerMode) status.textContent = 'Lista para activar';
         else status.textContent = 'No hay enemigos vivos en el mapa';
 
         const actionKey = `special:${selectedPanel}:legacy`;
         const pending = pendingActions.has(actionKey);
         const button = document.createElement('button');
         button.textContent = remaining > 0 && !developerMode ? `${icon} ${army.specialAbilityName} · ${Math.ceil(remaining)} s` : `${icon} ${army.specialAbilityName}`;
-        button.disabled = pending || !connected || !army.canControl || (!army.specialCanActivate && !developerMode);
+        button.disabled = pending || !connected || !army.canControl || (!unlocked && !developerMode) || (!army.specialCanActivate && !developerMode);
         button.addEventListener('click', () => request({ type: 'activateSpecial', army: selectedPanel }, actionKey));
         card.append(status, button);
         return card;
@@ -364,11 +367,12 @@
         cooldown.textContent = `Cooldown: ${numberFormat.format(ability.cooldownDuration || 0)} s`;
         const status = document.createElement('p'); status.className = 'muted';
         status.textContent = developerMode && remaining > 0 ? `Modo desarrollador · ignora el cooldown (${Math.ceil(remaining)} s restantes)` :
+          !ability.unlocked && !developerMode ? 'Bloqueada · se desbloquea en una recompensa de boss' :
           remaining > 0 ? `Disponible en ${numberFormat.format(remaining)} s` : developerMode || ability.canActivate ? 'Lista para activar' : 'No disponible durante esta partida';
         const actionKey = `special:${selectedPanel}:${ability.id}`;
         const button = document.createElement('button');
         button.textContent = remaining > 0 && !developerMode ? `${ability.icon} ${ability.name} · ${Math.ceil(remaining)} s` : `${ability.icon} ${ability.name}`;
-        button.disabled = pendingActions.has(actionKey) || !connected || !army.canControl || (!ability.canActivate && !developerMode);
+        button.disabled = pendingActions.has(actionKey) || !connected || !army.canControl || (!ability.unlocked && !developerMode) || (!ability.canActivate && !developerMode);
         button.addEventListener('click', () => request({ type: 'activateSpecial', army: selectedPanel, abilityId: ability.id }, actionKey));
         card.append(title, desc, values, cooldown, status, button);
         return card;
@@ -383,7 +387,8 @@
           cooldownRemaining: army[definition.remaining] || 0,
           cooldownDuration: army[definition.duration] || 0,
           detail: definition.detail(army),
-          canActivate: !!army[definition.canActivate]
+          canActivate: !!army[definition.canActivate],
+          unlocked: !!army[definition.unlocked]
         };
       }
       function createWarBlessingCard(army) {
@@ -396,20 +401,50 @@
         const cooldown = document.createElement('p'); cooldown.className = 'muted';
         cooldown.textContent = `Cooldown compartido: ${numberFormat.format(army.warBlessingCooldownDuration || 0)} s`;
         const status = document.createElement('p'); status.className = 'muted';
-        status.textContent = developerMode && remaining > 0 ? `Modo desarrollador · ignora el cooldown (${Math.ceil(remaining)} s restantes)` :
+        status.textContent = !army.warBlessingUnlocked && !developerMode ? 'Bloqueada · se desbloquea en una recompensa de boss' : developerMode && remaining > 0 ? `Modo desarrollador · ignora el cooldown (${Math.ceil(remaining)} s restantes)` :
           remaining > 0 ? `Disponible en ${numberFormat.format(remaining)} s` : 'Selecciona el héroe aliado';
         const row = document.createElement('div'); row.className = 'target-button-row';
         const actionKey = `special:${selectedPanel}:war_blessing`;
         const pending = pendingActions.has(actionKey);
         for (const target of [
           { armyId: 'aire', label: 'Aire', color: 'red', can: army.warBlessingCanActivateAire },
-          { armyId: 'mar', label: 'Agua', color: 'blue', can: army.warBlessingCanActivateMar }
+          { armyId: 'tierra', label: 'Tierra', color: 'green', can: army.warBlessingCanActivateTierra },
+          { armyId: 'mar', label: 'Mar', color: 'blue', can: army.warBlessingCanActivateMar }
         ]) {
           const button = document.createElement('button'); button.className = target.color;
           button.textContent = remaining > 0 && !developerMode ? `${target.label} · ${Math.ceil(remaining)} s` : target.label;
-          button.disabled = pending || !connected || !army.canControl || (!target.can && !developerMode);
+          button.disabled = pending || !connected || !army.canControl || (!army.warBlessingUnlocked && !developerMode) || (!target.can && !developerMode);
           button.addEventListener('click', () => request({ type: 'activateSpecial', army: selectedPanel,
             abilityId: 'war_blessing', targetArmy: target.armyId }, actionKey));
+          row.append(button);
+        }
+        card.append(title, desc, detail, cooldown, status, row);
+        return card;
+      }
+      function createFireRageCard(army) {
+        const card = document.createElement('article'); card.className = 'upgrade-card special-card';
+        const title = document.createElement('h3'); title.textContent = `🌋 ${army.fireRageAbilityName || 'Furia ígnea'}`;
+        const desc = document.createElement('p'); desc.className = 'description'; desc.textContent = army.fireRageAbilityDescription || '';
+        const detail = document.createElement('p'); detail.className = 'description';
+        detail.textContent = `Daño adicional: +${numberFormat.format(army.fireRageDamageBonusPercent || 0)} % · Duración: ${numberFormat.format(army.fireRageDuration || 0)} s`;
+        const remaining = Math.max(0, army.fireRageCooldownRemaining || 0);
+        const cooldown = document.createElement('p'); cooldown.className = 'muted';
+        cooldown.textContent = `Cooldown compartido: ${numberFormat.format(army.fireRageCooldownDuration || 0)} s`;
+        const status = document.createElement('p'); status.className = 'muted';
+        status.textContent = !army.fireRageUnlocked && !developerMode ? 'Bloqueada · se desbloquea en una recompensa de boss' : remaining > 0 ? `Disponible en ${numberFormat.format(remaining)} s` : 'Selecciona el héroe objetivo';
+        const row = document.createElement('div'); row.className = 'target-button-row';
+        const actionKey = `special:${selectedPanel}:fire_rage`;
+        const pending = pendingActions.has(actionKey);
+        for (const target of [
+          { armyId: 'aire', label: 'Aire', color: 'red', can: army.fireRageCanActivateAire },
+          { armyId: 'tierra', label: 'Tierra', color: 'green', can: army.fireRageCanActivateTierra },
+          { armyId: 'mar', label: 'Mar', color: 'blue', can: army.fireRageCanActivateMar }
+        ]) {
+          const button = document.createElement('button'); button.className = target.color;
+          button.textContent = remaining > 0 && !developerMode ? `${target.label} · ${Math.ceil(remaining)} s` : target.label;
+          button.disabled = pending || !connected || !army.canControl || (!army.fireRageUnlocked && !developerMode) || (!target.can && !developerMode);
+          button.addEventListener('click', () => request({ type: 'activateSpecial', army: selectedPanel,
+            abilityId: 'fire_rage', targetArmy: target.armyId }, actionKey));
           row.append(button);
         }
         card.append(title, desc, detail, cooldown, status, row);
@@ -419,7 +454,9 @@
         const panel = document.createDocumentFragment();
         panel.append(createSpecialAbilityCard(army));
         for (const definition of specialAbilityDefinitions[army.army] || [])
+          if (!(army.army === 'aire' && definition.id === 'fire_rage'))
           panel.append(createConfiguredAbilityCard(army, abilityCard(army, definition)));
+        if (army.army === 'aire') panel.append(createFireRageCard(army));
         if (army.army === 'tierra') {
           panel.append(createWarBlessingCard(army));
         }

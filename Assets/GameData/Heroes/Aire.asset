@@ -15,10 +15,10 @@ MonoBehaviour:
   id: hero-aire
   displayName: Aire
   army: 1
-  damage: 6
+  damage: 5
   attackCooldown: 0.8
   range: 7
-  splashRadius: 0.5
+  splashRadius: 0.7
   projectileColor: {r: 1, g: 0.3997736, b: 0.18039215, a: 1}
   projectileAnimatorController: {fileID: 9100000, guid: 48c70e6a31039fc40900f935c67a14b3, type: 2}
   projectileSize: 0.4

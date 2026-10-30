@@ -1,0 +1,32 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b15f0c26e01943f59de2e35d817a0001, type: 3}
+  m_Name: BringerOfDeath
+  m_EditorClassIdentifier: 
+  id: enemy-bringer-of-death
+  displayName: Bringer of Death
+  prefab: {fileID: 4815844238491936006, guid: 64127ec765688c6449b78c4d935db761, type: 3}
+  maximumHealth: 450
+  additionalHealthPerWave: 30
+  healthGrowthPerWave: 0.03
+  movementSpeed: 0.25
+  speedGrowthPerWave: 0.02
+  maximumSpeedMultiplier: 2
+  castleDamagePerAttack: 30
+  castleAttackInterval: 2
+  initialIdleDuration: 0.15
+  visualScale: 0.6
+  experienceReward: 50
+  healthBarLength: 0.75
+  healthBarHeight: 0.045
+  healthBarOffset: 0.12
+  deathAnimationFallbackSeconds: 1.3

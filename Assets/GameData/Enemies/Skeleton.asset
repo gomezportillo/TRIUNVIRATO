@@ -21,14 +21,11 @@ MonoBehaviour:
   movementSpeed: 0.4
   speedGrowthPerWave: 0.035
   maximumSpeedMultiplier: 2
-  bossHealthMultiplier: 5
-  bossSpeedMultiplier: 0.579
   castleDamagePerAttack: 10
-  bossCastleDamagePerAttack: 35
   castleAttackInterval: 2
   initialIdleDuration: 0.15
-  normalScale: 0.8
-  bossScale: 1.75
+  visualScale: 0.8
+  experienceReward: 14
   healthBarLength: 0.35
   healthBarHeight: 0.035
   healthBarOffset: -0.15

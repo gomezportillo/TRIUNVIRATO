@@ -179,6 +179,7 @@ public sealed class LocalControlServer : MonoBehaviour
         public float specialCooldownRemaining;
         public float specialCooldownDuration;
         public bool specialCanActivate;
+        public bool legacySpecialUnlocked;
         public int specialEffectCount;
         public float specialDamagePerEffect;
         public float specialNormalDuration;
@@ -190,17 +191,23 @@ public sealed class LocalControlServer : MonoBehaviour
         public float fireRageCooldownRemaining;
         public float fireRageCooldownDuration;
         public bool fireRageCanActivate;
+        public bool fireRageCanActivateAire;
+        public bool fireRageCanActivateTierra;
+        public bool fireRageCanActivateMar;
+        public bool fireRageUnlocked;
         public string cloneAbilityName;
         public string cloneAbilityDescription;
         public float cloneDuration;
         public float cloneCooldownRemaining;
         public float cloneCooldownDuration;
         public bool cloneCanActivate;
+        public bool cloneUnlocked;
         public string knightSummonAbilityName;
         public string knightSummonAbilityDescription;
         public float knightSummonCooldownRemaining;
         public float knightSummonCooldownDuration;
         public bool knightSummonCanActivate;
+        public bool knightSummonUnlocked;
         public string warBlessingAbilityName;
         public string warBlessingAbilityDescription;
         public float warBlessingBonusPercent;
@@ -208,7 +215,9 @@ public sealed class LocalControlServer : MonoBehaviour
         public float warBlessingCooldownRemaining;
         public float warBlessingCooldownDuration;
         public bool warBlessingCanActivateAire;
+        public bool warBlessingCanActivateTierra;
         public bool warBlessingCanActivateMar;
+        public bool warBlessingUnlocked;
         public string waterTornadoAbilityName;
         public string waterTornadoAbilityDescription;
         public float waterTornadoDamage;
@@ -216,12 +225,14 @@ public sealed class LocalControlServer : MonoBehaviour
         public float waterTornadoCooldownRemaining;
         public float waterTornadoCooldownDuration;
         public bool waterTornadoCanActivate;
+        public bool waterTornadoUnlocked;
         public string electricBirdAbilityName;
         public string electricBirdAbilityDescription;
         public float electricBirdDuration;
         public float electricBirdCooldownRemaining;
         public float electricBirdCooldownDuration;
         public bool electricBirdCanActivate;
+        public bool electricBirdUnlocked;
         public UpgradeOption[] upgradeOptions;
     }
 
@@ -888,6 +899,9 @@ public sealed class LocalControlServer : MonoBehaviour
     private static string GetArmyName(int index) => index >= 0 && index < 3
         ? ((ArmyType)index).ToString() : string.Empty;
 
+    private static string GetLegacyAbilityId(ArmyType army) => army == ArmyType.Tierra ? "zombie_grasp" :
+        army == ArmyType.Aire ? "meteor_shower" : army == ArmyType.Mar ? "lightning_storm" : string.Empty;
+
     private static bool TryParseArmy(string value, out ArmyType army)
     {
         if (string.Equals(value, "tierra", StringComparison.OrdinalIgnoreCase) ||
@@ -1095,6 +1109,7 @@ public sealed class LocalControlServer : MonoBehaviour
             specialCooldownRemaining = game != null ? game.GetSpecialAbilityCooldownRemaining(army) : 0f,
             specialCooldownDuration = game != null ? game.GetSpecialAbilityCooldown(army) : 0f,
             specialCanActivate = canControl && game != null && game.CanActivateSpecial(army, session != null && session.Developer),
+            legacySpecialUnlocked = game != null && game.IsSpecialAbilityUnlocked(army, GetLegacyAbilityId(army)),
             specialEffectCount = game != null ? game.GetSpecialAbilityEffectCount(army) : 0,
             specialDamagePerEffect = game != null ? game.GetSpecialAbilityDamagePerEffect(army) : 0f,
             specialNormalDuration = game != null ? game.GetSpecialAbilityNormalDuration(army) : 0f,
@@ -1106,17 +1121,23 @@ public sealed class LocalControlServer : MonoBehaviour
             fireRageCooldownRemaining = game != null ? game.GetFireRageCooldownRemaining() : 0f,
             fireRageCooldownDuration = game != null ? game.GetFireRageCooldown() : 0f,
             fireRageCanActivate = canControl && game != null && game.CanActivateFireRage(session != null && session.Developer),
+            fireRageCanActivateAire = canControl && game != null && game.CanActivateFireRage(ArmyType.Aire, session != null && session.Developer),
+            fireRageCanActivateTierra = canControl && game != null && game.CanActivateFireRage(ArmyType.Tierra, session != null && session.Developer),
+            fireRageCanActivateMar = canControl && game != null && game.CanActivateFireRage(ArmyType.Mar, session != null && session.Developer),
+            fireRageUnlocked = game != null && game.IsSpecialAbilityUnlocked(ArmyType.Aire, "fire_rage"),
             cloneAbilityName = game != null ? game.GetCloneAbilityName() : "Clon",
             cloneAbilityDescription = game != null ? game.GetCloneAbilityDescription() : string.Empty,
             cloneDuration = game != null ? game.GetCloneDuration() : 0f,
             cloneCooldownRemaining = game != null ? game.GetCloneCooldownRemaining() : 0f,
             cloneCooldownDuration = game != null ? game.GetCloneCooldown() : 0f,
             cloneCanActivate = canControl && game != null && game.CanActivateClone(session != null && session.Developer),
+            cloneUnlocked = game != null && game.IsSpecialAbilityUnlocked(ArmyType.Aire, "hero_clone"),
             knightSummonAbilityName = game != null ? game.GetKnightSummonName() : "Invocar caballero",
             knightSummonAbilityDescription = game != null ? game.GetKnightSummonDescription() : string.Empty,
             knightSummonCooldownRemaining = game != null ? game.GetKnightSummonCooldownRemaining() : 0f,
             knightSummonCooldownDuration = game != null ? game.GetKnightSummonCooldown() : 0f,
             knightSummonCanActivate = canControl && game != null && game.CanActivateKnightSummon(session != null && session.Developer),
+            knightSummonUnlocked = game != null && game.IsSpecialAbilityUnlocked(ArmyType.Tierra, "knight_summon"),
             warBlessingAbilityName = game != null ? game.GetWarBlessingName() : "Acelerar aliado",
             warBlessingAbilityDescription = game != null ? game.GetWarBlessingDescription() : string.Empty,
             warBlessingBonusPercent = game != null ? game.GetWarBlessingBonusPercent() : 0f,
@@ -1124,7 +1145,9 @@ public sealed class LocalControlServer : MonoBehaviour
             warBlessingCooldownRemaining = game != null ? game.GetWarBlessingCooldownRemaining() : 0f,
             warBlessingCooldownDuration = game != null ? game.GetWarBlessingCooldown() : 0f,
             warBlessingCanActivateAire = canControl && game != null && game.CanActivateWarBlessing(ArmyType.Aire, session != null && session.Developer),
+            warBlessingCanActivateTierra = canControl && game != null && game.CanActivateWarBlessing(ArmyType.Tierra, session != null && session.Developer),
             warBlessingCanActivateMar = canControl && game != null && game.CanActivateWarBlessing(ArmyType.Mar, session != null && session.Developer),
+            warBlessingUnlocked = game != null && game.IsSpecialAbilityUnlocked(ArmyType.Tierra, "war_blessing"),
             waterTornadoAbilityName = game != null ? game.GetWaterTornadoName() : "Huracán imparable",
             waterTornadoAbilityDescription = game != null ? game.GetWaterTornadoDescription() : string.Empty,
             waterTornadoDamage = game != null ? game.GetWaterTornadoDamage() : 0f,
@@ -1132,12 +1155,14 @@ public sealed class LocalControlServer : MonoBehaviour
             waterTornadoCooldownRemaining = game != null ? game.GetWaterTornadoCooldownRemaining() : 0f,
             waterTornadoCooldownDuration = game != null ? game.GetWaterTornadoCooldown() : 0f,
             waterTornadoCanActivate = canControl && game != null && game.CanActivateWaterTornado(session != null && session.Developer),
+            waterTornadoUnlocked = game != null && game.IsSpecialAbilityUnlocked(ArmyType.Mar, "water_tornado"),
             electricBirdAbilityName = game != null ? game.GetElectricBirdName() : "Ave eléctrica",
             electricBirdAbilityDescription = game != null ? game.GetElectricBirdDescription() : string.Empty,
             electricBirdDuration = game != null ? game.GetElectricBirdDuration() : 0f,
             electricBirdCooldownRemaining = game != null ? game.GetElectricBirdCooldownRemaining() : 0f,
             electricBirdCooldownDuration = game != null ? game.GetElectricBirdCooldown() : 0f,
             electricBirdCanActivate = canControl && game != null && game.CanActivateElectricBird(session != null && session.Developer),
+            electricBirdUnlocked = game != null && game.IsSpecialAbilityUnlocked(ArmyType.Mar, "electric_bird"),
             level = game != null ? game.GetLevel(army) : 1,
             experience = game != null ? game.GetExperience(army) : 0f,
             experienceNeeded = game != null ? game.GetExperienceNeeded(army) : 0f,

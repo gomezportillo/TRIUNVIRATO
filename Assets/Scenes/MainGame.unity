@@ -601,7 +601,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 1
     m_LineSpacing: 1
-  m_Text: 0.7
+  m_Text: 0.7.1
 --- !u!1 &250000030
 GameObject:
   m_ObjectHideFlags: 0
@@ -1420,6 +1420,7 @@ MonoBehaviour:
   enemySpawner: {fileID: 1000000041}
   castleTarget: {fileID: 1000000051}
   enemyConfig: {fileID: 11400000, guid: b15f0c26e01943f59de2e35d817a0005, type: 2}
+  bossConfig: {fileID: 11400000, guid: d71c57cf79244fdfaa8d372348a69f04, type: 2}
   damageFont: {fileID: 12800000, guid: 3516ce2d6a7e55f4eb648f57f6f5f47e, type: 3}
   upgradeCatalog: {fileID: 11400000, guid: 3fbc06f2046d442fa27c4a3a3c1f0a91, type: 2}
   zombieGraspAbility: {fileID: 11400000, guid: 4a7a84df65234ef0aaf27276c8f5b020, type: 2}
@@ -1438,9 +1439,65 @@ MonoBehaviour:
   initialExperienceMultiplier: 1
   experienceGrowthPerLevel: 0.18
   bossExperienceMultiplier: 5
-  tierraEnemyExperience: 10
-  aireEnemyExperience: 10
-  marEnemyExperience: 10
+  fireRageIconPrefab: {fileID: 1422243679215095485, guid: c32fa232b11ac5940a5fa900534ccc45, type: 3}
+  warBlessingIconPrefab: {fileID: 3882107446528888060, guid: 705c1ad372fea6e4da84321df6006067, type: 3}
+  electricBirdVulnerabilityIconPrefab: {fileID: 4604703881564831612, guid: 78d8021dabf417b44af77e0f480e45ac, type: 3}
+  electricBirdSlowIconPrefab: {fileID: 5760878161067039985, guid: 98f42ed4a2307e749b96e0d47d0b6f52, type: 3}
+  fireRageIconFrames:
+  - {fileID: -2437272158968371394, guid: cf1018611ca5d8444a0b96422fb207e1, type: 3}
+  - {fileID: -483825388, guid: cf1018611ca5d8444a0b96422fb207e1, type: 3}
+  - {fileID: 1462584116, guid: cf1018611ca5d8444a0b96422fb207e1, type: 3}
+  - {fileID: -2024496485, guid: cf1018611ca5d8444a0b96422fb207e1, type: 3}
+  - {fileID: 1555215818, guid: cf1018611ca5d8444a0b96422fb207e1, type: 3}
+  - {fileID: -1251232085, guid: cf1018611ca5d8444a0b96422fb207e1, type: 3}
+  - {fileID: 297231747, guid: cf1018611ca5d8444a0b96422fb207e1, type: 3}
+  - {fileID: -924192458, guid: cf1018611ca5d8444a0b96422fb207e1, type: 3}
+  - {fileID: -940755698, guid: cf1018611ca5d8444a0b96422fb207e1, type: 3}
+  warBlessingIconFrames:
+  - {fileID: 4330296753159370637, guid: 3c0fb723e9e10614fa1b621648d334d4, type: 3}
+  - {fileID: -73147680, guid: 3c0fb723e9e10614fa1b621648d334d4, type: 3}
+  - {fileID: -402061836, guid: 3c0fb723e9e10614fa1b621648d334d4, type: 3}
+  - {fileID: 1913772251, guid: 3c0fb723e9e10614fa1b621648d334d4, type: 3}
+  - {fileID: -2086239626, guid: 3c0fb723e9e10614fa1b621648d334d4, type: 3}
+  - {fileID: -579851897, guid: 3c0fb723e9e10614fa1b621648d334d4, type: 3}
+  - {fileID: -1693714060, guid: 3c0fb723e9e10614fa1b621648d334d4, type: 3}
+  - {fileID: -1002298685, guid: 3c0fb723e9e10614fa1b621648d334d4, type: 3}
+  - {fileID: -1037165559, guid: 3c0fb723e9e10614fa1b621648d334d4, type: 3}
+  - {fileID: -1029240747, guid: 3c0fb723e9e10614fa1b621648d334d4, type: 3}
+  - {fileID: -1178622328, guid: 3c0fb723e9e10614fa1b621648d334d4, type: 3}
+  electricBirdVulnerabilityIconFrames:
+  - {fileID: -8612130884058884887, guid: c92d5ffa1aa4dea43a24b5c3c6476282, type: 3}
+  - {fileID: 708363395, guid: c92d5ffa1aa4dea43a24b5c3c6476282, type: 3}
+  - {fileID: -776241566, guid: c92d5ffa1aa4dea43a24b5c3c6476282, type: 3}
+  - {fileID: -295242692, guid: c92d5ffa1aa4dea43a24b5c3c6476282, type: 3}
+  - {fileID: 686464607, guid: c92d5ffa1aa4dea43a24b5c3c6476282, type: 3}
+  - {fileID: -586278930, guid: c92d5ffa1aa4dea43a24b5c3c6476282, type: 3}
+  - {fileID: 247453898, guid: c92d5ffa1aa4dea43a24b5c3c6476282, type: 3}
+  - {fileID: -501774779, guid: c92d5ffa1aa4dea43a24b5c3c6476282, type: 3}
+  - {fileID: -881869340, guid: c92d5ffa1aa4dea43a24b5c3c6476282, type: 3}
+  - {fileID: -188571814, guid: c92d5ffa1aa4dea43a24b5c3c6476282, type: 3}
+  - {fileID: -1860707925, guid: c92d5ffa1aa4dea43a24b5c3c6476282, type: 3}
+  - {fileID: 542277815, guid: c92d5ffa1aa4dea43a24b5c3c6476282, type: 3}
+  electricBirdSlowIconFrames:
+  - {fileID: -8861509454234749793, guid: 54c264963e7b75248acbba2f580f3d20, type: 3}
+  - {fileID: -823059487, guid: 54c264963e7b75248acbba2f580f3d20, type: 3}
+  - {fileID: 1211920429, guid: 54c264963e7b75248acbba2f580f3d20, type: 3}
+  - {fileID: -527078254, guid: 54c264963e7b75248acbba2f580f3d20, type: 3}
+  - {fileID: 185749379, guid: 54c264963e7b75248acbba2f580f3d20, type: 3}
+  - {fileID: 1175596930, guid: 54c264963e7b75248acbba2f580f3d20, type: 3}
+  - {fileID: -367805029, guid: 54c264963e7b75248acbba2f580f3d20, type: 3}
+  - {fileID: 316479079, guid: 54c264963e7b75248acbba2f580f3d20, type: 3}
+  - {fileID: 1773101388, guid: 54c264963e7b75248acbba2f580f3d20, type: 3}
+  - {fileID: -1331195377, guid: 54c264963e7b75248acbba2f580f3d20, type: 3}
+  effectIconFrameRate: 12
+  effectIconFreezeNormalizedTime: 0.35
+  effectIconSize: 2.5
+  effectIconOffset: {x: 1.5, y: 1.5}
+  effectIconVerticalSpacing: 0.3
+  floatingDamageFontSize: 25
+  floatingDamageJitter: 0.16
+  aireDamageHorizontalOffset: -0.12
+  marDamageHorizontalOffset: 0.12
 --- !u!1 &390120928
 GameObject:
   m_ObjectHideFlags: 0
@@ -2039,6 +2096,37 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 674832708}
   m_CullTransparentMesh: 1
+--- !u!1 &678482960
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 678482961}
+  m_Layer: 0
+  m_Name: GameObject
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &678482961
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 678482960}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -15.09903, y: 0.30275, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &759804999
 GameObject:
   m_ObjectHideFlags: 0
@@ -6267,3 +6355,4 @@ SceneRoots:
   - {fileID: 910000002}
   - {fileID: 1461827111}
   - {fileID: 880000001}
+  - {fileID: 678482961}

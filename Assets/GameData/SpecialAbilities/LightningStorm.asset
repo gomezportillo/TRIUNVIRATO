@@ -21,7 +21,7 @@ MonoBehaviour:
   activationSoundPlayCount: 1
   hitCount: 3
   hitCountUpgrade: 1
-  damagePerHit: 15
-  damageUpgrade: 5
+  damagePerHit: 30
+  damageUpgrade: 15
   hitInterval: 0.75
   impactDelay: 0.2
