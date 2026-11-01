@@ -15,7 +15,7 @@ MonoBehaviour:
   id: enemy-bringer-of-death
   displayName: Bringer of Death
   prefab: {fileID: 4815844238491936006, guid: 64127ec765688c6449b78c4d935db761, type: 3}
-  maximumHealth: 450
+  maximumHealth: 400
   additionalHealthPerWave: 30
   healthGrowthPerWave: 0.03
   movementSpeed: 0.25
@@ -30,7 +30,7 @@ MonoBehaviour:
   takeHitAnimationState: Take Hit
   deathAnimationState: Death
   attackAnimationState: Attack
-  experienceReward: 50
+  experienceReward: 100
   deathSound: {fileID: 8300000, guid: 77660ebfbd3b4d749ac7ef3426c5b409, type: 3}
   healthBarLength: 0.75
   healthBarHeight: 0.045

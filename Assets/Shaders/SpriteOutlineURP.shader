@@ -6,6 +6,7 @@ Shader "TRIUNVIRATO/Sprite Outline URP"
         _SwapTex ("Optional Color Swap", 2D) = "transparent" {}
         _Color ("Tint", Color) = (1,1,1,1)
         _OutlineColor ("Outline Color", Color) = (0,0,0,1)
+        [HideInInspector] _DamageFlashAmount ("Damage Flash Amount", Float) = 0
         _OutlinePixels ("Outline Width (source pixels)", Range(0,4)) = 1
         [HideInInspector] _SpriteUvMin ("Sprite UV Min", Vector) = (0,0,0,0)
         [HideInInspector] _SpriteUvMax ("Sprite UV Max", Vector) = (0,0,0,0)
@@ -38,6 +39,7 @@ Shader "TRIUNVIRATO/Sprite Outline URP"
         CBUFFER_START(UnityPerMaterial)
             half4 _Color;
             half4 _OutlineColor;
+            float _DamageFlashAmount;
             float _OutlinePixels;
             float4 _SpriteUvMin;
             float4 _SpriteUvMax;
@@ -108,7 +110,8 @@ Shader "TRIUNVIRATO/Sprite Outline URP"
             {
                 half4 swapColor = SAMPLE_TEXTURE2D(_SwapTex, sampler_SwapTex, float2(source.r, 0));
                 half4 baseColor = lerp(source, swapColor, swapColor.a);
-                return half4(baseColor.rgb * input.color.rgb, source.a * input.color.a);
+                half3 spriteColor = lerp(baseColor.rgb * input.color.rgb, half3(1, 1, 1), saturate(_DamageFlashAmount));
+                return half4(spriteColor, source.a * input.color.a);
             }
 
             if (_OutlinePixels <= 0.01)

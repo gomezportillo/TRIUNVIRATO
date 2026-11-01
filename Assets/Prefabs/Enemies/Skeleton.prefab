@@ -12,7 +12,6 @@ GameObject:
   - component: {fileID: 1003}
   - component: {fileID: 1004}
   - component: {fileID: 1005}
-  - component: {fileID: 1006}
   m_Layer: 0
   m_Name: Skeleton
   m_TagString: Enemy
@@ -129,17 +128,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b15f0c26e01943f59de2e35d817a0002, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
---- !u!114 &1006
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1001}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 430a6dd32b8b4f46a90bef7f8b260006, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  overrideMaterialWidth: 0
-  outlinePixels: 1
+  damageSpeedMultiplier: 0.2
+  damageAnimationSlowDuration: 0.2
+  damageFlashDuration: 0.08

@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: LightningStorm
   m_EditorClassIdentifier: 
   abilityName: "Tormenta el\xE9ctrica"
-  description: Convoca varios rayos sobre el objetivo prioritario
+  description: Convoca varios rayos sobre el objetivo prioritario y daña a los enemigos cercanos
   cooldown: 25
   effectController: {fileID: 9100000, guid: 216314bf50a194f4f88d49455a7fd156, type: 2}
   effectScale: 0.8
@@ -23,5 +23,6 @@ MonoBehaviour:
   hitCountUpgrade: 1
   damagePerHit: 30
   damageUpgrade: 15
+  areaRadius: 1
   hitInterval: 0.75
   impactDelay: 0.2

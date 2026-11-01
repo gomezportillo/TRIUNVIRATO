@@ -3,6 +3,7 @@ using UnityEngine;
 /// <summary>Runtime state and animation driver for one Skeleton enemy instance.</summary>
 public class Enemy : MonoBehaviour
 {
+    private static readonly int DamageFlashAmountId = Shader.PropertyToID("_DamageFlashAmount");
     private int IdleState;
     private int WalkState;
     private int TakeHitState;
@@ -16,12 +17,21 @@ public class Enemy : MonoBehaviour
     private WorldHealthBar healthBar;
     private bool isBoss;
     private bool isDead;
-    private bool isTakingHit;
     private bool hasReachedCastle;
     private bool rewardGranted;
     private float currentHealth;
     private float movementSpeed;
     private float attackAnimationSpeed = 1f;
+    [SerializeField, Range(0f, 1f), Tooltip("Multiplicador temporal de velocidad de movimiento y animación al recibir daño.")]
+    private float damageSpeedMultiplier = 0.5f;
+    [SerializeField, Min(0f), Tooltip("Duración de la ralentización de animación tras un impacto, en segundos.")]
+    private float damageAnimationSlowDuration = 0.2f;
+    [SerializeField, Min(0f), Tooltip("Duración del destello blanco tras un impacto, en segundos. Cinco frames a 60 FPS son aproximadamente 0,083 s.")]
+    private float damageFlashDuration = 5f / 60f;
+    private float normalAnimationSpeed = 1f;
+    private float damageAnimationSlowRemaining;
+    private float damageFlashRemaining;
+    private MaterialPropertyBlock actorPropertyBlock;
     private float castleAttackImpactDelay;
     private float castleAttackTimer;
     private float allyAttackTimer;
@@ -31,7 +41,6 @@ public class Enemy : MonoBehaviour
     private float knockbackTargetX;
     private float knockbackSpeed;
     private bool isBeingKnockedBack;
-    private float animationSpeedBeforeRoot = 1f;
     private bool isRooted;
     private TimedCombatEffects combatEffects;
 
@@ -43,6 +52,12 @@ public class Enemy : MonoBehaviour
     public float ExperienceReward => config != null ? config.ExperienceReward : 0f;
     public TimedCombatEffects Effects => combatEffects;
     public bool IsRooted => isRooted || Time.time < rootedUntil;
+
+    private void LateUpdate()
+    {
+        if (animator == null || isDead) return;
+        animator.speed = IsRooted ? 0f : GetEffectiveAnimationSpeed();
+    }
 
     internal void Initialize(EnemyConfig enemyConfig, TriunviratoGame owner, int wave, bool boss)
     {
@@ -56,6 +71,8 @@ public class Enemy : MonoBehaviour
         AttackState = Animator.StringToHash(config.AttackAnimationState);
         animator = GetComponent<Animator>();
         actorRenderer = GetComponentInChildren<SpriteRenderer>();
+        actorPropertyBlock = new MaterialPropertyBlock();
+        SetDamageFlash(false);
         combatEffects = GetComponent<TimedCombatEffects>();
         if (combatEffects == null) combatEffects = gameObject.AddComponent<TimedCombatEffects>();
         currentHealth = MaximumHealth = config.GetMaximumHealth(wave);
@@ -86,7 +103,8 @@ public class Enemy : MonoBehaviour
         if (currentHealth <= 0f)
         {
             isDead = true;
-            isTakingHit = false;
+            ClearDamageFeedback();
+            RefreshDamageFlash();
             isBeingKnockedBack = false;
             isRooted = false;
             rootedUntil = 0f;
@@ -98,13 +116,7 @@ public class Enemy : MonoBehaviour
             return appliedDamage;
         }
 
-        if (!isTakingHit)
-        {
-            isTakingHit = true;
-            PlayState(TakeHitState, 1f);
-            if (isRooted && animator != null)
-                animator.speed = 0f;
-        }
+        RefreshDamageFeedback();
         return appliedDamage;
     }
 
@@ -129,6 +141,7 @@ public class Enemy : MonoBehaviour
     /// <summary>Moves toward the castle and returns true after the death animation has finished.</summary>
     internal bool Tick(float deltaTime, Vector3 castlePosition, KnightAlly knightTarget = null)
     {
+        TickDamageFeedback(deltaTime);
         if (isDead)
         {
             deathFallbackTimer -= deltaTime;
@@ -146,7 +159,6 @@ public class Enemy : MonoBehaviour
             if (!isRooted)
             {
                 isRooted = true;
-                animationSpeedBeforeRoot = animator != null ? animator.speed : 1f;
                 if (animator != null)
                     animator.speed = 0f;
             }
@@ -156,19 +168,7 @@ public class Enemy : MonoBehaviour
         {
             isRooted = false;
             if (animator != null)
-                animator.speed = animationSpeedBeforeRoot;
-        }
-
-        if (isTakingHit)
-        {
-            AnimatorStateInfo hitInfo = animator != null ? animator.GetCurrentAnimatorStateInfo(0) : default;
-            int resolvedHitState = ResolveStateHash(TakeHitState);
-            if (animator != null && hitInfo.shortNameHash == resolvedHitState && hitInfo.normalizedTime < 1f)
-                return false;
-
-            isTakingHit = false;
-            if (hasReachedCastle)
-                PlayState(AttackState, attackAnimationSpeed);
+                animator.speed = GetEffectiveAnimationSpeed();
         }
 
         if (isBeingKnockedBack)
@@ -219,7 +219,8 @@ public class Enemy : MonoBehaviour
             return false;
         }
 
-        float effectiveMovementSpeed = movementSpeed * (combatEffects != null ? combatEffects.MovementSpeedMultiplier : 1f);
+        float effectiveMovementSpeed = movementSpeed * (combatEffects != null ? combatEffects.MovementSpeedMultiplier : 1f) *
+            GetDamageSpeedMultiplier();
         transform.position = Vector3.MoveTowards(transform.position, castlePosition, effectiveMovementSpeed * deltaTime);
         if (Vector2.Distance(transform.position, castlePosition) <= 0.2f)
         {
@@ -255,7 +256,61 @@ public class Enemy : MonoBehaviour
 
         if (animator.GetCurrentAnimatorStateInfo(0).shortNameHash != selectedState)
             animator.Play(selectedState, 0, 0f);
-        animator.speed = speed;
+        normalAnimationSpeed = speed;
+        animator.speed = isRooted ? 0f : GetEffectiveAnimationSpeed();
+    }
+
+    private float GetEffectiveAnimationSpeed() => normalAnimationSpeed * GetDamageSpeedMultiplier();
+
+    private float GetDamageSpeedMultiplier() => damageAnimationSlowRemaining > 0f
+        ? Mathf.Clamp01(damageSpeedMultiplier)
+        : 1f;
+
+    private void RefreshDamageFeedback()
+    {
+        damageAnimationSlowRemaining = Mathf.Max(damageAnimationSlowRemaining, damageAnimationSlowDuration);
+        if (animator != null)
+            animator.speed = isRooted ? 0f : GetEffectiveAnimationSpeed();
+        RefreshDamageFlash();
+    }
+
+    private void RefreshDamageFlash()
+    {
+        if (actorRenderer == null || damageFlashDuration <= 0f) return;
+        damageFlashRemaining = Mathf.Max(damageFlashRemaining, damageFlashDuration);
+        SetDamageFlash(true);
+    }
+
+    private void TickDamageFeedback(float deltaTime)
+    {
+        if (damageAnimationSlowRemaining > 0f)
+        {
+            damageAnimationSlowRemaining = Mathf.Max(0f, damageAnimationSlowRemaining - deltaTime);
+            if (damageAnimationSlowRemaining <= 0f && animator != null)
+                animator.speed = isRooted ? 0f : normalAnimationSpeed;
+        }
+        if (damageFlashRemaining > 0f)
+        {
+            damageFlashRemaining = Mathf.Max(0f, damageFlashRemaining - deltaTime);
+            if (damageFlashRemaining <= 0f)
+                SetDamageFlash(false);
+        }
+    }
+
+    private void ClearDamageFeedback()
+    {
+        damageAnimationSlowRemaining = 0f;
+        damageFlashRemaining = 0f;
+        SetDamageFlash(false);
+    }
+
+    private void SetDamageFlash(bool enabled)
+    {
+        if (actorRenderer == null) return;
+        if (actorPropertyBlock == null) actorPropertyBlock = new MaterialPropertyBlock();
+        actorRenderer.GetPropertyBlock(actorPropertyBlock);
+        actorPropertyBlock.SetFloat(DamageFlashAmountId, enabled ? 1f : 0f);
+        actorRenderer.SetPropertyBlock(actorPropertyBlock);
     }
 
     private int ResolveStateHash(int stateHash)

@@ -25,8 +25,12 @@ public sealed class TriunviratoGame : MonoBehaviour
     [SerializeField] private HeroConfig aireConfig;
     [SerializeField] private HeroConfig marConfig;
     [SerializeField] private Transform enemySpawner;
+    [SerializeField] private Transform knightSpawn;
+    [SerializeField] private BlinkImage mapFrameBlinkImage;
+    [SerializeField] private GameObject mainGate;
     [SerializeField] private Transform castleTarget;
     [SerializeField] private EnemyConfig enemyConfig;
+    [SerializeField] private EnemyConfig goblinEnemyConfig;
     [SerializeField] private EnemyConfig bossConfig;
     [Header("Oleadas nocturnas")]
     [SerializeField] private EnemyConfig nightEnemyConfig;
@@ -284,6 +288,17 @@ public sealed class TriunviratoGame : MonoBehaviour
     private void Start()
     {
         gameCamera = Camera.main;
+        if (knightSpawn == null)
+        {
+            GameObject spawn = GameObject.Find("KnightSpawn");
+            if (spawn != null) knightSpawn = spawn.transform;
+        }
+        if (mapFrameBlinkImage == null)
+        {
+            GameObject mapFrame = GameObject.Find("Map_frame");
+            if (mapFrame != null) mapFrameBlinkImage = mapFrame.GetComponent<BlinkImage>();
+        }
+        if (mainGate == null) mainGate = GameObject.Find("Main_gate");
         if (gameCamera != null && gameCamera.orthographic)
             baseOrthographicSize = gameCamera.orthographicSize;
         UpdateGameCameraViewport();
@@ -296,10 +311,11 @@ public sealed class TriunviratoGame : MonoBehaviour
         if (tierraHero == null || aireHero == null || marHero == null ||
             tierraConfig == null || aireConfig == null || marConfig == null ||
             enemySpawner == null || castleTarget == null || enemyConfig == null || bossConfig == null ||
+            goblinEnemyConfig == null || goblinEnemyConfig.Prefab == null ||
             enemyConfig.Prefab == null || bossConfig.Prefab == null || damageFont == null ||
             nightEnemyConfig == null || nightEnemyConfig.Prefab == null || nightBossConfig == null || nightBossConfig.Prefab == null)
         {
-            Debug.LogError("Asigna los héroes, EnemyConfig, BossConfig, configuraciones nocturnas, referencias de escena, EnemySpawner, CastleTarget y la fuente en el Inspector.", this);
+            Debug.LogError("Asigna los héroes, EnemyConfig, Goblin EnemyConfig, BossConfig, configuraciones nocturnas, referencias de escena, EnemySpawner, CastleTarget y la fuente en el Inspector.", this);
             enabled = false;
             return;
         }
@@ -1244,9 +1260,11 @@ public sealed class TriunviratoGame : MonoBehaviour
             { message = "Invocar caballero no está configurada correctamente."; return false; }
             if (!bypassCooldown && GetKnightSummonCooldownRemaining() > 0f)
             { message = "Invocar caballero aún está en cooldown."; return false; }
-            Vector2 offset = knightSummonAbility.SpawnOffset;
             Transform hero = defenders[(int)ArmyType.Tierra].View.transform;
-            Vector3 position = new Vector3(hero.position.x + offset.x, hero.position.y + offset.y, hero.position.z);
+            Vector2 offset = knightSummonAbility.SpawnOffset;
+            Vector3 position = knightSpawn != null
+                ? knightSpawn.position
+                : new Vector3(hero.position.x + offset.x, hero.position.y + offset.y, hero.position.z);
             GameObject view = Instantiate(knightSummonAbility.KnightPrefab, position, Quaternion.identity);
             view.name = "Caballero de Tierra";
             view.tag = "Untagged";
@@ -1944,9 +1962,19 @@ public sealed class TriunviratoGame : MonoBehaviour
                 yield return new WaitForSeconds(ability.ImpactDelay);
             if (target == null || target.IsDead)
                 yield break;
-            ApplyDamage(target, ScaleSpecialDamage(ability != null ? ability.DamagePerHit + lightningDamageBonus[(int)ArmyType.Mar] : 0f, ArmyType.Mar),
-                marConfig != null ? marConfig.ProjectileColor : Color.cyan,
-                ArmyType.Mar, DamageCategory.SpecialAbility);
+            float damage = ScaleSpecialDamage(ability != null ? ability.DamagePerHit + lightningDamageBonus[(int)ArmyType.Mar] : 0f,
+                ArmyType.Mar);
+            float areaRadius = ability != null ? Mathf.Max(0f, ability.AreaRadius) : 0f;
+            foreach (Enemy affectedEnemy in enemies)
+            {
+                if (affectedEnemy == null || affectedEnemy.IsDead ||
+                    (affectedEnemy != target &&
+                     Vector2.Distance(affectedEnemy.transform.position, impactPosition) > areaRadius + GetEnemyHitRadius(affectedEnemy)))
+                    continue;
+                ApplyDamage(affectedEnemy, damage,
+                    marConfig != null ? marConfig.ProjectileColor : Color.cyan,
+                    ArmyType.Mar, DamageCategory.SpecialAbility);
+            }
             if (i < hitCount - 1)
                 yield return new WaitForSeconds(ability != null ? ability.HitInterval : 0f);
         }
@@ -2035,9 +2063,13 @@ public sealed class TriunviratoGame : MonoBehaviour
         float randomY = UnityEngine.Random.Range(-0.25f, 0.25f);
         Vector3 spawnPosition = enemySpawner.position + Vector3.up * randomY;
 
-        EnemyConfig selectedConfig = isBoss
-            ? (nightWaveActive ? nightBossConfig : bossConfig)
-            : (nightWaveActive ? nightEnemyConfig : enemyConfig);
+        EnemyConfig selectedConfig;
+        if (isBoss)
+            selectedConfig = nightWaveActive ? nightBossConfig : bossConfig;
+        else if (nightWaveActive)
+            selectedConfig = nightEnemyConfig;
+        else
+            selectedConfig = UnityEngine.Random.value < 0.5f ? enemyConfig : goblinEnemyConfig;
         Enemy enemy = Instantiate(
             selectedConfig.Prefab,
             spawnPosition,
@@ -2055,6 +2087,7 @@ public sealed class TriunviratoGame : MonoBehaviour
     private void BeginNightWave()
     {
         nightWaveActive = true;
+        SetNightMapObjects(true);
         if (mapFrameAnimator != null) mapFrameAnimator.speed = 0f;
         if (nightMapOverlay != null && !nightMapOverlay.gameObject.activeSelf)
             nightMapOverlay.gameObject.SetActive(true);
@@ -2066,6 +2099,7 @@ public sealed class TriunviratoGame : MonoBehaviour
     private void EndNightWave()
     {
         nightWaveActive = false;
+        SetNightMapObjects(false);
         if (mapFrameAnimator != null) mapFrameAnimator.speed = mapFrameAnimationSpeed;
         if (nightFadeCoroutine != null) StopCoroutine(nightFadeCoroutine);
         if (nightMapOverlay != null) nightFadeCoroutine = StartCoroutine(FadeNightOverlay(0f, nightFadeOutDuration));
@@ -2103,6 +2137,7 @@ public sealed class TriunviratoGame : MonoBehaviour
             nightFadeCoroutine = null;
         }
         nightWaveActive = false;
+        SetNightMapObjects(false);
         if (nightMapOverlay != null)
         {
             if (!nightMapOverlay.gameObject.activeSelf) nightMapOverlay.gameObject.SetActive(true);
@@ -2111,6 +2146,12 @@ public sealed class TriunviratoGame : MonoBehaviour
             nightMapOverlay.color = color;
         }
         if (mapFrameAnimator != null) mapFrameAnimator.speed = mapFrameAnimationSpeed;
+    }
+
+    private void SetNightMapObjects(bool isNight)
+    {
+        if (mapFrameBlinkImage != null) mapFrameBlinkImage.enabled = !isNight;
+        if (mainGate != null && mainGate.activeSelf != !isNight) mainGate.SetActive(!isNight);
     }
 
     private void UpdateEnemies()

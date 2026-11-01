@@ -18,13 +18,13 @@ MonoBehaviour:
   maximumHealth: 520
   additionalHealthPerWave: 30
   healthGrowthPerWave: 0.03
-  movementSpeed: 0.5
-  speedGrowthPerWave: 0.02
+  movementSpeed: 0.6
+  speedGrowthPerWave: 0.025
   maximumSpeedMultiplier: 2
   castleDamagePerAttack: 35
   castleAttackInterval: 2
   initialIdleDuration: 0.15
-  visualScale: 0.65
+  visualScale: 0.75
   idleAnimationState: Werewolf_Idle
   walkAnimationState: Werewolf_Run
   takeHitAnimationState: Werewolf_Hurt

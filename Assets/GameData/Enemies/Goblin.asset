@@ -1,0 +1,38 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b15f0c26e01943f59de2e35d817a0001, type: 3}
+  m_Name: Goblin
+  m_EditorClassIdentifier: 
+  id: enemy-goblin
+  displayName: Goblin
+  prefab: {fileID: 6218873479609355913, guid: 21d08e1503755a74ca8f7761a31eee22, type: 3}
+  maximumHealth: 20
+  additionalHealthPerWave: 5
+  healthGrowthPerWave: 0.05
+  movementSpeed: 0.5
+  speedGrowthPerWave: 0.035
+  maximumSpeedMultiplier: 2.5
+  castleDamagePerAttack: 5
+  castleAttackInterval: 1.5
+  initialIdleDuration: 0.15
+  visualScale: 0.7
+  idleAnimationState: Goblin_Idle
+  walkAnimationState: Goblin_Run
+  takeHitAnimationState: Goblin_TakeHit
+  deathAnimationState: Goblin_Death
+  attackAnimationState: Goblin_Attack
+  experienceReward: 15
+  deathSound: {fileID: 8300000, guid: ec593acee6d4ec2459b33a157ff80767, type: 3}
+  healthBarLength: 0.35
+  healthBarHeight: 0.035
+  healthBarOffset: -0.15
+  deathAnimationFallbackSeconds: 1.1
