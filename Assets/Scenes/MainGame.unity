@@ -336,7 +336,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &250000001
 RectTransform:
   m_ObjectHideFlags: 0
@@ -550,8 +550,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 1}
   m_AnchorMax: {x: 0.5, y: 1}
-  m_AnchoredPosition: {x: 549, y: -241}
-  m_SizeDelta: {x: 760, y: 45}
+  m_AnchoredPosition: {x: 566, y: -248}
+  m_SizeDelta: {x: 271.72, y: 108.5}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &250000022
 CanvasRenderer:
@@ -594,7 +594,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 1
     m_LineSpacing: 1
-  m_Text: 0.8.1
+  m_Text: 0.8.2
 --- !u!1 &250000030
 GameObject:
   m_ObjectHideFlags: 0
@@ -1437,6 +1437,7 @@ MonoBehaviour:
   knightSummonAbility: {fileID: 11400000, guid: 93bb7d55d48b403385323c6d5d59ced1, type: 2}
   warBlessingAbility: {fileID: 11400000, guid: 31eb1046c8364ed88e72c4649625a23b, type: 2}
   waterTornadoAbility: {fileID: 11400000, guid: 761e0e1b796d4f9a9bea9b9f1d573d51, type: 2}
+  fireTornadoSynergy: {fileID: 11400000, guid: 60f8cbe52a0e41378ad1c14062825ca9, type: 2}
   electricBirdAbility: {fileID: 11400000, guid: 53b86d992d7a4bc1b452298ce8e1c901, type: 2}
   meteorShowerArea: {fileID: 1065088}
   tierraExperienceToLevel: 100
@@ -5727,7 +5728,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 1, y: 1}
   m_AnchorMax: {x: 1, y: 1}
-  m_AnchoredPosition: {x: -1025, y: -22.999878}
+  m_AnchoredPosition: {x: -1025, y: -33}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 1, y: 1}
 --- !u!222 &1273085759

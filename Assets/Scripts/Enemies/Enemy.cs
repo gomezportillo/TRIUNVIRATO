@@ -43,6 +43,7 @@ public class Enemy : MonoBehaviour
     private bool isBeingKnockedBack;
     private bool isRooted;
     private TimedCombatEffects combatEffects;
+    private Transform center;
 
     public bool IsDead => isDead;
     public bool IsBoss => isBoss;
@@ -51,6 +52,7 @@ public class Enemy : MonoBehaviour
     public float MaximumHealth { get; private set; }
     public float ExperienceReward => config != null ? config.ExperienceReward : 0f;
     public TimedCombatEffects Effects => combatEffects;
+    public Vector3 AimPosition => center != null ? center.position : transform.position;
     public bool IsRooted => isRooted || Time.time < rootedUntil;
 
     private void LateUpdate()
@@ -64,6 +66,15 @@ public class Enemy : MonoBehaviour
         config = enemyConfig;
         game = owner;
         isBoss = boss;
+        center = null;
+        foreach (Transform child in GetComponentsInChildren<Transform>(true))
+        {
+            if (child != transform && child.name == "Centro")
+            {
+                center = child;
+                break;
+            }
+        }
         IdleState = Animator.StringToHash(config.IdleAnimationState);
         WalkState = Animator.StringToHash(config.WalkAnimationState);
         TakeHitState = Animator.StringToHash(config.TakeHitAnimationState);

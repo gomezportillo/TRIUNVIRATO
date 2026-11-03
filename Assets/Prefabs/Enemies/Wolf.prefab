@@ -31,7 +31,8 @@ Transform:
   m_LocalPosition: {x: -17.8, y: 0.88259625, z: 0}
   m_LocalScale: {x: 0.5, y: 0.5, z: 1}
   m_ConstrainProportionsScale: 1
-  m_Children: []
+  m_Children:
+  - {fileID: 2103674289378345636}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!212 &819540934059446554
@@ -128,6 +129,37 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b15f0c26e01943f59de2e35d817a0002, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  damageSpeedMultiplier: 0.2
+  damageSpeedMultiplier: 0.3
   damageAnimationSlowDuration: 0.2
   damageFlashDuration: 0.08
+--- !u!1 &6359739039634184557
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2103674289378345636}
+  m_Layer: 0
+  m_Name: Centro
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &2103674289378345636
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6359739039634184557}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 0, y: 0.357, z: 0}
+  m_LocalScale: {x: 2, y: 2, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 7426324509983756339}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}

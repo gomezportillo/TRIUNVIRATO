@@ -36,6 +36,8 @@ public sealed class LocalControlServer : MonoBehaviour
     private readonly string[] armySeats = new string[3];
     private readonly bool[] restartRequestedByArmy = new bool[3];
     private bool restartTriggered;
+    private TriunviratoGame.MatchStatus observedMatchStatus;
+    private bool hasObservedMatchStatus;
     private string developerToken;
     private TcpListener listener;
     private CancellationTokenSource shutdown;
@@ -83,6 +85,8 @@ public sealed class LocalControlServer : MonoBehaviour
         public string offerToken;
         public string clientToken;
         public string requestId;
+        public string priority;
+        public bool open;
 #pragma warning restore 0649
     }
 
@@ -132,6 +136,10 @@ public sealed class LocalControlServer : MonoBehaviour
         public float towerRange;
         public float towerAttackCooldown;
         public bool canControl;
+        public bool heroBossTargetPriority;
+        public bool heroRangePreviewVisible;
+        public bool objectiveTabOpen;
+        public string objectivePlayerName;
         public int level;
         public float experience;
         public float experienceNeeded;
@@ -257,6 +265,7 @@ public sealed class LocalControlServer : MonoBehaviour
         public int ArmyIndex = -1;
         public string PlayerName;
         public bool Developer;
+        public bool ObjectiveTabOpen;
         public bool Connected;
         public int ClientId = -1;
         public float DisconnectedAt;
@@ -289,6 +298,15 @@ public sealed class LocalControlServer : MonoBehaviour
         ExpireDisconnectedLobbySeats();
         while (pendingMessages.TryDequeue(out PendingMessage pending))
             ProcessMessage(pending);
+
+        if (game != null)
+        {
+            if (hasObservedMatchStatus && observedMatchStatus == TriunviratoGame.MatchStatus.Finished &&
+                game.Status == TriunviratoGame.MatchStatus.InProgress)
+                ResetObjectiveTabStates();
+            observedMatchStatus = game.Status;
+            hasObservedMatchStatus = true;
+        }
 
         // The TV overlay can restart directly. Clear votes carried from the finished
         // match when the shared game state returns to combat.
@@ -586,6 +604,18 @@ public sealed class LocalControlServer : MonoBehaviour
                     response.success = SelectArmy(session, command.army, command.playerName, out response.message);
                     stateChanged = response.success;
                 }
+                else if (command.type == "setHeroTargetPriority")
+                {
+                    response.type = "objectiveSettingsResult";
+                    response.success = SetHeroTargetPriority(session, command.army, command.priority, out response.message);
+                    stateChanged = response.success;
+                }
+                else if (command.type == "setObjectiveTab")
+                {
+                    response.type = "objectiveSettingsResult";
+                    response.success = SetObjectiveTab(session, command.army, command.open, out response.message);
+                    stateChanged = response.success;
+                }
                 else if (command.type == "joinDeveloper")
                 {
                     response.type = "selectionResult";
@@ -634,6 +664,7 @@ public sealed class LocalControlServer : MonoBehaviour
                         {
                             restartTriggered = true;
                             game.RestartFinishedMatch();
+                            ResetObjectiveTabStates();
                             Array.Clear(restartRequestedByArmy, 0, restartRequestedByArmy.Length);
                             restartTriggered = false;
                             response.message = "Los tres jugadores confirmaron. Nueva partida iniciada.";
@@ -730,6 +761,9 @@ public sealed class LocalControlServer : MonoBehaviour
         session.Connected = true;
         session.ClientId = clientId;
         session.DisconnectedAt = 0f;
+        session.ObjectiveTabOpen = false;
+        if (game != null && session.ArmyIndex >= 0 && session.ArmyIndex < 3)
+            game.SetHeroRangePreview((ArmyType)session.ArmyIndex, false);
         sessionsByClient[clientId] = session;
         response.selectedArmy = GetArmyName(session.ArmyIndex);
         response.developerMode = session.Developer;
@@ -782,6 +816,48 @@ public sealed class LocalControlServer : MonoBehaviour
         else
         {
             message = "Plaza de " + army + " asignada. Esperando a los otros ejércitos.";
+        }
+        return true;
+    }
+
+    private bool SetHeroTargetPriority(PlayerSession session, string armyName, string priority, out string message)
+    {
+        message = null;
+        if (!TryGetPlayerArmy(session, armyName, out ArmyType army, out message)) return false;
+        if (priority != "bosses" && priority != "enemies")
+        {
+            message = "Prioridad de objetivo no válida.";
+            return false;
+        }
+        game.SetHeroBossTargetPriority(army, priority == "bosses");
+        message = priority == "bosses" ? "Prioridad de bosses actualizada." : "Prioridad de enemigos actualizada.";
+        return true;
+    }
+
+    private bool SetObjectiveTab(PlayerSession session, string armyName, bool open, out string message)
+    {
+        message = null;
+        if (!TryGetPlayerArmy(session, armyName, out ArmyType army, out message)) return false;
+        session.ObjectiveTabOpen = open;
+        game.SetHeroRangePreview(army, open);
+        message = open ? "Rango del héroe visible." : "Rango del héroe oculto.";
+        return true;
+    }
+
+    private bool TryGetPlayerArmy(PlayerSession session, string armyName, out ArmyType army, out string message)
+    {
+        message = null;
+        army = default;
+        if (session == null || session.Developer || session.ArmyIndex < 0 || session.ArmyIndex >= 3 ||
+            !TryParseArmy(armyName, out army) || session.ArmyIndex != (int)army)
+        {
+            message = "Solo puedes configurar el objetivo de tu propio héroe.";
+            return false;
+        }
+        if (game == null)
+        {
+            message = "La partida no está disponible.";
+            return false;
         }
         return true;
     }
@@ -856,10 +932,23 @@ public sealed class LocalControlServer : MonoBehaviour
         sessionsByClient.Remove(clientId);
         session.Connected = false;
         session.ClientId = -1;
+        session.ObjectiveTabOpen = false;
+        if (game != null && session.ArmyIndex >= 0 && session.ArmyIndex < 3)
+            game.SetHeroRangePreview((ArmyType)session.ArmyIndex, false);
         session.DisconnectedAt = Time.realtimeSinceStartup;
         Debug.Log("Sesión desconectada. Ejército reservado: " + GetArmyName(session.ArmyIndex) +
                   (session.Developer ? " (desarrollador)" : string.Empty) + ".", this);
         PublishState();
+    }
+
+    private void ResetObjectiveTabStates()
+    {
+        foreach (PlayerSession session in sessionsByToken.Values)
+            if (session != null) session.ObjectiveTabOpen = false;
+        if (game == null) return;
+        game.SetHeroRangePreview(ArmyType.Tierra, false);
+        game.SetHeroRangePreview(ArmyType.Aire, false);
+        game.SetHeroRangePreview(ArmyType.Mar, false);
     }
 
     private void ExpireDisconnectedLobbySeats()
@@ -1067,6 +1156,9 @@ public sealed class LocalControlServer : MonoBehaviour
     {
         HeroConfig hero = game != null ? game.GetHeroConfig(army) : null;
         bool canControl = CanControl(session, army);
+        PlayerSession armySession = null;
+        string armyOwner = armySeats[(int)army];
+        if (armyOwner != null) sessionsByToken.TryGetValue(armyOwner, out armySession);
         TowerConfig towerConfig = towerManager.GetConfig(army);
         return new ArmyState
         {
@@ -1076,6 +1168,11 @@ public sealed class LocalControlServer : MonoBehaviour
             towerRange = towerManager.GetCurrentRange(army),
             towerAttackCooldown = towerManager.GetCurrentCooldown(army),
             canControl = canControl,
+            heroBossTargetPriority = game != null && game.GetHeroBossTargetPriority(army),
+            heroRangePreviewVisible = session != null && !session.Developer &&
+                session.ArmyIndex == (int)army && session.ObjectiveTabOpen,
+            objectiveTabOpen = armySession != null && armySession.ObjectiveTabOpen,
+            objectivePlayerName = armySession != null ? armySession.PlayerName : null,
             heroDamage = game != null ? game.GetHeroDamage(army) : 0f,
             heroBaseDamage = hero != null ? hero.Damage : 0f,
             heroRange = game != null ? game.GetHeroRange(army) : hero != null ? hero.Range : 0f,

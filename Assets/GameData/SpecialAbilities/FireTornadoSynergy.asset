@@ -1,0 +1,16 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6d7d5e5c5ac44a7ebac07ec0f474f76b, type: 3}
+  m_Name: FireTornadoSynergy
+  m_EditorClassIdentifier: 
+  fireTornadoPrefab: {fileID: 354688607620101139, guid: 0df33d00b894fb245a42eefe42650cdb, type: 3}
+  damageMultiplier: 2

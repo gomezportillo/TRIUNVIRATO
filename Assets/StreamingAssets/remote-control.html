@@ -42,9 +42,11 @@
     .army-header { display: flex; justify-content: space-between; gap: 8px; align-items: center; border-left: 4px solid var(--army); padding: 5px 0 5px 11px; }
     .army-header h2 { margin: 0; font-size: 1.2rem; }
     .wave-label { color: #94a3b8; font-size: .82rem; white-space: nowrap; }
-    .section-tabs { position: sticky; top: 0; z-index: 2; margin: 12px 0; padding: 5px; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 5px; border-radius: 14px; background: #0b1220; }
+    .section-tabs { position: sticky; top: 0; z-index: 2; margin: 12px 0; padding: 5px; display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 5px; border-radius: 14px; background: #0b1220; }
     .section-tabs button { min-height: 42px; padding: 7px 4px; color: #cbd5e1; background: #1e293b; font-size: .88rem; }
     .section-tabs button.active { color: #07111f; background: var(--army); }
+    .objective-choice { margin: 7px 0; color: #cbd5e1; background: #1e293b; border: 1px solid #475569; }
+    .objective-choice.selected { color: #07111f; background: var(--army); outline: 2px solid white; outline-offset: 1px; }
     .hero-summary { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 7px; }
     .hero-stat { min-width: 0; padding: 8px; border-radius: 10px; background: #0b1220; overflow-wrap: anywhere; }
     .hero-stat strong { display: block; font-size: .98rem; }
@@ -125,6 +127,7 @@
       <nav id="section-tabs" class="section-tabs" aria-label="Secciones del ejército">
         <button data-view="statistics" class="active" aria-pressed="true">Estadísticas</button>
         <button data-view="attacks" aria-pressed="false">Ataques</button>
+        <button data-view="objective" aria-pressed="false">Objetivo</button>
       </nav>
       <div id="section-content"></div>
       <button id="reconnect" class="secondary">Conectar / volver a conectar</button>
@@ -174,6 +177,7 @@
       let socket, state;
       let connected = false, sessionReady = false, developerMode = false;
       let selectedPanel = '', activeView = 'attacks', stateRevision = -1, requestCounter = 0;
+      let objectiveTabAnnounced = false;
       let previousMatchStatus = null;
       const previousArmyLevels = Object.create(null);
       const pendingRequests = new Map();
@@ -215,6 +219,11 @@
         message.requestId = requestId;
         if (actionKey) { pendingActions.add(actionKey); pendingRequests.set(requestId, actionKey); renderPanel(); }
         socket.send(JSON.stringify(message));
+      }
+      function syncObjectiveTab(open) {
+        if (!sessionReady || !state || developerMode || !selectedPanel || objectiveTabAnnounced === open) return;
+        objectiveTabAnnounced = open;
+        request({ type: 'setObjectiveTab', army: selectedPanel, open });
       }
       function feedback(text, success) {
         result.textContent = text || (success ? 'Mejora seleccionada.' : 'No se pudo seleccionar la mejora.');
@@ -462,6 +471,29 @@
         }
         return panel;
       }
+      function createObjectivePanel(army) {
+        const panel = document.createDocumentFragment();
+        const heading = document.createElement('h3'); heading.textContent = 'Prioridad de ataque';
+        const note = document.createElement('p'); note.className = 'description';
+        note.textContent = `Rango actual: ${numberFormat.format(army.heroRange || 0)} unidades. Los bosses se priorizan solo cuando están dentro del rango.`;
+        panel.append(heading, note);
+        for (const option of [
+          { id: 'enemies', label: 'Enemigos', selected: !army.heroBossTargetPriority },
+          { id: 'bosses', label: 'Bosses', selected: !!army.heroBossTargetPriority }
+        ]) {
+          const button = document.createElement('button');
+          button.className = `objective-choice${option.selected ? ' selected' : ''}`;
+          button.setAttribute('aria-pressed', String(option.selected));
+          button.textContent = `${option.selected ? '✓ ' : ''}${option.label}`;
+          button.disabled = !connected || !army.canControl;
+          button.addEventListener('click', () => request({ type: 'setHeroTargetPriority', army: selectedPanel, priority: option.id }));
+          panel.append(button);
+        }
+        const rangeNote = document.createElement('p'); rangeNote.className = 'stat-note';
+        rangeNote.textContent = army.heroRangePreviewVisible ? 'Rango visible en la pantalla del juego.' : 'El círculo solo aparece mientras esta pestaña está abierta.';
+        panel.append(rangeNote);
+        return panel;
+      }
       function renderPanel() {
         if (!state || (!sessionReady && state.status !== 'Finished')) return;
         const inMatch = state.status === 'InProgress' || state.status === 'Finished';
@@ -472,7 +504,7 @@
           return;
         }
         lobby.hidden = true; control.hidden = false;
-        if (state.status === 'Finished') { renderFinalScreen(); return; }
+        if (state.status === 'Finished') { syncObjectiveTab(false); renderFinalScreen(); return; }
         if (!developerMode && !state.selectedArmy) {
           document.getElementById('panel-heading').textContent = 'Partida en curso';
           document.getElementById('dev-tabs').hidden = true;
@@ -481,11 +513,14 @@
         }
         if (!selectedPanel || (!developerMode && selectedPanel !== state.selectedArmy)) selectedPanel = developerMode ? 'tierra' : state.selectedArmy;
         const army = state.armies.find(item => item.army === selectedPanel); if (!army) return;
+        syncObjectiveTab(activeView === 'objective' && !army.hasUpgradeOffer);
         document.documentElement.style.setProperty('--army', selectedPanel === 'tierra' ? '#4ade80' : selectedPanel === 'aire' ? '#f87171' : '#60a5fa');
         document.documentElement.style.setProperty('--army-soft', selectedPanel === 'tierra' ? '#123322' : selectedPanel === 'aire' ? '#3b171b' : '#172d49');
         document.getElementById('panel-heading').textContent = developerMode ? `Desarrollador · ${names[selectedPanel]}` : `${army.playerName || names[selectedPanel]} · Nivel ${army.level}`;
         document.getElementById('wave-label').textContent = `Oleada ${state.currentWave || 0}`;
         document.getElementById('dev-tabs').hidden = !developerMode;
+        sectionTabs.querySelector('[data-view="objective"]').hidden = developerMode;
+        if (developerMode && activeView === 'objective') activeView = 'attacks';
         tabs.forEach(tab => tab.classList.toggle('active', tab.dataset.tab === selectedPanel));
         const xpSummary = document.createElement('p'); xpSummary.className = 'muted';
         xpSummary.textContent = `${army.playerName || names[selectedPanel]} · Nivel ${army.level} · ${numberFormat.format(army.experience)} / ${numberFormat.format(army.experienceNeeded)} XP · Multiplicador ×${numberFormat.format(army.experienceMultiplier)} · Suerte ${numberFormat.format(army.luckChance * 100)} % · Aumento de EXP +${numberFormat.format(army.experienceIncrease * 100)} %`;
@@ -521,8 +556,8 @@
           button.setAttribute('aria-pressed', String(isActive));
         });
 
-        const fragment = activeView === 'attacks'
-          ? createAttacksPanel(army)
+        const fragment = activeView === 'attacks' ? createAttacksPanel(army)
+          : activeView === 'objective' ? createObjectivePanel(army)
           : createCombatStatistics(army);
         if (state.status === 'Finished') {
           const finished = document.createElement('p'); finished.className = 'blocked'; finished.textContent = 'Partida finalizada. Las órdenes están bloqueadas.'; fragment.prepend(finished);
@@ -537,6 +572,7 @@
         socket.addEventListener('open', () => { stateRevision = -1; updateConnection(true); request({ type: 'hello', clientToken: token }); });
         socket.addEventListener('close', () => {
           updateConnection(false);
+          objectiveTabAnnounced = false;
           pendingRequests.clear(); pendingActions.clear();
           renderPanel();
         });
@@ -571,7 +607,17 @@
       chooseButtons.forEach(button => button.addEventListener('click', () => request({ type: 'selectArmy', army: button.dataset.army, playerName: playerNameInput.value.trim().slice(0, 24) })));
       developerButton.addEventListener('click', () => request({ type: 'joinDeveloper', playerName: playerNameInput.value.trim().slice(0, 24) }));
       tabs.forEach(tab => tab.addEventListener('click', () => { if (developerMode) { selectedPanel = tab.dataset.tab; renderPanel(); } }));
-      sectionButtons.forEach(button => button.addEventListener('click', () => { activeView = button.dataset.view; renderPanel(); }));
+      sectionButtons.forEach(button => button.addEventListener('click', () => {
+        const nextView = button.dataset.view;
+        if (activeView === 'objective' && nextView !== 'objective') syncObjectiveTab(false);
+        activeView = nextView;
+        if (activeView === 'objective') syncObjectiveTab(true);
+        renderPanel();
+      }));
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) syncObjectiveTab(false);
+        else if (activeView === 'objective') syncObjectiveTab(true);
+      });
       document.getElementById('reconnect').addEventListener('click', connect);
       document.getElementById('reconnectLobby').addEventListener('click', connect);
       connect();

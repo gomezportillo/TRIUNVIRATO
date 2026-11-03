@@ -65,7 +65,7 @@ public sealed class KnightAlly : MonoBehaviour
         Enemy target = FindTarget(enemies);
         if (target != null)
         {
-            float distance = Vector2.Distance(transform.position, target.transform.position);
+            float distance = Vector2.Distance(transform.position, target.AimPosition);
             if (distance <= config.AttackRange)
             {
                 SetMoving(false);
@@ -79,9 +79,9 @@ public sealed class KnightAlly : MonoBehaviour
                 return false;
             }
 
-            float targetY = Mathf.Clamp(target.transform.position.y,
+            float targetY = Mathf.Clamp(target.AimPosition.y,
                 combatLaneY - config.MaximumLaneYOffset, combatLaneY + config.MaximumLaneYOffset);
-            MoveToward(new Vector2(target.transform.position.x, targetY), deltaTime);
+            MoveToward(new Vector2(target.AimPosition.x, targetY), deltaTime);
             return false;
         }
 
@@ -115,7 +115,7 @@ public sealed class KnightAlly : MonoBehaviour
         foreach (Enemy enemy in enemies)
         {
             if (enemy == null || enemy.IsDead) continue;
-            float distance = Vector2.Distance(transform.position, enemy.transform.position);
+            float distance = Vector2.Distance(transform.position, enemy.AimPosition);
             if (distance < bestDistance) { best = enemy; bestDistance = distance; }
         }
         return best;

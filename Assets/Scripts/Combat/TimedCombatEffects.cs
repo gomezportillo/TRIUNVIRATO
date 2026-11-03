@@ -217,7 +217,12 @@ public sealed class TimedCombatEffects : MonoBehaviour
         GameObject icon = Instantiate(prefab, transform, false);
         icon.name = "Effect icon - " + entry.value.id;
         icon.transform.localPosition = Vector3.zero;
-        icon.transform.localScale = Vector3.one * Mathf.Max(0.01f, entry.value.iconSize);
+        Vector3 desiredWorldScale = prefab.transform.localScale * Mathf.Max(0.01f, entry.value.iconSize);
+        Vector3 hostScale = transform.lossyScale;
+        icon.transform.localScale = new Vector3(
+            desiredWorldScale.x / SafeScale(hostScale.x),
+            desiredWorldScale.y / SafeScale(hostScale.y),
+            desiredWorldScale.z / SafeScale(hostScale.z));
         SpriteRenderer renderer = icon.GetComponentInChildren<SpriteRenderer>(true);
         if (renderer == null)
         {
@@ -288,17 +293,16 @@ public sealed class TimedCombatEffects : MonoBehaviour
         Vector2 offset = Vector2.zero;
         foreach (Entry entry in active)
             if (entry != null) { offset = entry.value.iconOffset; spacing = Mathf.Max(0.01f, entry.value.iconVerticalSpacing); break; }
-        // Keep adjacent icons visually separate even when the configured icon size is increased.
-        float hostScaleY = Mathf.Max(0.0001f, Mathf.Abs(transform.lossyScale.y));
+        // Bounds and offsets are in world units so host/enemy scale cannot stretch the layout.
         foreach (GameObject icon in icons)
         {
             SpriteRenderer renderer = icon.GetComponentInChildren<SpriteRenderer>(true);
-            if (renderer != null) spacing = Mathf.Max(spacing, renderer.bounds.size.y / hostScaleY * 1.05f);
+            if (renderer != null) spacing = Mathf.Max(spacing, renderer.bounds.size.y * 1.05f);
         }
         for (int i = 0; i < icons.Count; i++)
         {
             float centeredIndex = i - (icons.Count - 1) * 0.5f;
-            icons[i].transform.localPosition = new Vector3(offset.x, offset.y - centeredIndex * spacing, 0f);
+            icons[i].transform.position = transform.position + new Vector3(offset.x, offset.y - centeredIndex * spacing, 0f);
         }
     }
 
@@ -311,4 +315,8 @@ public sealed class TimedCombatEffects : MonoBehaviour
     }
 
     private static float Positive(float value) => value <= 0f ? 1f : value;
+
+    private static float SafeScale(float value) => Mathf.Abs(value) < 0.0001f
+        ? (value < 0f ? -0.0001f : 0.0001f)
+        : value;
 }
