@@ -7,6 +7,7 @@ using UnityEngine.InputSystem;
 public sealed class GameSoundManager : MonoBehaviour
 {
     public static GameSoundManager Instance { get; private set; }
+    public bool IsThemeMuted => themeMuted;
 
     [Header("Tema principal")]
     [SerializeField] private AudioClip[] themeTracks;
@@ -44,12 +45,12 @@ public sealed class GameSoundManager : MonoBehaviour
     {
         if (Instance != null && Instance != this)
         {
-            Debug.LogWarning("Hay más de un GameSoundManager en la escena; el duplicado se desactivará.", this);
-            enabled = false;
+            Destroy(gameObject);
             return;
         }
 
         Instance = this;
+        DontDestroyOnLoad(gameObject);
         AudioSource[] sources = GetComponents<AudioSource>();
         themeSource = sources.Length > 0 ? sources[0] : gameObject.AddComponent<AudioSource>();
         effectsSource = sources.Length > 1 ? sources[1] : gameObject.AddComponent<AudioSource>();
