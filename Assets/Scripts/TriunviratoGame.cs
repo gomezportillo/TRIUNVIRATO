@@ -74,6 +74,10 @@ public sealed class TriunviratoGame : MonoBehaviour
     private bool waveInProgress;
     private bool nightWaveActive;
     private Coroutine nightFadeCoroutine;
+    private SpriteRenderer[] mapRenderers;
+    private SpriteRenderer morningMap;
+    private SpriteRenderer sunsetMap;
+    private SpriteRenderer nightMap;
     private float mapFrameAnimationSpeed = 1f;
     private bool paused;
     private bool finished;
@@ -294,6 +298,10 @@ public sealed class TriunviratoGame : MonoBehaviour
 
     private void Start()
     {
+        CacheMapRenderers();
+        if (mainGate == null) mainGate = GameObject.Find("Main_gate");
+        if (mainGate != null) mainGate.SetActive(false);
+        ResetMapLayers();
         gameCamera = Camera.main;
         if (knightSpawn == null)
         {
@@ -1057,6 +1065,9 @@ public sealed class TriunviratoGame : MonoBehaviour
         waveInProgress = true;
         spawnTimer = 0f;
         if (wave % 5 == 0) BeginNightWave();
+        else if (wave % 5 == 1 && wave > 1) TransitionToMap(morningMap);
+        else if (wave % 5 == 2) TransitionToMap(mapRenderers != null ? mapRenderers[0] : null);
+        else if (wave % 5 == 4) TransitionToMap(sunsetMap);
         StateRevision++;
     }
 
@@ -2228,10 +2239,7 @@ public sealed class TriunviratoGame : MonoBehaviour
         nightWaveActive = true;
         SetNightMapObjects(true);
         if (mapFrameAnimator != null) mapFrameAnimator.speed = 0f;
-        if (nightMapOverlay != null && !nightMapOverlay.gameObject.activeSelf)
-            nightMapOverlay.gameObject.SetActive(true);
-        if (nightFadeCoroutine != null) StopCoroutine(nightFadeCoroutine);
-        if (nightMapOverlay != null) nightFadeCoroutine = StartCoroutine(FadeNightOverlay(1f, nightFadeInDuration));
+        TransitionToMap(nightMap);
         GameSoundManager.Instance?.PlayNightHowl(nightStartSound, nightStartVolume);
     }
 
@@ -2240,57 +2248,83 @@ public sealed class TriunviratoGame : MonoBehaviour
         nightWaveActive = false;
         SetNightMapObjects(false);
         if (mapFrameAnimator != null) mapFrameAnimator.speed = mapFrameAnimationSpeed;
-        if (nightFadeCoroutine != null) StopCoroutine(nightFadeCoroutine);
-        if (nightMapOverlay != null) nightFadeCoroutine = StartCoroutine(FadeNightOverlay(0f, nightFadeOutDuration));
     }
 
-    private IEnumerator FadeNightOverlay(float targetAlpha, float duration)
+    private void CacheMapRenderers()
     {
-        Color color = nightMapOverlay.color;
-        float startAlpha = color.a;
-        if (duration <= 0f)
+        GameObject map = GameObject.Find("Map");
+        GameObject morning = GameObject.Find("Map_morning");
+        GameObject sunset = GameObject.Find("Map_sunset");
+        GameObject night = GameObject.Find("Map_night");
+        mapRenderers = new SpriteRenderer[]
         {
-            color.a = targetAlpha;
-            nightMapOverlay.color = color;
-            nightFadeCoroutine = null;
-            yield break;
-        }
+            map != null ? map.GetComponent<SpriteRenderer>() : null,
+            morning != null ? morning.GetComponent<SpriteRenderer>() : null,
+            sunset != null ? sunset.GetComponent<SpriteRenderer>() : null,
+            night != null ? night.GetComponent<SpriteRenderer>() : null
+        };
+        morningMap = mapRenderers[1];
+        sunsetMap = mapRenderers[2];
+        nightMap = mapRenderers[3];
+    }
+
+    private void ResetMapLayers()
+    {
+        if (mapRenderers == null) return;
+        for (int i = 0; i < mapRenderers.Length; i++)
+            SetMapAlpha(mapRenderers[i], i == 0 ? 1f : 0f);
+    }
+
+    private void TransitionToMap(SpriteRenderer target)
+    {
+        if (target == null || mapRenderers == null) return;
+        if (nightFadeCoroutine != null) StopCoroutine(nightFadeCoroutine);
+        nightFadeCoroutine = StartCoroutine(FadeToMap(target));
+    }
+
+    private IEnumerator FadeToMap(SpriteRenderer target)
+    {
+        float duration = Mathf.Max(nightFadeInDuration, nightFadeOutDuration);
+        float[] starts = new float[mapRenderers.Length];
+        for (int i = 0; i < mapRenderers.Length; i++)
+            starts[i] = mapRenderers[i] != null ? mapRenderers[i].color.a : 0f;
         float elapsed = 0f;
         while (elapsed < duration)
         {
             if (!paused) elapsed += Time.deltaTime;
-            color.a = Mathf.Lerp(startAlpha, targetAlpha, Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(elapsed / duration)));
-            nightMapOverlay.color = color;
+            float t = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(elapsed / duration));
+            for (int i = 0; i < mapRenderers.Length; i++)
+            {
+                SpriteRenderer renderer = mapRenderers[i];
+                if (renderer != null) SetMapAlpha(renderer, Mathf.Lerp(starts[i], renderer == target ? 1f : 0f, t));
+            }
             yield return null;
         }
-        color.a = targetAlpha;
-        nightMapOverlay.color = color;
+        for (int i = 0; i < mapRenderers.Length; i++)
+            if (mapRenderers[i] != null) SetMapAlpha(mapRenderers[i], mapRenderers[i] == target ? 1f : 0f);
         nightFadeCoroutine = null;
+    }
+
+    private static void SetMapAlpha(SpriteRenderer renderer, float alpha)
+    {
+        if (renderer == null) return;
+        Color color = renderer.color;
+        color.a = alpha;
+        renderer.color = color;
     }
 
     private void ResetNightVisuals()
     {
-        if (nightFadeCoroutine != null)
-        {
-            StopCoroutine(nightFadeCoroutine);
-            nightFadeCoroutine = null;
-        }
+        if (nightFadeCoroutine != null) { StopCoroutine(nightFadeCoroutine); nightFadeCoroutine = null; }
         nightWaveActive = false;
         SetNightMapObjects(false);
-        if (nightMapOverlay != null)
-        {
-            if (!nightMapOverlay.gameObject.activeSelf) nightMapOverlay.gameObject.SetActive(true);
-            Color color = nightMapOverlay.color;
-            color.a = 0f;
-            nightMapOverlay.color = color;
-        }
+        ResetMapLayers();
         if (mapFrameAnimator != null) mapFrameAnimator.speed = mapFrameAnimationSpeed;
     }
 
     private void SetNightMapObjects(bool isNight)
     {
         if (mapFrameBlinkImage != null) mapFrameBlinkImage.enabled = !isNight;
-        if (mainGate != null && mainGate.activeSelf != !isNight) mainGate.SetActive(!isNight);
     }
 
     private void UpdateEnemies()
@@ -2906,10 +2940,11 @@ public sealed class TriunviratoGame : MonoBehaviour
         if (target == null)
             return false;
 
-        Transform cannon = tower.Cannon;
+        tower.PlayMuzzleEffect();
+        Transform muzzle = tower.Muzzle;
         FireProjectile(tower.gameObject, tower.Config.DisplayName, tower.Config.Hero,
             tower.Damage, tower.SplashRadius, target,
-            launchPosition: cannon != null ? cannon.position : tower.transform.position + Vector3.right * 0.2f,
+            launchPosition: muzzle != null ? muzzle.position : tower.transform.position + Vector3.right * 0.2f,
             damageCategory: DamageCategory.Tower);
         return true;
     }

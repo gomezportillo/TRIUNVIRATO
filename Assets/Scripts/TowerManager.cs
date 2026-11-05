@@ -62,7 +62,7 @@ public sealed class TowerManager : MonoBehaviour
             return;
 
         foreach (SpriteRenderer renderer in anchor.GetComponentsInChildren<SpriteRenderer>(true))
-            renderer.enabled = visible;
+            renderer.enabled = visible && renderer.transform.name != "Muzzle";
         DefenseTower behavior = anchor.GetComponent<DefenseTower>();
         if (behavior != null)
             behavior.enabled = visible;

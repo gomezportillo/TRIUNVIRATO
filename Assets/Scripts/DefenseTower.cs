@@ -1,4 +1,5 @@
 using UnityEngine;
+using System.Collections;
 
 /// <summary>Attack cadence and stats for an unlocked tower; hits use the shared game projectile pipeline.</summary>
 public sealed class DefenseTower : MonoBehaviour
@@ -9,10 +10,37 @@ public sealed class DefenseTower : MonoBehaviour
     public float Damage { get; private set; }
     public float Cooldown { get; private set; }
     public float SplashRadius { get; private set; }
-    public Transform Cannon => transform.Find("Cannon");
+    public Transform Muzzle => transform.Find("Muzzle");
+
+    internal void PlayMuzzleEffect()
+    {
+        Transform muzzle = Muzzle;
+        if (muzzle == null) return;
+        Animator animator = muzzle.GetComponent<Animator>();
+        SpriteRenderer renderer = muzzle.GetComponent<SpriteRenderer>();
+        if (animator == null || renderer == null) return;
+        if (muzzleEffectCoroutine != null) StopCoroutine(muzzleEffectCoroutine);
+        renderer.enabled = true;
+        animator.enabled = true;
+        animator.Play("Muzzle", 0, 0f);
+        float duration = 0.3f;
+        RuntimeAnimatorController controller = animator.runtimeAnimatorController;
+        if (controller != null && controller.animationClips.Length > 0)
+            duration = controller.animationClips[0].length;
+        muzzleEffectCoroutine = StartCoroutine(HideMuzzleEffect(animator, renderer, duration));
+    }
+
+    private IEnumerator HideMuzzleEffect(Animator animator, SpriteRenderer renderer, float duration)
+    {
+        yield return new WaitForSeconds(duration);
+        if (animator != null) animator.enabled = false;
+        if (renderer != null) renderer.enabled = false;
+        muzzleEffectCoroutine = null;
+    }
 
     private TriunviratoGame game;
     private float attackTimer;
+    private Coroutine muzzleEffectCoroutine;
     internal void Configure(TriunviratoGame owner, TowerConfig config)
     {
         game = owner;
