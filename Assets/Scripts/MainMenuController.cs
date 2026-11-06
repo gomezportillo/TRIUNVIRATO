@@ -34,6 +34,7 @@ public sealed class MainMenuController : MonoBehaviour
         QualitySettings.vSyncCount = 1;
         DontDestroyOnLoad(crtScanlineOverlay.transform.root.gameObject);
         crtScanlineOverlay.SetActive(crtEnabled);
+        CRTFullscreenFeature.SetEffectsEnabled(crtEnabled);
         startButton.onClick.AddListener(StartGame);
         optionsButton.onClick.AddListener(() => Show(optionsPanel));
         creditsButton.onClick.AddListener(() => Show(creditsPanel));
@@ -69,6 +70,7 @@ public sealed class MainMenuController : MonoBehaviour
     {
         crtEnabled = !crtEnabled;
         crtScanlineOverlay.SetActive(crtEnabled);
+        CRTFullscreenFeature.SetEffectsEnabled(crtEnabled);
         RefreshOptionLabels();
     }
 

@@ -129,9 +129,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b15f0c26e01943f59de2e35d817a0002, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  damageSpeedMultiplier: 0.5
+  damageSpeedMultiplier: 0.35
   damageAnimationSlowDuration: 0.2
-  damageFlashDuration: 0.083333336
+  damageFlashDuration: 0.08
 --- !u!1 &7557137002565367005
 GameObject:
   m_ObjectHideFlags: 0

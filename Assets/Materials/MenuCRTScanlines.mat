@@ -29,9 +29,13 @@ Material:
         m_Offset: {x: 0, y: 0}
     m_Ints: []
     m_Floats:
-    - _LineSpacing: 6
-    - _LineWidth: 2
+    - _ChromaticAberration: 0.01
+    - _Fisheye: 0.0557
+    - _LineScrollSpeed: 10
+    - _LineSpacing: 10
+    - _LineWidth: 3
+    - _Vignette: 0.35
     m_Colors:
-    - _Color: {r: 0, g: 0, b: 0, a: 0.19607843}
+    - _Color: {r: 0, g: 0, b: 0, a: 0.11764706}
   m_BuildTextureStacks: []
   m_AllowLocking: 1
