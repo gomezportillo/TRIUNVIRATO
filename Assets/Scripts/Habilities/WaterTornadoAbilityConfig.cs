@@ -12,7 +12,7 @@ public sealed class WaterTornadoAbilityConfig : HeroSpecialAbilityConfig
     [SerializeField, Min(0.01f)] private float pushSpeed = 3.5f;
     [SerializeField, Min(0f)] private float damageUpgradePercent = 50f;
     [SerializeField, Min(0f)] private float pushDistanceUpgrade = 0.25f;
-    [SerializeField, Range(0f, 1f), Tooltip("Fracción del empuje aplicado a jefes.")] private float bossPushMultiplier = 0f;
+    [SerializeField, Range(0f, 1f), Tooltip("Fracción del empuje aplicado a jefes.")] private float bossPushMultiplier = 0.5f;
 
     public GameObject TornadoPrefab => tornadoPrefab;
     public Vector2 InitialWorldPosition => initialWorldPosition;

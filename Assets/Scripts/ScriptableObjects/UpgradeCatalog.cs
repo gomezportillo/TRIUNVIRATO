@@ -74,7 +74,7 @@ public sealed class UpgradeCatalog : ScriptableObject
             case UpgradeEffect.TowerDamage: return "Daño de torres";
             case UpgradeEffect.TowerAttackSpeed: return "Velocidad de ataque de torres";
             case UpgradeEffect.TowerRange: return "Alcance de torres";
-            case UpgradeEffect.HeroDamage: return "Daño del héroe";
+            case UpgradeEffect.HeroDamage: return "Daño del héroe y sus habilidades";
             case UpgradeEffect.HeroAttackSpeed: return "Velocidad de ataque del héroe";
             case UpgradeEffect.HeroRange: return "Alcance del héroe";
             case UpgradeEffect.HeroSplash: return "Área de impacto del héroe";

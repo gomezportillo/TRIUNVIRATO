@@ -15,6 +15,8 @@ public sealed class MeteorShowerAbilityConfig : HeroSpecialAbilityConfig
     [SerializeField, Min(0.1f)] private float verticalHalfRange = 0.5f;
     [SerializeField] private float maximumX = 5f;
     [SerializeField, Min(0f)] private float minimumSeparation = 1.1f;
+    [SerializeField, Min(0f), Tooltip("Intensidad del pequeño temblor de cámara al lanzar cada meteorito.")] private float screenShakeMagnitude = 0.08f;
+    [SerializeField, Min(0f), Tooltip("Duración del temblor de cámara al lanzar cada meteorito, en segundos.")] private float screenShakeDuration = 0.12f;
 
     public int MeteorCount => meteorCount;
     public int MeteorCountUpgrade => meteorCountUpgrade;
@@ -28,4 +30,6 @@ public sealed class MeteorShowerAbilityConfig : HeroSpecialAbilityConfig
     public float VerticalHalfRange => verticalHalfRange;
     public float MaximumX => maximumX;
     public float MinimumSeparation => minimumSeparation;
+    public float ScreenShakeMagnitude => screenShakeMagnitude;
+    public float ScreenShakeDuration => screenShakeDuration;
 }

@@ -48,7 +48,7 @@ public sealed class SceneGameHUD : MonoBehaviour
         if (game != null)
         {
             Set(matchStatus, "Partida: " + (game.IsPaused ? "Pausada" : game.Status.ToString()));
-            Set(wave, "Oleada " + Mathf.Max(1, game.CurrentWave) + " / ∞");
+            Set(wave, "Oleada " + Mathf.Max(1, game.CurrentWave) + " / 30");
             Set(enemies, "Enemigos restantes: " + game.EnemiesRemainingInWave);
             Set(castleHealth, "Castillo: " + Mathf.CeilToInt(game.CastleHealth) + " / " + Mathf.CeilToInt(game.CastleMaximumHealth));
             for (int i = 0; i < 3; i++)

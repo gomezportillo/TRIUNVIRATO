@@ -28,4 +28,4 @@ MonoBehaviour:
   pushSpeed: 3.5
   damageUpgradePercent: 50
   pushDistanceUpgrade: 0.25
-  bossPushMultiplier: 0
+  bossPushMultiplier: 0.5

@@ -32,6 +32,8 @@ public sealed class TriunviratoGame : MonoBehaviour
     [SerializeField] private EnemyConfig enemyConfig;
     [SerializeField] private EnemyConfig goblinEnemyConfig;
     [SerializeField] private EnemyConfig bossConfig;
+    [SerializeField] private EnemyConfig finalBossConfig;
+    [SerializeField, Min(0f)] private float finalBossSpawnDelay = 3f;
     [Header("Oleadas nocturnas")]
     [SerializeField] private EnemyConfig nightEnemyConfig;
     [SerializeField] private EnemyConfig nightBossConfig;
@@ -74,6 +76,9 @@ public sealed class TriunviratoGame : MonoBehaviour
     private bool waveInProgress;
     private bool nightWaveActive;
     private Coroutine nightFadeCoroutine;
+    private SpriteRenderer finalBossMap;
+    private Coroutine finalBossIntroCoroutine;
+    private bool finalBossIntroLock;
     private SpriteRenderer[] mapRenderers;
     private SpriteRenderer morningMap;
     private SpriteRenderer sunsetMap;
@@ -177,6 +182,11 @@ public sealed class TriunviratoGame : MonoBehaviour
     private const float TargetAspectRatio = 16f / 9f;
     private Camera gameCamera;
     private float baseOrthographicSize;
+    private Vector3 cameraShakeBaseLocalPosition;
+    private float cameraShakeRemaining;
+    private float cameraShakeDuration;
+    private float cameraShakeMagnitude;
+    private bool cameraShakeActive;
     private int lastScreenWidth = -1;
     private int lastScreenHeight = -1;
     private CloneRuntime activeClone;
@@ -200,6 +210,7 @@ public sealed class TriunviratoGame : MonoBehaviour
     public float CastleMaximumHealth => CastleStartHealth;
     public int StateRevision { get; private set; }
     public bool IsMatchInProgress => matchStatus == MatchStatus.InProgress;
+    public bool IsVictory => finished && victory;
     public int CurrentWave => wave;
     public bool IsWaveInProgress => waveInProgress;
     public int GetLevel(ArmyType army) => IsValidArmy(army) ? levels[(int)army] : 1;
@@ -326,11 +337,11 @@ public sealed class TriunviratoGame : MonoBehaviour
         if (tierraHero == null || aireHero == null || marHero == null ||
             tierraConfig == null || aireConfig == null || marConfig == null ||
             enemySpawner == null || castleTarget == null || enemyConfig == null || bossConfig == null ||
-            goblinEnemyConfig == null || goblinEnemyConfig.Prefab == null ||
+            goblinEnemyConfig == null || goblinEnemyConfig.Prefab == null || finalBossConfig == null || finalBossConfig.Prefab == null || finalBossMap == null ||
             enemyConfig.Prefab == null || bossConfig.Prefab == null || damageFont == null ||
             nightEnemyConfig == null || nightEnemyConfig.Prefab == null || nightBossConfig == null || nightBossConfig.Prefab == null)
         {
-            Debug.LogError("Asigna los héroes, EnemyConfig, Goblin EnemyConfig, BossConfig, configuraciones nocturnas, referencias de escena, EnemySpawner, CastleTarget y la fuente en el Inspector.", this);
+            Debug.LogError("Asigna los héroes, EnemyConfig, Goblin EnemyConfig, BossConfig, FinalBossConfig, configuraciones nocturnas, referencias de escena, EnemySpawner, CastleTarget y la fuente en el Inspector.", this);
             enabled = false;
             return;
         }
@@ -341,10 +352,14 @@ public sealed class TriunviratoGame : MonoBehaviour
 
     private void Update()
     {
-        UpdateGameCameraViewport();
-        UpdateSpecialCooldownState();
-        UpdateSpecialAnimations();
-        CleanupSpecialEffects();
+        if (!finalBossIntroLock)
+        {
+            UpdateGameCameraViewport();
+            UpdateSpecialCooldownState();
+            UpdateSpecialAnimations();
+            CleanupSpecialEffects();
+            if (!paused) UpdateCameraShake();
+        }
 
         Keyboard keyboard = Keyboard.current;
         if (keyboard != null)
@@ -364,12 +379,14 @@ public sealed class TriunviratoGame : MonoBehaviour
 
         if (matchStatus != MatchStatus.InProgress || paused || finished)
         {
-            UpdateHeroRangeIndicators();
+            if (!finalBossIntroLock) UpdateHeroRangeIndicators();
             return;
         }
 
         UpdateWaveFlow();
         if (finished)
+            return;
+        if (finalBossIntroLock)
             return;
         UpdateEnemies();
         if (finished)
@@ -436,11 +453,59 @@ public sealed class TriunviratoGame : MonoBehaviour
         }
     }
 
+    private void StartCameraShake(float duration, float magnitude)
+    {
+        if (gameCamera == null || duration <= 0f || magnitude <= 0f)
+            return;
+
+        if (!cameraShakeActive)
+        {
+            cameraShakeBaseLocalPosition = gameCamera.transform.localPosition;
+            cameraShakeActive = true;
+        }
+        cameraShakeDuration = Mathf.Max(cameraShakeDuration, duration);
+        cameraShakeRemaining = Mathf.Max(cameraShakeRemaining, duration);
+        cameraShakeMagnitude = Mathf.Max(cameraShakeMagnitude, magnitude);
+    }
+
+    private void UpdateCameraShake()
+    {
+        if (!cameraShakeActive || gameCamera == null)
+            return;
+
+        cameraShakeRemaining = Mathf.Max(0f, cameraShakeRemaining - Time.deltaTime);
+        if (cameraShakeRemaining <= 0f)
+        {
+            gameCamera.transform.localPosition = cameraShakeBaseLocalPosition;
+            cameraShakeActive = false;
+            cameraShakeDuration = 0f;
+            cameraShakeMagnitude = 0f;
+            return;
+        }
+
+        float fade = cameraShakeDuration > 0f ? cameraShakeRemaining / cameraShakeDuration : 0f;
+        Vector2 offset = UnityEngine.Random.insideUnitCircle * (cameraShakeMagnitude * fade);
+        gameCamera.transform.localPosition = cameraShakeBaseLocalPosition + new Vector3(offset.x, offset.y, 0f);
+    }
+
+    private void ResetCameraShake()
+    {
+        if (cameraShakeActive && gameCamera != null)
+            gameCamera.transform.localPosition = cameraShakeBaseLocalPosition;
+        cameraShakeActive = false;
+        cameraShakeRemaining = 0f;
+        cameraShakeDuration = 0f;
+        cameraShakeMagnitude = 0f;
+    }
+
     private void ResetMatch(bool resumeMatch)
     {
         ResetLevelUpEffects();
         ResetNightVisuals();
+        ResetCameraShake();
         StopAllCoroutines();
+        finalBossIntroCoroutine = null;
+        finalBossIntroLock = false;
         cloneSpawnPending = false;
         cloneSpawnRemaining = 0f;
         RemoveActiveClone();
@@ -583,6 +648,7 @@ public sealed class TriunviratoGame : MonoBehaviour
 
     private void UpdateWaveFlow()
     {
+        if (finalBossIntroLock) return;
         if (!waveInProgress)
         {
             StartNextWave();
@@ -1060,7 +1126,18 @@ public sealed class TriunviratoGame : MonoBehaviour
 
     private void StartNextWave()
     {
+        if (wave >= 30 || finished) return;
         wave++;
+        if (wave == 30)
+        {
+            remainingToSpawn = 0;
+            waveInProgress = true;
+            finalBossIntroLock = true;
+            TransitionToMap(finalBossMap);
+            finalBossIntroCoroutine = StartCoroutine(BeginFinalBossAfterTransition());
+            StateRevision++;
+            return;
+        }
         remainingToSpawn = 4 + wave * 2;
         waveInProgress = true;
         spawnTimer = 0f;
@@ -1070,6 +1147,23 @@ public sealed class TriunviratoGame : MonoBehaviour
         else if (wave % 5 == 4) TransitionToMap(sunsetMap);
         StateRevision++;
     }
+
+    private IEnumerator BeginFinalBossAfterTransition()
+    {
+        while (nightFadeCoroutine != null) yield return null;
+        float remaining = Mathf.Max(0f, finalBossSpawnDelay);
+        while (remaining > 0f)
+        {
+            if (!paused) remaining -= Time.deltaTime;
+            yield return null;
+        }
+        if (!finished && finalBossConfig != null && finalBossConfig.Prefab != null)
+            SpawnConfiguredEnemy(finalBossConfig, true);
+        finalBossIntroLock = false;
+        finalBossIntroCoroutine = null;
+    }
+
+    internal void FinalBossVictory() => EndMatch(true);
 
     public bool TryStartMatch()
     {
@@ -1888,6 +1982,8 @@ public sealed class TriunviratoGame : MonoBehaviour
         {
             Vector3 position = GetMeteorStrikePosition(strikePositions, ability);
             strikePositions.Add(position);
+            if (ability != null)
+                StartCameraShake(ability.ScreenShakeDuration, ability.ScreenShakeMagnitude);
             CreateAnimatedEffect(ability != null ? ability.EffectController : null, position,
                 ability != null ? ability.EffectScale : 1f, null);
             StartCoroutine(ResolveMeteorImpact(position, ability));
@@ -2220,12 +2316,15 @@ public sealed class TriunviratoGame : MonoBehaviour
             selectedConfig = nightEnemyConfig;
         else
             selectedConfig = UnityEngine.Random.value < 0.5f ? enemyConfig : goblinEnemyConfig;
-        Enemy enemy = Instantiate(
-            selectedConfig.Prefab,
-            spawnPosition,
-            Quaternion.identity
-        );
+        SpawnConfiguredEnemy(selectedConfig, isBoss, spawnPosition);
+    }
 
+    private void SpawnConfiguredEnemy(EnemyConfig selectedConfig, bool isBoss, Vector3? position = null)
+    {
+        Vector3 spawnPosition = position ?? enemySpawner.position;
+        if (selectedConfig.IsFinalBoss)
+            spawnPosition.y = 0.85f;
+        Enemy enemy = Instantiate(selectedConfig.Prefab, spawnPosition, Quaternion.identity);
         enemy.name = selectedConfig.DisplayName;
         enemy.transform.localScale = Vector3.one * selectedConfig.VisualScale;
         enemy.Initialize(selectedConfig, this, wave, isBoss);
@@ -2256,12 +2355,15 @@ public sealed class TriunviratoGame : MonoBehaviour
         GameObject morning = GameObject.Find("Map_morning");
         GameObject sunset = GameObject.Find("Map_sunset");
         GameObject night = GameObject.Find("Map_night");
+        GameObject finalBoss = GameObject.Find("Map_final_boss");
+        finalBossMap = finalBoss != null ? finalBoss.GetComponent<SpriteRenderer>() : null;
         mapRenderers = new SpriteRenderer[]
         {
             map != null ? map.GetComponent<SpriteRenderer>() : null,
             morning != null ? morning.GetComponent<SpriteRenderer>() : null,
             sunset != null ? sunset.GetComponent<SpriteRenderer>() : null,
-            night != null ? night.GetComponent<SpriteRenderer>() : null
+            night != null ? night.GetComponent<SpriteRenderer>() : null,
+            finalBossMap
         };
         morningMap = mapRenderers[1];
         sunsetMap = mapRenderers[2];
@@ -2500,7 +2602,7 @@ public sealed class TriunviratoGame : MonoBehaviour
         view.transform.position = origin;
         float projectileScale = animatorController != null ? config.ProjectileSize : 0.14f;
         if (damageCategory == DamageCategory.Tower)
-            projectileScale *= 0.8f;
+            projectileScale *= 0.65f;
         view.transform.localScale = Vector3.one * projectileScale;
         SetProjectileVisualDirection(view.transform, destination - origin);
 
@@ -2515,7 +2617,7 @@ public sealed class TriunviratoGame : MonoBehaviour
         else if (towerProjectile)
         {
             renderer.sprite = GetTowerProjectileSprite();
-            renderer.color = config.ProjectileColor;
+            renderer.color = Color.yellow;
         }
         else
         {
@@ -2543,25 +2645,20 @@ public sealed class TriunviratoGame : MonoBehaviour
     private Sprite GetTowerProjectileSprite()
     {
         if (towerProjectileSprite != null) return towerProjectileSprite;
-        const int size = 32;
-        towerProjectileTexture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+        const int width = 32;
+        const int height = 12;
+        towerProjectileTexture = new Texture2D(width, height, TextureFormat.RGBA32, false)
         {
-            name = "Tower Projectile Circle",
-            filterMode = FilterMode.Bilinear,
+            name = "Tower Bullet",
+            filterMode = FilterMode.Point,
             wrapMode = TextureWrapMode.Clamp
         };
-        Vector2 center = new Vector2((size - 1) * 0.5f, (size - 1) * 0.5f);
-        float radius = size * 0.46f;
-        for (int y = 0; y < size; y++)
-        for (int x = 0; x < size; x++)
-        {
-            float distance = Vector2.Distance(new Vector2(x, y), center);
-            float alpha = Mathf.Clamp01(radius + 0.75f - distance);
-            towerProjectileTexture.SetPixel(x, y, new Color(1f, 1f, 1f, alpha));
-        }
+        Color[] pixels = new Color[width * height];
+        for (int i = 0; i < pixels.Length; i++) pixels[i] = Color.white;
+        towerProjectileTexture.SetPixels(pixels);
         towerProjectileTexture.Apply();
-        towerProjectileSprite = Sprite.Create(towerProjectileTexture, new Rect(0f, 0f, size, size),
-            new Vector2(0.5f, 0.5f), size);
+        towerProjectileSprite = Sprite.Create(towerProjectileTexture, new Rect(0f, 0f, width, height),
+            new Vector2(0.5f, 0.5f), width);
         return towerProjectileSprite;
     }
 
@@ -2808,7 +2905,7 @@ public sealed class TriunviratoGame : MonoBehaviour
             return;
         damageDealt[(int)army, (int)category] += appliedDamage;
         ShowDamage(enemy, appliedDamage, damageColor, army);
-        if (enemy.IsDead && !enemy.RewardGranted)
+        if (enemy.IsDead && !enemy.IsFinalBoss && !enemy.RewardGranted)
         {
             enemy.MarkRewardGranted();
             GrantEnemyExperience(enemy.IsBoss, enemy.ExperienceReward);
@@ -2965,6 +3062,9 @@ public sealed class TriunviratoGame : MonoBehaviour
         if (finished)
             return;
 
+        finalBossIntroLock = false;
+        if (finalBossIntroCoroutine != null) { StopCoroutine(finalBossIntroCoroutine); finalBossIntroCoroutine = null; }
+
         if (nightWaveActive) EndNightWave();
 
         for (int army = 0; army < 3; army++)
@@ -2984,7 +3084,9 @@ public sealed class TriunviratoGame : MonoBehaviour
         StateRevision++;
         Debug.Log(didWin ? "Partida finalizada: victoria." : "Partida finalizada: derrota.", this);
         GameSoundManager.Instance?.FadeOutTheme(2f);
-        if (!didWin)
+        if (didWin)
+            GameSoundManager.Instance?.PlayVictory();
+        else
             GameSoundManager.Instance?.PlayDefeat();
     }
 

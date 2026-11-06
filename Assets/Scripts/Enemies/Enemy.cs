@@ -3,6 +3,7 @@ using UnityEngine;
 /// <summary>Runtime state and animation driver for one Skeleton enemy instance.</summary>
 public class Enemy : MonoBehaviour
 {
+    private enum FinalBossState { None, Phase1, Phase1Death, Transforming, Phase2, FinalDeath, Victory }
     private static readonly int DamageFlashAmountId = Shader.PropertyToID("_DamageFlashAmount");
     private int IdleState;
     private int WalkState;
@@ -44,9 +45,15 @@ public class Enemy : MonoBehaviour
     private bool isRooted;
     private TimedCombatEffects combatEffects;
     private Transform center;
+    private FinalBossState finalBossState;
+    private int finalBossWalkHash, finalBossTransformHash, finalBossFlyHash, finalBossDieHash;
+    private float bossStateTimer, bossTransformDuration, bossCastleAttackTimer;
+    private bool bossVictoryReported;
+    private bool bossAtCastle;
 
-    public bool IsDead => isDead;
+    public bool IsDead => isDead || finalBossState == FinalBossState.Phase1Death || finalBossState == FinalBossState.Transforming || finalBossState == FinalBossState.FinalDeath || finalBossState == FinalBossState.Victory;
     public bool IsBoss => isBoss;
+    public bool IsFinalBoss => config != null && config.IsFinalBoss;
     public bool RewardGranted => rewardGranted;
     public float CurrentHealth => currentHealth;
     public float MaximumHealth { get; private set; }
@@ -58,6 +65,13 @@ public class Enemy : MonoBehaviour
     private void LateUpdate()
     {
         if (animator == null || isDead) return;
+        if (config != null && config.IsFinalBoss &&
+            (finalBossState == FinalBossState.Phase1Death || (bossAtCastle &&
+             (finalBossState == FinalBossState.Phase1 || finalBossState == FinalBossState.Phase2))))
+        {
+            animator.speed = 0f;
+            return;
+        }
         animator.speed = IsRooted ? 0f : GetEffectiveAnimationSpeed();
     }
 
@@ -66,6 +80,11 @@ public class Enemy : MonoBehaviour
         config = enemyConfig;
         game = owner;
         isBoss = boss;
+        finalBossState = config.IsFinalBoss ? FinalBossState.Phase1 : FinalBossState.None;
+        finalBossWalkHash = Animator.StringToHash(config.FinalBossWalkState);
+        finalBossTransformHash = Animator.StringToHash(config.FinalBossTransformState);
+        finalBossFlyHash = Animator.StringToHash(config.FinalBossFlyState);
+        finalBossDieHash = Animator.StringToHash(config.FinalBossDieState);
         center = null;
         foreach (Transform child in GetComponentsInChildren<Transform>(true))
         {
@@ -99,13 +118,14 @@ public class Enemy : MonoBehaviour
         allyAttackTimer = config.CastleAttackInterval;
         idleRemaining = config.InitialIdleDuration;
         deathFallbackTimer = config.DeathAnimationFallbackSeconds;
-        PlayState(IdleState, 1f);
+        if (config.IsFinalBoss) PlayFinalBossState(finalBossWalkHash);
+        else PlayState(IdleState, 1f);
     }
 
     /// <summary>Returns only the damage that actually reduced health, capped by remaining health.</summary>
     internal float ApplyDamage(float amount)
     {
-        if (isDead || amount <= 0f)
+        if (IsDead || amount <= 0f)
             return 0f;
 
         float appliedDamage = Mathf.Min(currentHealth, amount * (combatEffects != null ? combatEffects.IncomingDamageMultiplier : 1f));
@@ -113,6 +133,18 @@ public class Enemy : MonoBehaviour
         healthBar?.SetHealth(currentHealth, MaximumHealth);
         if (currentHealth <= 0f)
         {
+            if (config.IsFinalBoss)
+            {
+                currentHealth = 0f;
+                finalBossState = finalBossState == FinalBossState.Phase1 ? FinalBossState.Phase1Death : FinalBossState.FinalDeath;
+                bossStateTimer = finalBossState == FinalBossState.Phase1Death ? 1f : 2f;
+                healthBar?.SetHealth(0f, MaximumHealth);
+                ClearDamageFeedback();
+                isBeingKnockedBack = false;
+                combatEffects?.ClearAll();
+                if (finalBossState == FinalBossState.FinalDeath) PlayFinalBossState(finalBossDieHash);
+                return appliedDamage;
+            }
             isDead = true;
             ClearDamageFeedback();
             RefreshDamageFlash();
@@ -133,7 +165,7 @@ public class Enemy : MonoBehaviour
 
     internal void ApplyRooted(float duration)
     {
-        if (isDead || duration <= 0f)
+        if (IsDead || duration <= 0f)
             return;
         rootedUntil = Mathf.Max(rootedUntil, Time.time + duration);
     }
@@ -141,7 +173,7 @@ public class Enemy : MonoBehaviour
     /// <summary>Moves an enemy by a bounded horizontal impulse unless zombie grasp currently owns its movement.</summary>
     internal bool TryApplyKnockback(float signedDistance, float speed, float minimumX, float maximumX)
     {
-        if (isDead || IsRooted || Mathf.Abs(signedDistance) <= 0.001f || speed <= 0f) return false;
+        if (IsDead || IsRooted || Mathf.Abs(signedDistance) <= 0.001f || speed <= 0f) return false;
         knockbackTargetX = Mathf.Clamp(transform.position.x + signedDistance, minimumX, maximumX);
         if (Mathf.Abs(knockbackTargetX - transform.position.x) <= 0.001f) return false;
         knockbackSpeed = speed;
@@ -152,6 +184,8 @@ public class Enemy : MonoBehaviour
     /// <summary>Moves toward the castle and returns true after the death animation has finished.</summary>
     internal bool Tick(float deltaTime, Vector3 castlePosition, KnightAlly knightTarget = null)
     {
+        if (config != null && config.IsFinalBoss)
+            return TickFinalBoss(deltaTime, castlePosition);
         TickDamageFeedback(deltaTime);
         if (isDead)
         {
@@ -245,6 +279,91 @@ public class Enemy : MonoBehaviour
         }
 
         return false;
+    }
+
+    private bool TickFinalBoss(float deltaTime, Vector3 castlePosition)
+    {
+        TickDamageFeedback(deltaTime);
+        if (finalBossState == FinalBossState.Phase1Death)
+        {
+            bossStateTimer -= deltaTime;
+            if (bossStateTimer <= 0f)
+            {
+                finalBossState = FinalBossState.Transforming;
+                bossTransformDuration = Mathf.Max(0.1f, GetClipLength(finalBossTransformHash, config.FinalBossTransformState, 1f));
+                bossStateTimer = bossTransformDuration;
+                healthBar?.SetVisible(true);
+                PlayFinalBossState(finalBossTransformHash);
+            }
+            return false;
+        }
+        if (finalBossState == FinalBossState.Transforming)
+        {
+            bossStateTimer -= deltaTime;
+            currentHealth = MaximumHealth * (1f - Mathf.Clamp01(bossStateTimer / bossTransformDuration));
+            healthBar?.SetHealth(currentHealth, MaximumHealth);
+            if (bossStateTimer <= 0f)
+            {
+                currentHealth = MaximumHealth;
+                healthBar?.SetHealth(currentHealth, MaximumHealth);
+                finalBossState = FinalBossState.Phase2;
+                bossCastleAttackTimer = 0f;
+                PlayFinalBossState(finalBossFlyHash);
+            }
+            return false;
+        }
+        if (finalBossState == FinalBossState.FinalDeath)
+        {
+            bossStateTimer -= deltaTime;
+            if (bossStateTimer <= 0f && !bossVictoryReported)
+            {
+                bossVictoryReported = true;
+                finalBossState = FinalBossState.Victory;
+                game?.FinalBossVictory();
+                gameObject.SetActive(false);
+            }
+            return false;
+        }
+        if (finalBossState != FinalBossState.Phase1 && finalBossState != FinalBossState.Phase2) return false;
+        if (Time.time < rootedUntil)
+        {
+            if (animator != null) animator.speed = 0f;
+            return false;
+        }
+        if (isBeingKnockedBack)
+        {
+            float nextX = Mathf.MoveTowards(transform.position.x, knockbackTargetX, knockbackSpeed * deltaTime);
+            transform.position = new Vector3(nextX, transform.position.y, transform.position.z);
+            if (Mathf.Abs(nextX - knockbackTargetX) <= 0.001f) isBeingKnockedBack = false;
+            return false;
+        }
+        if (Vector2.Distance(transform.position, castlePosition) <= 0.2f)
+        {
+            if (!bossAtCastle) bossCastleAttackTimer = config.CastleAttackInterval;
+            bossAtCastle = true;
+            bossCastleAttackTimer -= deltaTime;
+            if (animator != null) animator.speed = 0f;
+            if (bossCastleAttackTimer <= 0f)
+            {
+                game?.ApplyCastleDamage(config.GetCastleDamage());
+                bossCastleAttackTimer = config.CastleAttackInterval;
+            }
+            return false;
+        }
+        bossAtCastle = false;
+        if (animator != null) animator.speed = 1f;
+        float effectiveSpeed = movementSpeed * (combatEffects != null ? combatEffects.MovementSpeedMultiplier : 1f) * GetDamageSpeedMultiplier();
+        transform.position = Vector3.MoveTowards(transform.position, castlePosition, effectiveSpeed * deltaTime);
+        int movingState = finalBossState == FinalBossState.Phase1 ? finalBossWalkHash : finalBossFlyHash;
+        if (animator != null && animator.GetCurrentAnimatorStateInfo(0).shortNameHash != movingState) PlayFinalBossState(movingState);
+        return false;
+    }
+
+    private void PlayFinalBossState(int stateHash)
+    {
+        if (animator == null || !animator.HasState(0, stateHash)) return;
+        animator.Play(stateHash, 0, 0f);
+        animator.speed = 1f;
     }
 
     /// <summary>Animation Event on the weapon impact frame; timer is a fallback if the clip is interrupted.</summary>

@@ -9,34 +9,43 @@ public sealed class MatchEndOverlay : MonoBehaviour
     [SerializeField] private TriunviratoGame game;
     [SerializeField] private LocalControlServer controlServer;
     [SerializeField] private GameObject overlay;
+    [SerializeField] private GameObject victoryOverlay;
     [SerializeField] private Text confirmedPlayersText;
+    [SerializeField] private Text victoryConfirmedPlayersText;
     [SerializeField] private Button restartButton;
+    [SerializeField] private Button victoryRestartButton;
 
     private bool isShowing;
+    private bool isVictoryShowing;
 
     private void Awake()
     {
         if (restartButton != null)
             restartButton.onClick.AddListener(RestartMatch);
+        if (victoryRestartButton != null)
+            victoryRestartButton.onClick.AddListener(RestartMatch);
 
         EnsureUiInputSystem();
         SetVisible(false);
+        SetVictoryVisible(false);
     }
 
     private void Update()
     {
-        bool shouldShow = game != null && game.Status == TriunviratoGame.MatchStatus.Finished;
+        bool matchFinished = game != null && game.Status == TriunviratoGame.MatchStatus.Finished;
+        bool shouldShowVictory = matchFinished && game.IsVictory;
+        bool shouldShowDefeat = matchFinished && !game.IsVictory;
 
-        if (shouldShow && confirmedPlayersText != null)
+        if (matchFinished)
         {
             int confirmed = controlServer != null ? controlServer.RestartRequestCount : 0;
-            confirmedPlayersText.text = "Jugadores confirmados " + confirmed + "/3";
+            string message = "Jugadores confirmados " + confirmed + "/3";
+            if (confirmedPlayersText != null) confirmedPlayersText.text = message;
+            if (victoryConfirmedPlayersText != null) victoryConfirmedPlayersText.text = message;
         }
 
-        if (shouldShow == isShowing)
-            return;
-
-        SetVisible(shouldShow);
+        if (shouldShowDefeat != isShowing) SetVisible(shouldShowDefeat);
+        if (shouldShowVictory != isVictoryShowing) SetVictoryVisible(shouldShowVictory);
     }
 
     private void SetVisible(bool visible)
@@ -46,6 +55,15 @@ public sealed class MatchEndOverlay : MonoBehaviour
             restartButton.interactable = visible;
         if (overlay != null && overlay.activeSelf != visible)
             overlay.SetActive(visible);
+    }
+
+    private void SetVictoryVisible(bool visible)
+    {
+        isVictoryShowing = visible;
+        if (victoryRestartButton != null)
+            victoryRestartButton.interactable = visible;
+        if (victoryOverlay != null && victoryOverlay.activeSelf != visible)
+            victoryOverlay.SetActive(visible);
     }
 
     private void RestartMatch()

@@ -3302,6 +3302,8 @@ MonoBehaviour:
   skeletonDeathVolume: 0.5
   defeat: {fileID: 8300000, guid: 51527a4bb1d06f34cb762d3a58ab65e5, type: 3}
   defeatVolume: 0.5
+  victory: {fileID: 8300000, guid: 1d2a8f8018c1b0e47af1bfcb1e8cdfa0, type: 3}
+  victoryVolume: 0.7
   matchStart: {fileID: 8300000, guid: 09f8a4276f3451548a72237e008b62f5, type: 3}
   matchStartVolume: 0.5
   towerBuilt: {fileID: 8300000, guid: 2ebf9b38baa94391a5e6ee8eeffa4853, type: 3}
@@ -3752,7 +3754,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 1
     m_LineSpacing: 1
-  m_Text: 0.9.1
+  m_Text: 0.10
 --- !u!222 &1866141510
 CanvasRenderer:
   m_ObjectHideFlags: 0

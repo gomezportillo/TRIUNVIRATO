@@ -33,6 +33,12 @@ public sealed class EnemyConfig : ScriptableObject
     [SerializeField, Min(0.001f), Tooltip("Altura de la barra en unidades de mundo.")] private float healthBarHeight = 0.03f;
     [SerializeField, Tooltip("Desplazamiento vertical respecto al sprite, en unidades de mundo. Puede ser negativo.")] private float healthBarOffset = 0.03f;
     [SerializeField, Min(0.1f)] private float deathAnimationFallbackSeconds = 1f;
+    [Header("Boss final")]
+    [SerializeField] private bool finalBoss;
+    [SerializeField] private string finalBossWalkState = "FinalBoss_Walk";
+    [SerializeField] private string finalBossTransformState = "FinalBoss_Transform";
+    [SerializeField] private string finalBossFlyState = "FinalBoss_Fly";
+    [SerializeField] private string finalBossDieState = "FinalBoss_Die";
 
     public string Id => id;
     public string DisplayName => displayName;
@@ -51,6 +57,11 @@ public sealed class EnemyConfig : ScriptableObject
     public float HealthBarHeight => healthBarHeight;
     public float HealthBarOffset => healthBarOffset;
     public float DeathAnimationFallbackSeconds => deathAnimationFallbackSeconds;
+    public bool IsFinalBoss => finalBoss;
+    public string FinalBossWalkState => finalBossWalkState;
+    public string FinalBossTransformState => finalBossTransformState;
+    public string FinalBossFlyState => finalBossFlyState;
+    public string FinalBossDieState => finalBossDieState;
 
     public float GetMaximumHealth(int wave)
     {

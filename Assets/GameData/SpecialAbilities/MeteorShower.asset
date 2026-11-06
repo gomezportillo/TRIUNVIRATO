@@ -31,3 +31,5 @@ MonoBehaviour:
   verticalHalfRange: 0.2
   maximumX: 4.5
   minimumSeparation: 1.2
+  screenShakeMagnitude: 0.08
+  screenShakeDuration: 0.12
