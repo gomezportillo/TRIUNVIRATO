@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   abilityName: Clon
   description: "Crea una copia temporal del h\xE9roe Aire que hereda sus efectos activos."
-  cooldown: 30
+  cooldown: 25
   effectController: {fileID: 0}
   effectScale: 1
   activationSound: {fileID: 8300000, guid: 74e6407b5559ba846880df6874be0070, type: 3}

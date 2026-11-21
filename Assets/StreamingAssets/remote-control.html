@@ -131,6 +131,10 @@
       </nav>
       <div id="section-content"></div>
       <button id="reconnect" class="secondary">Conectar / volver a conectar</button>
+      <div id="pause-controls" hidden>
+        <p id="pause-ready-count" class="muted" aria-live="polite">Jugadores listos 0/3</p>
+        <button id="pause-vote" class="neutral">SOLICITAR PAUSA</button>
+      </div>
     </section>
   </main>
 
@@ -143,6 +147,9 @@
       const lobbyMessage = document.getElementById('lobby-message');
       const seatsElement = document.getElementById('seats');
       const content = document.getElementById('section-content');
+      const pauseControls = document.getElementById('pause-controls');
+      const pauseReadyCount = document.getElementById('pause-ready-count');
+      const pauseVoteButton = document.getElementById('pause-vote');
       const sectionTabs = document.getElementById('section-tabs');
       const developerButton = document.getElementById('developer');
       const playerNameInput = document.getElementById('player-name');
@@ -154,6 +161,7 @@
       const icons = { tierra: '🟢', aire: '🔴', mar: '🔵' };
       const legacyAbilityIcons = { tierra: '🧟', aire: '☄️', mar: '⚡' };
       const numberFormat = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 2 });
+      const damageFormat = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 0 });
       const specialAbilityDefinitions = {
         aire: [
           { id: 'fire_rage', icon: '🌋', name: 'fireRageAbilityName', fallbackName: 'Furia ígnea', description: 'fireRageAbilityDescription', remaining: 'fireRageCooldownRemaining', duration: 'fireRageCooldownDuration', canActivate: 'fireRageCanActivate', unlocked: 'fireRageUnlocked', detail: a => `Daño adicional: +${numberFormat.format(a.fireRageDamageBonusPercent || 0)} % · Duración: ${numberFormat.format(a.fireRageDuration || 0)} s` },
@@ -163,7 +171,7 @@
           { id: 'knight_summon', icon: '⚔️', name: 'knightSummonAbilityName', fallbackName: 'Invocar caballero', description: 'knightSummonAbilityDescription', remaining: 'knightSummonCooldownRemaining', duration: 'knightSummonCooldownDuration', canActivate: 'knightSummonCanActivate', unlocked: 'knightSummonUnlocked', detail: () => 'Invoca un caballero aliado que combate automáticamente.' }
         ],
         mar: [
-          { id: 'water_tornado', icon: '🌪️', name: 'waterTornadoAbilityName', fallbackName: 'Huracán imparable', description: 'waterTornadoAbilityDescription', remaining: 'waterTornadoCooldownRemaining', duration: 'waterTornadoCooldownDuration', canActivate: 'waterTornadoCanActivate', unlocked: 'waterTornadoUnlocked', detail: a => `Daño: ${numberFormat.format(a.waterTornadoDamage || 0)} · Empuje hacia la izquierda: ${numberFormat.format(Math.abs(a.waterTornadoPushDistance || 0))}` },
+          { id: 'water_tornado', icon: '🌪️', name: 'waterTornadoAbilityName', fallbackName: 'Huracán imparable', description: 'waterTornadoAbilityDescription', remaining: 'waterTornadoCooldownRemaining', duration: 'waterTornadoCooldownDuration', canActivate: 'waterTornadoCanActivate', unlocked: 'waterTornadoUnlocked', detail: a => `Daño: ${damageFormat.format(a.waterTornadoDamage || 0)} · Empuje hacia la izquierda: ${numberFormat.format(Math.abs(a.waterTornadoPushDistance || 0))}` },
           { id: 'electric_bird', icon: '🦅', name: 'electricBirdAbilityName', fallbackName: 'Ave eléctrica', description: 'electricBirdAbilityDescription', remaining: 'electricBirdCooldownRemaining', duration: 'electricBirdCooldownDuration', canActivate: 'electricBirdCanActivate', unlocked: 'electricBirdUnlocked', detail: a => `Ralentiza y duplica el daño recibido durante ${numberFormat.format(a.electricBirdDuration || 0)} s.` }
         ]
       };
@@ -212,12 +220,30 @@
       function armyLabel(army) { return names[army] || army; }
       function attackRate(cooldown) { return cooldown > 0 ? `${numberFormat.format(1 / cooldown)} / s` : '0 / s'; }
 
+      function appendDeveloperTowerUnlock(army) {
+        if (!developerMode || army.towerUnlocked) return;
+        const section = document.createElement('article'); section.className = 'stat-section';
+        const heading = document.createElement('h3'); heading.textContent = `Herramientas de desarrollo · ${armyLabel(army.army)}`;
+        const description = document.createElement('p'); description.className = 'muted';
+        description.textContent = 'Desbloquea la torre de este héroe para probarla sin derrotar a un jefe.';
+        const button = document.createElement('button'); button.className = colors[army.army] || 'neutral';
+        button.textContent = `Desbloquear torre de ${armyLabel(army.army)}`;
+        const actionKey = `unlock-tower:${army.army}`;
+        button.disabled = !connected || pendingActions.has(actionKey);
+        button.addEventListener('click', () => request({ type: 'developerUnlockTower', army: army.army }, actionKey));
+        section.append(heading, description, button);
+        content.append(section);
+      }
+
       function request(message, actionKey = '') {
         if (!socket || socket.readyState !== WebSocket.OPEN) return;
         if (actionKey && pendingActions.has(actionKey)) return;
         const requestId = `${Date.now()}-${++requestCounter}`;
         message.requestId = requestId;
-        if (actionKey) { pendingActions.add(actionKey); pendingRequests.set(requestId, actionKey); renderPanel(); }
+        if (actionKey) {
+          pendingActions.add(actionKey); pendingRequests.set(requestId, actionKey);
+          renderPanel(); renderPauseControls();
+        }
         socket.send(JSON.stringify(message));
       }
       function syncObjectiveTab(open) {
@@ -277,7 +303,7 @@
           [`${numberFormat.format(army.luckChance * 100)} %`, 'Suerte · mejoras de dos estrellas']
         ]));
         const heroStats = [
-          [`${numberFormat.format(army.heroDamage)}`, 'Daño por ataque'],
+          [`${damageFormat.format(army.heroDamage)}`, 'Daño por ataque'],
           [attackRate(army.heroAttackCooldown), 'Ataques por segundo'],
           [`${numberFormat.format(army.heroRange)} u`, 'Alcance']
         ];
@@ -285,7 +311,7 @@
         if (army.army === 'mar') heroStats.push([`+${numberFormat.format(army.heroBossDamageBonusPercent)} %`, 'Daño contra jefes']);
         fragments.append(statSection(`Héroe · ${army.heroName || armyLabel(army.army)}`, heroStats));
         if (army.towerUnlocked) fragments.append(statSection(`Torre · ${army.towerName}`, [
-          [`${numberFormat.format(army.currentDamage)}`, 'Daño por ataque'],
+          [`${damageFormat.format(army.currentDamage)}`, 'Daño por ataque'],
           [attackRate(army.towerAttackCooldown), 'Ataques por segundo'],
           [`${numberFormat.format(army.towerRange)} u`, 'Alcance']
         ]));
@@ -302,15 +328,19 @@
         const note = document.createElement('p'); note.className = 'muted';
         note.textContent = 'Daño que redujo la vida de los enemigos; el exceso sobre su vida restante no se cuenta.';
         const table = document.createElement('table'); table.className = 'damage-summary';
-        table.innerHTML = '<thead><tr><th>Ejército</th><th>Héroe</th><th>Clon</th><th>Torres</th><th>Habilidades</th><th>Total</th></tr></thead>';
+        table.innerHTML = '<thead><tr><th>Ejército</th><th>Héroe</th><th>Torres</th><th>Habilidades</th><th>Total</th></tr></thead>';
         const tableWrap = document.createElement('div'); tableWrap.className = 'damage-summary-wrap'; tableWrap.tabIndex = 0;
         tableWrap.setAttribute('aria-label', 'Resumen de daño; desplázate horizontalmente para ver todas las columnas');
         const body = document.createElement('tbody');
         for (const army of state.armies || []) {
-          const values = [army.damageByHero || 0, army.damageByClone || 0, army.damageByTower || 0, army.damageBySpecialAbility || 0];
+          const values = [
+            (army.damageByHero || 0) + (army.damageByClone || 0),
+            army.damageByTower || 0,
+            army.damageBySpecialAbility || 0
+          ];
           const row = document.createElement('tr');
           const nameCell = document.createElement('th'); nameCell.scope = 'row'; nameCell.textContent = armyLabel(army.army); row.append(nameCell);
-          for (const value of [...values.map(v => numberFormat.format(v)), numberFormat.format(values.reduce((a, b) => a + b, 0))]) {
+          for (const value of [...values.map(v => damageFormat.format(v)), damageFormat.format(values.reduce((a, b) => a + b, 0))]) {
             const cell = document.createElement('td'); cell.textContent = value; row.append(cell);
           }
           body.append(row);
@@ -345,9 +375,9 @@
         if (army.army === 'tierra') {
           detail.textContent = `Inmoviliza ${numberFormat.format(army.specialNormalDuration || 0)} s · Jefes: ${numberFormat.format(army.specialBossDuration || 0)} s`;
         } else if (army.army === 'aire') {
-          detail.textContent = `${army.specialEffectCount || 0} meteoritos · ${numberFormat.format(army.specialDamagePerEffect || 0)} daño por meteorito`;
+          detail.textContent = `${army.specialEffectCount || 0} meteoritos · ${damageFormat.format(army.specialDamagePerEffect || 0)} daño por meteorito`;
         } else if (army.army === 'mar') {
-          detail.textContent = `${army.specialEffectCount || 0} rayos · ${numberFormat.format(army.specialDamagePerEffect || 0)} daño por rayo`;
+          detail.textContent = `${army.specialEffectCount || 0} rayos · ${damageFormat.format(army.specialDamagePerEffect || 0)} daño por rayo`;
         }
         card.append(detail, cooldown);
         const status = document.createElement('p'); status.className = 'muted';
@@ -525,10 +555,10 @@
         const xpSummary = document.createElement('p'); xpSummary.className = 'muted';
         xpSummary.textContent = `${army.playerName || names[selectedPanel]} · Nivel ${army.level} · ${numberFormat.format(army.experience)} / ${numberFormat.format(army.experienceNeeded)} XP · Multiplicador ×${numberFormat.format(army.experienceMultiplier)} · Suerte ${numberFormat.format(army.luckChance * 100)} % · Aumento de EXP +${numberFormat.format(army.experienceIncrease * 100)} %`;
         content.replaceChildren(xpSummary);
+        appendDeveloperTowerUnlock(army);
 
         if (army.hasUpgradeOffer) {
           sectionTabs.hidden = true;
-          content.replaceChildren(xpSummary);
           const title = document.createElement('h2'); title.textContent = army.hasBossOffer ? 'Recompensa de jefe · elige una mejora' : `¡Nivel ${army.level}! · elige una mejora`;
           content.append(title);
           for (const option of (army.upgradeOptions || [])) {
@@ -564,7 +594,23 @@
         }
         content.replaceChildren(fragment);
       }
-      function render() { if (!state) return; renderSeats(); renderPanel(); }
+      function render() {
+        if (!state) return;
+        renderSeats(); renderPanel(); renderPauseControls();
+      }
+      function renderPauseControls() {
+        const ownArmy = state && (state.armies || []).find(item => item.army === state.selectedArmy);
+        const visible = !!state && state.status === 'InProgress' && !developerMode && !!ownArmy;
+        pauseControls.hidden = !visible;
+        if (!visible) return;
+        const paused = !!state.paused;
+        const ready = !!ownArmy.readyRequested;
+        pauseReadyCount.textContent = `Jugadores listos ${state.readyPlayerCount || 0}/3`;
+        pauseVoteButton.textContent = ready
+          ? (paused ? 'CONTINUACIÓN SOLICITADA ✓' : 'PAUSA SOLICITADA ✓')
+          : (paused ? 'SOLICITAR CONTINUAR' : 'SOLICITAR PAUSA');
+        pauseVoteButton.disabled = !connected || !sessionReady || ready || pendingActions.has('pauseVote');
+      }
       function connect() {
         if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) return;
         result.textContent = 'Conectando…'; result.dataset.kind = '';
@@ -598,7 +644,7 @@
               const actionKey = pendingRequests.get(message.requestId);
               if (actionKey) { pendingRequests.delete(message.requestId); pendingActions.delete(actionKey); }
               feedback(message.message, !!message.success);
-              renderPanel();
+              renderPanel(); renderPauseControls();
             }
           } catch (_) { feedback('Unity envió una respuesta no válida.', false); }
         });
@@ -614,6 +660,7 @@
         if (activeView === 'objective') syncObjectiveTab(true);
         renderPanel();
       }));
+      pauseVoteButton.addEventListener('click', () => request({ type: 'requestPause' }, 'pauseVote'));
       document.addEventListener('visibilitychange', () => {
         if (document.hidden) syncObjectiveTab(false);
         else if (activeView === 'objective') syncObjectiveTab(true);

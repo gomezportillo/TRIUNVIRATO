@@ -35,6 +35,8 @@ public sealed class LocalControlServer : MonoBehaviour
     private readonly Dictionary<string, PlayerSession> sessionsByToken = new Dictionary<string, PlayerSession>();
     private readonly string[] armySeats = new string[3];
     private readonly bool[] restartRequestedByArmy = new bool[3];
+    private readonly bool[] pauseRequestedByArmy = new bool[3];
+    private readonly bool[] continueRequestedByArmy = new bool[3];
     private bool restartTriggered;
     private TriunviratoGame.MatchStatus observedMatchStatus;
     private bool hasObservedMatchStatus;
@@ -55,6 +57,7 @@ public sealed class LocalControlServer : MonoBehaviour
     public string StatusText => status;
     public string AccessUrlText => accessUrl;
     public int RestartRequestCount => CountRestartRequests();
+    public int ReadyPlayerCount => CountVotes(game != null && game.IsPaused ? continueRequestedByArmy : pauseRequestedByArmy);
     public string RoomStatusText => game != null ? "Sala: " + game.Status + " · " + SeatSummary() : "Sala: no disponible";
 
     /// <summary>Reads a live lobby seat directly from the authoritative session table.</summary>
@@ -114,6 +117,8 @@ public sealed class LocalControlServer : MonoBehaviour
         public int currentWave;
         public bool waveInProgress;
         public int restartRequestCount;
+        public bool paused;
+        public int readyPlayerCount;
         public SeatState[] seats;
         public ArmyState[] armies;
     }
@@ -152,6 +157,7 @@ public sealed class LocalControlServer : MonoBehaviour
         public float damageBySpecialAbility;
         public float damageByClone;
         public bool restartRequested;
+        public bool readyRequested;
         public bool hasUpgradeOffer;
         public bool hasBossOffer;
         public float heroDamage;
@@ -168,7 +174,6 @@ public sealed class LocalControlServer : MonoBehaviour
         public float towerBaseDamage;
         public float towerDamageMultiplier;
         public float towerDamageFixedBonus;
-        public float towerSplashRadius;
         public float towerBaseCooldown;
         public float towerBaseRange;
         public float towerAttackSpeedMultiplier;
@@ -303,7 +308,11 @@ public sealed class LocalControlServer : MonoBehaviour
         {
             if (hasObservedMatchStatus && observedMatchStatus == TriunviratoGame.MatchStatus.Finished &&
                 game.Status == TriunviratoGame.MatchStatus.InProgress)
+            {
                 ResetObjectiveTabStates();
+                Array.Clear(pauseRequestedByArmy, 0, pauseRequestedByArmy.Length);
+                Array.Clear(continueRequestedByArmy, 0, continueRequestedByArmy.Length);
+            }
             observedMatchStatus = game.Status;
             hasObservedMatchStatus = true;
         }
@@ -622,6 +631,31 @@ public sealed class LocalControlServer : MonoBehaviour
                     response.success = JoinDeveloper(session, command.playerName, out response.message);
                     stateChanged = response.success;
                 }
+                else if (command.type == "developerUnlockTower")
+                {
+                    response.type = "developerActionResult";
+                    if (!session.Developer)
+                        response.message = "Esta acción solo está disponible en modo desarrollador.";
+                    else if (!TryParseArmy(command.army, out ArmyType army))
+                        response.message = "Ejército desconocido.";
+                    else if (game == null || game.Status != TriunviratoGame.MatchStatus.InProgress)
+                        response.message = "La torre solo se puede desbloquear durante una partida.";
+                    else if (towerManager == null)
+                        response.message = "Tower Manager no está disponible.";
+                    else if (towerManager.HasTower(army))
+                    {
+                        response.success = true;
+                        response.message = "La torre de " + army + " ya está desbloqueada.";
+                    }
+                    else
+                    {
+                        response.success = towerManager.UnlockTower(army);
+                        response.message = response.success
+                            ? "Torre de " + army + " desbloqueada."
+                            : "No se pudo desbloquear la torre de " + army + ".";
+                        stateChanged = response.success;
+                    }
+                }
                 else if (command.type == "selectUpgrade")
                 {
                     response.type = "upgradeResult";
@@ -666,10 +700,42 @@ public sealed class LocalControlServer : MonoBehaviour
                             game.RestartFinishedMatch();
                             ResetObjectiveTabStates();
                             Array.Clear(restartRequestedByArmy, 0, restartRequestedByArmy.Length);
+                            Array.Clear(pauseRequestedByArmy, 0, pauseRequestedByArmy.Length);
+                            Array.Clear(continueRequestedByArmy, 0, continueRequestedByArmy.Length);
                             restartTriggered = false;
                             response.message = "Los tres jugadores confirmaron. Nueva partida iniciada.";
                             stateChanged = true;
                         }
+                    }
+                }
+                else if (command.type == "requestPause")
+                {
+                    response.type = "pauseVoteResult";
+                    if (session.Developer || session.ArmyIndex < 0 || session.ArmyIndex >= pauseRequestedByArmy.Length)
+                        response.message = "Solo los jugadores pueden solicitar la pausa.";
+                    else if (game == null || game.Status != TriunviratoGame.MatchStatus.InProgress)
+                        response.message = "La pausa solo está disponible durante una partida.";
+                    else
+                    {
+                        bool[] votes = game.IsPaused ? continueRequestedByArmy : pauseRequestedByArmy;
+                        votes[session.ArmyIndex] = true;
+                        int readyCount = CountVotes(votes);
+                        response.success = true;
+                        if (readyCount == votes.Length)
+                        {
+                            bool pauseNow = !game.IsPaused;
+                            Array.Clear(pauseRequestedByArmy, 0, pauseRequestedByArmy.Length);
+                            Array.Clear(continueRequestedByArmy, 0, continueRequestedByArmy.Length);
+                            game.SetPaused(pauseNow);
+                            response.message = pauseNow ? "Los tres jugadores han solicitado la pausa." : "Los tres jugadores han solicitado continuar.";
+                        }
+                        else
+                        {
+                            response.message = game.IsPaused
+                                ? "Solicitud para continuar registrada (" + readyCount + "/3)."
+                                : "Solicitud de pausa registrada (" + readyCount + "/3).";
+                        }
+                        stateChanged = true;
                     }
                 }
                 else if (command.type == "activateSpecial")
@@ -1121,6 +1187,8 @@ public sealed class LocalControlServer : MonoBehaviour
             currentWave = game != null ? game.CurrentWave : 0,
             waveInProgress = game != null && game.IsWaveInProgress,
             restartRequestCount = CountRestartRequests(),
+            paused = game != null && game.IsPaused,
+            readyPlayerCount = ReadyPlayerCount,
             seats = new[]
             {
                 CreateSeatState(ArmyType.Tierra, session),
@@ -1195,8 +1263,7 @@ public sealed class LocalControlServer : MonoBehaviour
             towerBaseDamage = towerConfig != null ? towerConfig.GetBaseDamage() : 0f,
             towerDamageMultiplier = game != null ? game.GetTowerUpgradeMultiplier(army) : 1f,
             towerDamageFixedBonus = game != null ? game.GetTowerDamageFixedBonus(army) : 0f,
-            towerSplashRadius = towerConfig != null && towerConfig.Hero != null ? towerConfig.Hero.SplashRadius : 0f,
-            towerBaseCooldown = towerConfig != null && towerConfig.Hero != null ? towerConfig.Hero.AttackCooldown : 0f,
+            towerBaseCooldown = towerConfig != null ? towerConfig.AttackCooldown : 0f,
             towerBaseRange = towerConfig != null && towerConfig.Hero != null ? towerConfig.Hero.Range : 0f,
             towerAttackSpeedMultiplier = game != null ? game.GetTowerAttackSpeedMultiplier(army) : 1f,
             towerRangeMultiplier = game != null ? game.GetTowerRangeMultiplier(army) : 1f,
@@ -1272,6 +1339,9 @@ public sealed class LocalControlServer : MonoBehaviour
             damageBySpecialAbility = game != null ? game.GetDamageBySpecialAbility(army) : 0f,
             damageByClone = game != null ? game.GetDamageByClone(army) : 0f,
             restartRequested = restartRequestedByArmy[(int)army],
+            readyRequested = (game != null && game.IsPaused
+                ? continueRequestedByArmy[(int)army]
+                : pauseRequestedByArmy[(int)army]),
             hasUpgradeOffer = game != null && game.GetUpgradeOffers(army).Length > 0,
             hasBossOffer = game != null && game.GetUpgradeOffers(army).Length > 0 && game.GetUpgradeOffers(army)[0].stars >= 3,
             upgradeOptions = CreateUpgradeOptions(army)
@@ -1294,6 +1364,15 @@ public sealed class LocalControlServer : MonoBehaviour
         int count = 0;
         foreach (bool requested in restartRequestedByArmy)
             if (requested) count++;
+        return count;
+    }
+
+    private static int CountVotes(bool[] votes)
+    {
+        int count = 0;
+        if (votes != null)
+            foreach (bool vote in votes)
+                if (vote) count++;
         return count;
     }
 

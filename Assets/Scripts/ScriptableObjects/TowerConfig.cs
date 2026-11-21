@@ -9,12 +9,14 @@ public sealed class TowerConfig : ScriptableObject
     [SerializeField] private ArmyType army;
     [SerializeField] private HeroConfig hero;
     [SerializeField, Min(0f)] private float baseDamage = 1f;
+    [SerializeField, Min(0f), Tooltip("Tiempo en segundos entre ataques de la torre.")] private float attackCooldown = 1f;
 
     public string Id => id;
     public string DisplayName => displayName;
     public ArmyType Army => army;
     public HeroConfig Hero => hero;
     public float BaseDamage => baseDamage;
+    public float AttackCooldown => attackCooldown;
 
     public float GetBaseDamage() => baseDamage;
 

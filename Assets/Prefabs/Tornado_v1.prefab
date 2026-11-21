@@ -12,7 +12,7 @@ GameObject:
   - component: {fileID: 6859885215364616716}
   - component: {fileID: 4559140549800029709}
   m_Layer: 0
-  m_Name: Normal-Fire-Tornado
+  m_Name: Tornado_v1
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -27,7 +27,7 @@ Transform:
   m_GameObject: {fileID: 5445062886903740078}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -3.91, y: -0.23, z: 0}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 0.6, y: 0.6, z: 0.6}
   m_ConstrainProportionsScale: 1
   m_Children: []

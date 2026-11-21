@@ -17,6 +17,9 @@ public sealed class SceneGameHUD : MonoBehaviour
     [SerializeField] private Text roomStatus;
     [Header("Lobby")]
     [SerializeField] private GameObject lobbyOverlay;
+    [Header("Pausa")]
+    [SerializeField] private GameObject pauseOverlay;
+    [SerializeField] private Text readyPlayersText;
     [Header("Experiencia individual")]
     [SerializeField] private GameObject experienceRoot;
     [SerializeField] private Image[] experienceBarFills = new Image[3];
@@ -42,6 +45,11 @@ public sealed class SceneGameHUD : MonoBehaviour
         bool showLobby = game == null || game.Status == TriunviratoGame.MatchStatus.WaitingForPlayers;
         if (lobbyOverlay != null && lobbyOverlay.activeSelf != showLobby)
             lobbyOverlay.SetActive(showLobby);
+        bool showPause = game != null && game.IsPaused;
+        if (pauseOverlay != null && pauseOverlay.activeSelf != showPause)
+            pauseOverlay.SetActive(showPause);
+        if (readyPlayersText != null)
+            Set(readyPlayersText, "Jugadores listos " + (controlServer != null ? controlServer.ReadyPlayerCount : 0) + "/3");
         bool showExperience = game != null && game.Status != TriunviratoGame.MatchStatus.WaitingForPlayers;
         if (experienceRoot != null && experienceRoot.activeSelf != showExperience)
             experienceRoot.SetActive(showExperience);

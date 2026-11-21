@@ -21,27 +21,27 @@ MonoBehaviour:
     category: 1
     effect: 3
     valueType: 0
-    normalEffect: 10
-    rareEffect: 15
-    legendaryEffect: 20
+    normalEffect: 20
+    rareEffect: 30
+    legendaryEffect: 40
     eligibleArmies: 
   - id: tower_speed
     displayName: Mecanismo veloz
     category: 1
     effect: 4
     valueType: 0
-    normalEffect: 10
-    rareEffect: 15
-    legendaryEffect: 20
+    normalEffect: 20
+    rareEffect: 30
+    legendaryEffect: 40
     eligibleArmies: 
   - id: tower_range
     displayName: Mira ampliada
     category: 1
     effect: 5
     valueType: 0
-    normalEffect: 10
-    rareEffect: 15
-    legendaryEffect: 20
+    normalEffect: 20
+    rareEffect: 30
+    legendaryEffect: 40
     eligibleArmies: 
   - id: hero_damage
     displayName: Golpe heroico
@@ -49,8 +49,8 @@ MonoBehaviour:
     effect: 6
     valueType: 0
     normalEffect: 10
-    rareEffect: 15
-    legendaryEffect: 20
+    rareEffect: 20
+    legendaryEffect: 30
     eligibleArmies: 
   - id: hero_speed
     displayName: Reflejos heroicos
@@ -58,8 +58,8 @@ MonoBehaviour:
     effect: 7
     valueType: 0
     normalEffect: 10
-    rareEffect: 15
-    legendaryEffect: 20
+    rareEffect: 20
+    legendaryEffect: 30
     eligibleArmies: 
   - id: hero_range
     displayName: "Vista de \xE1guila"
@@ -85,17 +85,17 @@ MonoBehaviour:
     effect: 10
     valueType: 0
     normalEffect: 10
-    rareEffect: 15
-    legendaryEffect: 20
+    rareEffect: 20
+    legendaryEffect: 30
     eligibleArmies: 
   - id: luck
     displayName: Suerte
     category: 0
     effect: 11
     valueType: 1
-    normalEffect: 1
-    rareEffect: 2
-    legendaryEffect: 3
+    normalEffect: 2
+    rareEffect: 4
+    legendaryEffect: 6
     eligibleArmies: 
   - id: unlock_tower_tierra
     displayName: Desbloqueo de torre de Tierra
@@ -105,8 +105,7 @@ MonoBehaviour:
     normalEffect: 0
     rareEffect: 0
     legendaryEffect: 0
-    eligibleArmies:
-    - 0
+    eligibleArmies: 00000000i
   - id: unlock_tower_aire
     displayName: Desbloqueo de torre de Aire
     category: 1
@@ -115,8 +114,7 @@ MonoBehaviour:
     normalEffect: 0
     rareEffect: 0
     legendaryEffect: 0
-    eligibleArmies:
-    - 1
+    eligibleArmies: 01000000i
   - id: unlock_tower_mar
     displayName: Desbloqueo de torre de Mar
     category: 1
@@ -125,15 +123,13 @@ MonoBehaviour:
     normalEffect: 0
     rareEffect: 0
     legendaryEffect: 0
-    eligibleArmies:
-    - 2
+    eligibleArmies: 02000000i
   - id: mar_boss_damage
     displayName: Cazajefes
     category: 2
     effect: 13
     valueType: 0
     normalEffect: 10
-    rareEffect: 15
-    legendaryEffect: 20
-    eligibleArmies:
-    - 2
+    rareEffect: 20
+    legendaryEffect: 30
+    eligibleArmies: 02000000i

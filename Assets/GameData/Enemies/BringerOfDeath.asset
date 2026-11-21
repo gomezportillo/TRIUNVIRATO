@@ -23,7 +23,7 @@ MonoBehaviour:
   slowDuration: 0.2
   speedGrowthPerWave: 0.02
   maximumSpeedMultiplier: 2
-  castleDamagePerAttack: 30
+  castleDamagePerAttack: 15
   castleAttackInterval: 2
   initialIdleDuration: 0.15
   visualScale: 0.6
@@ -32,9 +32,14 @@ MonoBehaviour:
   takeHitAnimationState: Take Hit
   deathAnimationState: Death
   attackAnimationState: Attack
-  experienceReward: 100
+  experienceReward: 80
   deathSound: {fileID: 8300000, guid: 77660ebfbd3b4d749ac7ef3426c5b409, type: 3}
   healthBarLength: 0.75
   healthBarHeight: 0.045
   healthBarOffset: 0.12
   deathAnimationFallbackSeconds: 1.3
+  finalBoss: 0
+  finalBossWalkState: FinalBoss_Walk
+  finalBossTransformState: FinalBoss_Transform
+  finalBossFlyState: FinalBoss_Fly
+  finalBossDieState: FinalBoss_Die

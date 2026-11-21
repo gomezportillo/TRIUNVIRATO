@@ -19,7 +19,7 @@ MonoBehaviour:
   effectScale: 1
   activationSound: {fileID: 8300000, guid: 817f111bedb9f1649872900147ba1075, type: 3}
   activationSoundPlayCount: 1
-  tornadoPrefab: {fileID: 4853735614445427219, guid: 23ca6482494d37a48bb018ee68857325, type: 3}
+  tornadoPrefab: {fileID: 8877750642822802525, guid: 193cdae5d01fae543ad90f951db39f18, type: 3}
   initialWorldPosition: {x: 4.5, y: -0.3}
   damage: 10
   travelSpeed: 3

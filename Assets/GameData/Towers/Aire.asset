@@ -16,4 +16,5 @@ MonoBehaviour:
   displayName: Aire
   army: 1
   hero: {fileID: 11400000, guid: a71d004d37b344738f574713f5240022, type: 2}
-  baseDamage: 2
+  baseDamage: 4
+  attackCooldown: 0.4

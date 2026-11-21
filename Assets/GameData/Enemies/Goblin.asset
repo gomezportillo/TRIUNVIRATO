@@ -23,7 +23,7 @@ MonoBehaviour:
   slowDuration: 0.2
   speedGrowthPerWave: 0.035
   maximumSpeedMultiplier: 2.5
-  castleDamagePerAttack: 5
+  castleDamagePerAttack: 10
   castleAttackInterval: 1.5
   initialIdleDuration: 0.15
   visualScale: 0.7
@@ -32,9 +32,14 @@ MonoBehaviour:
   takeHitAnimationState: Goblin_TakeHit
   deathAnimationState: Goblin_Death
   attackAnimationState: Goblin_Attack
-  experienceReward: 15
+  experienceReward: 18
   deathSound: {fileID: 8300000, guid: ec593acee6d4ec2459b33a157ff80767, type: 3}
   healthBarLength: 0.35
   healthBarHeight: 0.035
   healthBarOffset: -0.15
   deathAnimationFallbackSeconds: 1.1
+  finalBoss: 0
+  finalBossWalkState: FinalBoss_Walk
+  finalBossTransformState: FinalBoss_Transform
+  finalBossFlyState: FinalBoss_Fly
+  finalBossDieState: FinalBoss_Die

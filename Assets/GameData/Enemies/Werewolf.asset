@@ -15,15 +15,15 @@ MonoBehaviour:
   id: boss-werewolf
   displayName: Werewolf
   prefab: {fileID: 8800000000000000012, guid: 66fb834191f764e44b8e9d25e54e65cf, type: 3}
-  maximumHealth: 520
+  maximumHealth: 450
   additionalHealthPerWave: 30
   healthGrowthPerWave: 0.03
-  movementSpeed: 0.6
+  movementSpeed: 0.55
   slowPercentage: 70
   slowDuration: 0.2
   speedGrowthPerWave: 0.025
   maximumSpeedMultiplier: 2
-  castleDamagePerAttack: 35
+  castleDamagePerAttack: 15
   castleAttackInterval: 2
   initialIdleDuration: 0.15
   visualScale: 0.75
@@ -32,9 +32,14 @@ MonoBehaviour:
   takeHitAnimationState: Werewolf_Hurt
   deathAnimationState: Werewolf_Die
   attackAnimationState: Werewolf_Attack
-  experienceReward: 60
+  experienceReward: 100
   deathSound: {fileID: 8300000, guid: c3d0bf1443cc4884e8decffd501a647b, type: 3}
   healthBarLength: 0.8
   healthBarHeight: 0.045
   healthBarOffset: -0.1
   deathAnimationFallbackSeconds: 1.3
+  finalBoss: 0
+  finalBossWalkState: FinalBoss_Walk
+  finalBossTransformState: FinalBoss_Transform
+  finalBossFlyState: FinalBoss_Fly
+  finalBossDieState: FinalBoss_Die

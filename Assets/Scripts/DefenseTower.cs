@@ -9,7 +9,6 @@ public sealed class DefenseTower : MonoBehaviour
     public float Range { get; private set; }
     public float Damage { get; private set; }
     public float Cooldown { get; private set; }
-    public float SplashRadius { get; private set; }
     public Transform Muzzle => transform.Find("Muzzle");
 
     internal void PlayMuzzleEffect()
@@ -49,7 +48,6 @@ public sealed class DefenseTower : MonoBehaviour
             return;
 
         RefreshUpgradeStats();
-        SplashRadius = config.Hero.SplashRadius;
         attackTimer = 0f;
     }
 
@@ -60,10 +58,10 @@ public sealed class DefenseTower : MonoBehaviour
         if (Config == null || Config.Hero == null) return;
         Range = Config.Hero.Range * (game != null ? game.GetTowerRangeMultiplier(Config.Army) : 1f) +
                 (game != null ? game.GetTowerRangeFixedBonus(Config.Army) : 0f);
-        float attackRate = (Config.Hero.AttackCooldown > 0f ? 1f / Config.Hero.AttackCooldown : 0f) *
+        float attackRate = (Config.AttackCooldown > 0f ? 1f / Config.AttackCooldown : 0f) *
                            (game != null ? game.GetTowerAttackSpeedMultiplier(Config.Army) : 1f) +
                            (game != null ? game.GetTowerAttackRateFixedBonus(Config.Army) : 0f);
-        Cooldown = attackRate > 0f ? 1f / attackRate : Config.Hero.AttackCooldown;
+        Cooldown = attackRate > 0f ? 1f / attackRate : Config.AttackCooldown;
         RefreshDamage();
     }
 

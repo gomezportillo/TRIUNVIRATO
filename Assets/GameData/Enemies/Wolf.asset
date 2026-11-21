@@ -18,12 +18,12 @@ MonoBehaviour:
   maximumHealth: 38
   additionalHealthPerWave: 7
   healthGrowthPerWave: 0.05
-  movementSpeed: 0.55
+  movementSpeed: 0.5
   slowPercentage: 80
   slowDuration: 0.2
   speedGrowthPerWave: 0.03
   maximumSpeedMultiplier: 2
-  castleDamagePerAttack: 12
+  castleDamagePerAttack: 10
   castleAttackInterval: 1.7
   initialIdleDuration: 0.15
   visualScale: 0.45
@@ -32,9 +32,14 @@ MonoBehaviour:
   takeHitAnimationState: Wolf_TakeHit
   deathAnimationState: Wolf_Death
   attackAnimationState: Wolf_Attack
-  experienceReward: 18
+  experienceReward: 20
   deathSound: {fileID: 8300000, guid: 35846afe14f70764dad8e55b4642cf51, type: 3}
   healthBarLength: 0.38
   healthBarHeight: 0.035
   healthBarOffset: -0.15
   deathAnimationFallbackSeconds: 1.1
+  finalBoss: 0
+  finalBossWalkState: FinalBoss_Walk
+  finalBossTransformState: FinalBoss_Transform
+  finalBossFlyState: FinalBoss_Fly
+  finalBossDieState: FinalBoss_Die

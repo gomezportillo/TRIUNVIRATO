@@ -15,7 +15,7 @@ MonoBehaviour:
   id: hero-mar
   displayName: Mar
   army: 2
-  damage: 16
+  damage: 12
   attackCooldown: 1.5
   range: 9
   splashRadius: 0.3

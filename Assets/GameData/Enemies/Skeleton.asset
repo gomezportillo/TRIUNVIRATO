@@ -32,9 +32,14 @@ MonoBehaviour:
   takeHitAnimationState: Take Hit
   deathAnimationState: Death
   attackAnimationState: Attack
-  experienceReward: 15
+  experienceReward: 20
   deathSound: {fileID: 8300000, guid: ec593acee6d4ec2459b33a157ff80767, type: 3}
   healthBarLength: 0.35
   healthBarHeight: 0.035
   healthBarOffset: -0.15
   deathAnimationFallbackSeconds: 1.1
+  finalBoss: 0
+  finalBossWalkState: FinalBoss_Walk
+  finalBossTransformState: FinalBoss_Transform
+  finalBossFlyState: FinalBoss_Fly
+  finalBossDieState: FinalBoss_Die

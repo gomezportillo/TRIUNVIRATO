@@ -20,15 +20,15 @@ MonoBehaviour:
   activationSound: {fileID: 8300000, guid: 25ae01c1a6eee8f41a6d8ee1e819b013, type: 3}
   activationSoundPlayCount: 1
   knightPrefab: {fileID: 7582727259677179434, guid: 30e18d7fef433334f8f7335dd0a1693f, type: 3}
-  baseHealth: 40
-  baseDamage: 20
-  attackInterval: 1.5
+  baseHealth: 100
+  baseDamage: 50
+  attackInterval: 1.25
   attackRange: 0.5
-  movementSpeed: 1
-  enemyEngagementRange: 0.65
+  movementSpeed: 1.25
+  enemyEngagementRange: 0.5
   maximumLaneYOffset: 0.5
   healthAndDamageIncreasePerLevel: 0.5
-  cooldownReductionPerLevel: 3
+  cooldownReductionPerLevel: 5
   minimumCooldown: 5
   spawnOffset: {x: 0.55, y: -0.2}
   visualScale: 1

@@ -18,6 +18,7 @@ public sealed class TriunviratoGame : MonoBehaviour
     private const string WarBlessingAbilityId = "war_blessing";
     private const string WaterTornadoAbilityId = "water_tornado";
     private const string ElectricBirdAbilityId = "electric_bird";
+    private static readonly int TornadoTransformTriggerId = Animator.StringToHash("TransformToFire");
     [SerializeField] private Transform tierraHero;
     [SerializeField] private Transform aireHero;
     [SerializeField] private Transform marHero;
@@ -130,11 +131,11 @@ public sealed class TriunviratoGame : MonoBehaviour
     [SerializeField] private Sprite[] electricBirdSlowIconFrames;
     [SerializeField, Min(1f)] private float effectIconFrameRate = 12f;
     [SerializeField, Range(0f, 1f)] private float effectIconFreezeNormalizedTime = 0.55f;
-    [SerializeField, Min(0.01f)] private float effectIconSize = 0.35f;
+    [SerializeField, Min(0.01f)] private float effectIconSize = 1f;
     [SerializeField] private Vector2 effectIconOffset = new Vector2(0.55f, 0.35f);
     [SerializeField, Min(0.01f)] private float effectIconVerticalSpacing = 0.3f;
     [Header("Números de daño")]
-    [SerializeField, Min(1)] private int floatingDamageFontSize = 25;
+    [SerializeField, Min(1)] private int floatingDamageFontSize = 18;
     [SerializeField, Min(0f)] private float floatingDamageJitter = 0.16f;
     [SerializeField, Min(0f)] private float aireDamageHorizontalOffset = -0.12f;
     [SerializeField, Min(0f)] private float marDamageHorizontalOffset = 0.12f;
@@ -177,6 +178,7 @@ public sealed class TriunviratoGame : MonoBehaviour
     private float nextCooldownStateRefreshAt;
     private bool warnedMissingZombieGraspController;
     private bool warnedMissingMeteorController;
+    private float meteorShowerActiveUntil;
     private bool warnedMissingLightningController;
     private MatchStatus matchStatus = MatchStatus.WaitingForPlayers;
     private const float TargetAspectRatio = 16f / 9f;
@@ -245,6 +247,7 @@ public sealed class TriunviratoGame : MonoBehaviour
         public GameObject View;
         public HeroConfig Config;
         public Animator Animator;
+        public SpriteRenderer ActorRenderer;
         public Transform AttackSpawn;
         public TimedCombatEffects Effects;
         public float AttackTimer;
@@ -259,6 +262,7 @@ public sealed class TriunviratoGame : MonoBehaviour
     {
         public GameObject View;
         public Animator Animator;
+        public SpriteRenderer ActorRenderer;
         public TimedCombatEffects Effects;
         public Transform AttackSpawn;
         public float Remaining;
@@ -287,6 +291,7 @@ public sealed class TriunviratoGame : MonoBehaviour
         public GameObject View;
         public HashSet<Enemy> HitEnemies = new HashSet<Enemy>();
         public bool IsFireTornado;
+        public bool SynergyActivated;
     }
 
     private sealed class ElectricBirdProjectile
@@ -540,6 +545,7 @@ public sealed class TriunviratoGame : MonoBehaviour
         }
         floatingDamage.Clear();
         castleHealth = CastleStartHealth;
+        meteorShowerActiveUntil = 0f;
         spawnTimer = 1.5f;
         wave = 0;
         remainingToSpawn = 0;
@@ -633,6 +639,8 @@ public sealed class TriunviratoGame : MonoBehaviour
             return null;
         }
         Animator animator = hero.GetComponent<Animator>();
+        SpriteRenderer actorRenderer = hero.GetComponent<SpriteRenderer>();
+        if (actorRenderer == null) actorRenderer = hero.GetComponentInChildren<SpriteRenderer>(true);
         TimedCombatEffects effects = hero.GetComponent<TimedCombatEffects>();
         if (effects == null) effects = hero.gameObject.AddComponent<TimedCombatEffects>();
 
@@ -641,6 +649,7 @@ public sealed class TriunviratoGame : MonoBehaviour
             View = hero.gameObject,
             Config = config,
             Animator = animator,
+            ActorRenderer = actorRenderer,
             AttackSpawn = hero.Find("AttackSpawn"),
             Effects = effects
         };
@@ -1087,7 +1096,7 @@ public sealed class TriunviratoGame : MonoBehaviour
             if (towerManager == null || !towerManager.HasTower(army) || tower == null || tower.Hero == null)
                 return false;
             if (definition.effect == UpgradeEffect.TowerRange) return tower.Hero.Range > 0f;
-            if (definition.effect == UpgradeEffect.TowerAttackSpeed) return tower.Hero.AttackCooldown > 0f;
+            if (definition.effect == UpgradeEffect.TowerAttackSpeed) return tower.AttackCooldown > 0f;
             return true;
         }
         HeroConfig hero = GetHeroConfig(army);
@@ -1169,6 +1178,13 @@ public sealed class TriunviratoGame : MonoBehaviour
     {
         if (matchStatus != MatchStatus.WaitingForPlayers)
             return false;
+        EnsureDefendersInitialized();
+        for (int i = 0; i < defenders.Length; i++)
+        {
+            if (defenders[i] != null) continue;
+            Debug.LogError("No se puede iniciar la partida: falta configurar el héroe o HeroConfig del ejército " + (ArmyType)i + ".", this);
+            return false;
+        }
         matchStatus = MatchStatus.InProgress;
         paused = false;
         finished = false;
@@ -1177,6 +1193,25 @@ public sealed class TriunviratoGame : MonoBehaviour
         GameSoundManager.Instance?.PlayMatchStart();
         StartNextWave();
         return true;
+    }
+
+    internal void SetPaused(bool value)
+    {
+        if (matchStatus != MatchStatus.InProgress || paused == value)
+            return;
+        paused = value;
+        StateRevision++;
+    }
+
+    private void EnsureDefendersInitialized()
+    {
+        if (defenders != null) return;
+        defenders = new[]
+        {
+            CreateDefender(tierraHero, tierraConfig, ArmyType.Tierra),
+            CreateDefender(aireHero, aireConfig, ArmyType.Aire),
+            CreateDefender(marHero, marConfig, ArmyType.Mar)
+        };
     }
 
     public HeroConfig GetHeroConfig(ArmyType army)
@@ -1222,8 +1257,7 @@ public sealed class TriunviratoGame : MonoBehaviour
         return effects != null && effects.AttackSpeedMultiplier > 0f ? cooldown / effects.AttackSpeedMultiplier : cooldown;
     }
 
-    public float GetSpecialAbilityCooldown(ArmyType army) =>
-        ApplyHeroAttackSpeedToCooldown(GetBaseSpecialCooldown(army), army);
+    public float GetSpecialAbilityCooldown(ArmyType army) => GetBaseSpecialCooldown(army);
 
     public float GetSpecialAbilityCooldownRemaining(ArmyType army) =>
         IsValidArmy(army) ? Mathf.Max(0f, specialCooldownEndsAt[(int)army] - Time.time) : 0f;
@@ -1447,7 +1481,10 @@ public sealed class TriunviratoGame : MonoBehaviour
             tornado.name = "Huracán imparable";
             SpriteRenderer tornadoRenderer = tornado.GetComponentInChildren<SpriteRenderer>();
             if (tornadoRenderer != null) tornadoRenderer.sortingOrder = 16;
-            tornadoProjectiles.Add(new TornadoProjectile { View = tornado });
+            TornadoProjectile projectile = new TornadoProjectile { View = tornado };
+            tornadoProjectiles.Add(projectile);
+            if (Time.time < meteorShowerActiveUntil)
+                ActivateFireTornadoSynergy(projectile);
             StartAbilityCooldown(ArmyType.Mar, abilityId, waterTornadoAbility.Cooldown);
             PlayNewAbilityActivation(defenders[(int)ArmyType.Mar], waterTornadoAbility);
             message = "Huracán imparable lanzado.";
@@ -1587,6 +1624,7 @@ public sealed class TriunviratoGame : MonoBehaviour
                 message = "Zombie Grasp activado.";
                 break;
             case ArmyType.Aire:
+                meteorShowerActiveUntil = Time.time + GetMeteorShowerSequenceDuration();
                 TransformActiveTornados();
                 StartCoroutine(PerformMeteorShower());
                 message = "Meteor Shower activado.";
@@ -1645,6 +1683,8 @@ public sealed class TriunviratoGame : MonoBehaviour
         view.transform.localScale = original.View.transform.localScale;
         Animator animator = view.GetComponent<Animator>();
         if (animator == null) animator = view.GetComponentInChildren<Animator>();
+        SpriteRenderer actorRenderer = view.GetComponent<SpriteRenderer>();
+        if (actorRenderer == null) actorRenderer = view.GetComponentInChildren<SpriteRenderer>(true);
         TimedCombatEffects effects = view.GetComponent<TimedCombatEffects>();
         if (effects == null) effects = view.AddComponent<TimedCombatEffects>();
         effects.ClearAll();
@@ -1683,6 +1723,7 @@ public sealed class TriunviratoGame : MonoBehaviour
         {
             View = view,
             Animator = animator,
+            ActorRenderer = actorRenderer,
             Effects = effects,
             AttackSpawn = attackSpawn,
             Remaining = GetCloneDuration(),
@@ -1738,15 +1779,19 @@ public sealed class TriunviratoGame : MonoBehaviour
             clone.ShotPending = false;
             Enemy pendingTarget = FindTarget(clone.View.transform.position, GetHeroRange(ArmyType.Aire), ArmyType.Aire);
             if (pendingTarget != null)
+            {
+                FaceEnemy(clone.View.transform, clone.ActorRenderer, pendingTarget);
                 FireProjectile(clone.View, aireConfig.DisplayName + " · Clon", aireConfig, clone.PendingDamage,
                     GetHeroSplashRadius(ArmyType.Aire), pendingTarget.AimPosition, pendingTarget,
                     aireConfig.ProjectileAnimatorController, GetCloneAttackSpawnPosition(clone), DamageCategory.Clone);
+            }
         }
 
         clone.AttackTimer -= Time.deltaTime;
         if (clone.AttackTimer > 0f) return;
         Enemy target = FindTarget(clone.View.transform.position, GetHeroRange(ArmyType.Aire), ArmyType.Aire);
         if (target == null) return;
+        FaceEnemy(clone.View.transform, clone.ActorRenderer, target);
         clone.AttackTimer = GetHeroAttackCooldownWithEffects(ArmyType.Aire, clone.Effects);
         clone.PendingDamage = GetHeroDamageWithEffects(ArmyType.Aire, clone.Effects);
         if (clone.Animator != null && clone.Animator.runtimeAnimatorController != null &&
@@ -1994,27 +2039,37 @@ public sealed class TriunviratoGame : MonoBehaviour
 
     private void TransformActiveTornados()
     {
-        if (fireTornadoSynergy == null || fireTornadoSynergy.FireTornadoPrefab == null)
-            return;
-
         foreach (TornadoProjectile tornado in tornadoProjectiles)
         {
-            if (tornado == null || tornado.View == null || tornado.IsFireTornado)
-                continue;
-
-            Transform oldTransform = tornado.View.transform;
-            Vector3 position = oldTransform.position;
-            Quaternion rotation = oldTransform.rotation;
-            GameObject fireTornado = Instantiate(fireTornadoSynergy.FireTornadoPrefab, position, rotation, oldTransform.parent);
-            fireTornado.name = "Tornado de fuego";
-            SpriteRenderer renderer = fireTornado.GetComponentInChildren<SpriteRenderer>();
-            if (renderer != null)
-                renderer.sortingOrder = 16;
-
-            tornado.View = fireTornado;
-            tornado.IsFireTornado = true;
-            Destroy(oldTransform.gameObject);
+            ActivateFireTornadoSynergy(tornado);
         }
+    }
+
+    private float GetMeteorShowerSequenceDuration()
+    {
+        if (meteorShowerAbility == null) return 0f;
+        int count = Mathf.Max(1, meteorShowerAbility.MeteorCount + meteorCountBonus[(int)ArmyType.Aire]);
+        float interval = Mathf.Max(0f, meteorShowerAbility.Interval);
+        float impactDelay = Mathf.Max(0f, meteorShowerAbility.ImpactDelay);
+        return (count - 1) * interval + impactDelay + 0.1f;
+    }
+
+    private void ActivateFireTornadoSynergy(TornadoProjectile tornado)
+    {
+        if (fireTornadoSynergy == null || tornado == null || tornado.View == null || tornado.SynergyActivated)
+            return;
+
+        Animator animator = tornado.View.GetComponent<Animator>();
+        if (animator == null)
+        {
+            Debug.LogWarning("Tornado_v2 necesita un Animator para reproducir la transformación a fuego.", tornado.View);
+            return;
+        }
+
+        tornado.SynergyActivated = true;
+        tornado.IsFireTornado = true;
+        tornado.View.name = "Tornado de fuego";
+        animator.SetTrigger(TornadoTransformTriggerId);
     }
 
     private IEnumerator ResolveMeteorImpact(Vector3 position, MeteorShowerAbilityConfig ability)
@@ -2504,6 +2559,7 @@ public sealed class TriunviratoGame : MonoBehaviour
 
     private void UpdateDefenders()
     {
+        if (defenders == null) return;
         foreach (Defender defender in defenders)
         {
             if (defender == null || defender.View == null)
@@ -2519,7 +2575,10 @@ public sealed class TriunviratoGame : MonoBehaviour
                     {
                         Enemy currentTarget = FindTarget(defender);
                         if (currentTarget != null)
+                        {
+                            FaceEnemy(defender.View.transform, defender.ActorRenderer, currentTarget);
                             FireProjectile(defender, currentTarget);
+                        }
                     }
                 }
                 continue;
@@ -2533,6 +2592,7 @@ public sealed class TriunviratoGame : MonoBehaviour
             if (target == null)
                 continue;
 
+            FaceEnemy(defender.View.transform, defender.ActorRenderer, target);
             defender.AttackTimer = GetHeroAttackCooldown(defender.Config.Army);
             if (!defender.SpecialAnimationActive && defender.Animator != null && defender.Animator.runtimeAnimatorController != null)
                 defender.Animator.Play(NormalAttackState, 0, 0f);
@@ -2548,11 +2608,20 @@ public sealed class TriunviratoGame : MonoBehaviour
         return CanCombat && defender != null && defender.View != null && defender.Config != null;
     }
 
+    private static void FaceEnemy(Transform hero, SpriteRenderer actorRenderer, Enemy target)
+    {
+        if (hero == null || actorRenderer == null || target == null)
+            return;
+
+        actorRenderer.flipX = target.AimPosition.x < hero.position.x;
+    }
+
     private void FireProjectile(Defender defender, Enemy target)
     {
         if (target == null || target.IsDead)
             return;
 
+        FaceEnemy(defender.View.transform, defender.ActorRenderer, target);
         FireProjectile(defender.View, defender.Config.DisplayName, defender.Config,
             GetHeroDamage(defender.Config.Army), GetHeroSplashRadius(defender.Config.Army),
             target.AimPosition, target, defender.Config.ProjectileAnimatorController,
@@ -2904,7 +2973,7 @@ public sealed class TriunviratoGame : MonoBehaviour
         if (appliedDamage <= 0f)
             return;
         damageDealt[(int)army, (int)category] += appliedDamage;
-        ShowDamage(enemy, appliedDamage, damageColor, army);
+        ShowDamage(enemy, appliedDamage, category == DamageCategory.Tower ? Color.yellow : damageColor, army);
         if (enemy.IsDead && !enemy.IsFinalBoss && !enemy.RewardGranted)
         {
             enemy.MarkRewardGranted();
@@ -3040,7 +3109,7 @@ public sealed class TriunviratoGame : MonoBehaviour
         tower.PlayMuzzleEffect();
         Transform muzzle = tower.Muzzle;
         FireProjectile(tower.gameObject, tower.Config.DisplayName, tower.Config.Hero,
-            tower.Damage, tower.SplashRadius, target,
+            tower.Damage, 0f, target,
             launchPosition: muzzle != null ? muzzle.position : tower.transform.position + Vector3.right * 0.2f,
             damageCategory: DamageCategory.Tower);
         return true;
