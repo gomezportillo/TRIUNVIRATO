@@ -11,6 +11,10 @@ public sealed class EnemyConfig : ScriptableObject
     [SerializeField, Min(0f)] private float additionalHealthPerWave = 7f;
     [SerializeField, Min(0f)] private float healthGrowthPerWave = 0.05f;
     [SerializeField, Min(0f)] private float movementSpeed = 0.95f;
+    [SerializeField, Range(0f, 100f), Tooltip("Porcentaje de ralentización que recibe este enemigo al sufrir daño.")]
+    private float slowPercentage = 50f;
+    [SerializeField, Min(0f), Tooltip("Duración de la ralentización al recibir daño, en segundos.")]
+    private float slowDuration = 0.2f;
     [SerializeField, Min(0f)] private float speedGrowthPerWave = 0.05f;
     [SerializeField, Min(1f), Tooltip("Límite de velocidad respecto a la velocidad base, para evitar que oleadas tardías se vuelvan incontrolables.")]
     private float maximumSpeedMultiplier = 2f;
@@ -44,6 +48,8 @@ public sealed class EnemyConfig : ScriptableObject
     public string DisplayName => displayName;
     public Enemy Prefab => prefab;
     public float CastleAttackInterval => castleAttackInterval;
+    public float SlowPercentage => Mathf.Clamp(slowPercentage, 0f, 100f);
+    public float SlowDuration => Mathf.Max(0f, slowDuration);
     public float InitialIdleDuration => initialIdleDuration;
     public float VisualScale => visualScale;
     public string IdleAnimationState => idleAnimationState;

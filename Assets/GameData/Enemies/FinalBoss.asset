@@ -19,6 +19,8 @@ MonoBehaviour:
   additionalHealthPerWave: 0
   healthGrowthPerWave: 0
   movementSpeed: 0.3
+  slowPercentage: 50
+  slowDuration: 0.2
   speedGrowthPerWave: 0
   maximumSpeedMultiplier: 1
   castleDamagePerAttack: 25

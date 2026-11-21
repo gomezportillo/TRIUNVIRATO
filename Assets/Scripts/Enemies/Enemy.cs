@@ -23,14 +23,10 @@ public class Enemy : MonoBehaviour
     private float currentHealth;
     private float movementSpeed;
     private float attackAnimationSpeed = 1f;
-    [SerializeField, Range(0f, 1f), Tooltip("Multiplicador temporal de velocidad de movimiento y animación al recibir daño.")]
-    private float damageSpeedMultiplier = 0.5f;
-    [SerializeField, Min(0f), Tooltip("Duración de la ralentización de animación tras un impacto, en segundos.")]
-    private float damageAnimationSlowDuration = 0.2f;
     [SerializeField, Min(0f), Tooltip("Duración del destello blanco tras un impacto, en segundos. Cinco frames a 60 FPS son aproximadamente 0,083 s.")]
     private float damageFlashDuration = 5f / 60f;
     private float normalAnimationSpeed = 1f;
-    private float damageAnimationSlowRemaining;
+    private float damageSlowRemaining;
     private float damageFlashRemaining;
     private MaterialPropertyBlock actorPropertyBlock;
     private float castleAttackImpactDelay;
@@ -107,6 +103,7 @@ public class Enemy : MonoBehaviour
         if (combatEffects == null) combatEffects = gameObject.AddComponent<TimedCombatEffects>();
         currentHealth = MaximumHealth = config.GetMaximumHealth(wave);
         movementSpeed = config.GetMovementSpeed(wave);
+        damageSlowRemaining = 0f;
         healthBar = GetComponent<WorldHealthBar>();
         if (healthBar == null) healthBar = gameObject.AddComponent<WorldHealthBar>();
         healthBar.Initialize(actorRenderer, config.HealthBarLength, config.HealthBarHeight, config.HealthBarOffset);
@@ -264,8 +261,7 @@ public class Enemy : MonoBehaviour
             return false;
         }
 
-        float effectiveMovementSpeed = movementSpeed * (combatEffects != null ? combatEffects.MovementSpeedMultiplier : 1f) *
-            GetDamageSpeedMultiplier();
+        float effectiveMovementSpeed = movementSpeed * (combatEffects != null ? combatEffects.MovementSpeedMultiplier : 1f) * GetDamageSlowMultiplier();
         transform.position = Vector3.MoveTowards(transform.position, castlePosition, effectiveMovementSpeed * deltaTime);
         if (Vector2.Distance(transform.position, castlePosition) <= 0.2f)
         {
@@ -351,8 +347,8 @@ public class Enemy : MonoBehaviour
             return false;
         }
         bossAtCastle = false;
-        if (animator != null) animator.speed = 1f;
-        float effectiveSpeed = movementSpeed * (combatEffects != null ? combatEffects.MovementSpeedMultiplier : 1f) * GetDamageSpeedMultiplier();
+        if (animator != null) animator.speed = GetEffectiveAnimationSpeed();
+        float effectiveSpeed = movementSpeed * (combatEffects != null ? combatEffects.MovementSpeedMultiplier : 1f) * GetDamageSlowMultiplier();
         transform.position = Vector3.MoveTowards(transform.position, castlePosition, effectiveSpeed * deltaTime);
         int movingState = finalBossState == FinalBossState.Phase1 ? finalBossWalkHash : finalBossFlyHash;
         if (animator != null && animator.GetCurrentAnimatorStateInfo(0).shortNameHash != movingState) PlayFinalBossState(movingState);
@@ -390,15 +386,15 @@ public class Enemy : MonoBehaviour
         animator.speed = isRooted ? 0f : GetEffectiveAnimationSpeed();
     }
 
-    private float GetEffectiveAnimationSpeed() => normalAnimationSpeed * GetDamageSpeedMultiplier();
+    private float GetEffectiveAnimationSpeed() => normalAnimationSpeed * GetDamageSlowMultiplier();
 
-    private float GetDamageSpeedMultiplier() => damageAnimationSlowRemaining > 0f
-        ? Mathf.Clamp01(damageSpeedMultiplier)
+    private float GetDamageSlowMultiplier() => damageSlowRemaining > 0f && config != null
+        ? 1f - config.SlowPercentage / 100f
         : 1f;
 
     private void RefreshDamageFeedback()
     {
-        damageAnimationSlowRemaining = Mathf.Max(damageAnimationSlowRemaining, damageAnimationSlowDuration);
+        damageSlowRemaining = Mathf.Max(damageSlowRemaining, config != null ? config.SlowDuration : 0f);
         if (animator != null)
             animator.speed = isRooted ? 0f : GetEffectiveAnimationSpeed();
         RefreshDamageFlash();
@@ -413,10 +409,10 @@ public class Enemy : MonoBehaviour
 
     private void TickDamageFeedback(float deltaTime)
     {
-        if (damageAnimationSlowRemaining > 0f)
+        if (damageSlowRemaining > 0f)
         {
-            damageAnimationSlowRemaining = Mathf.Max(0f, damageAnimationSlowRemaining - deltaTime);
-            if (damageAnimationSlowRemaining <= 0f && animator != null)
+            damageSlowRemaining = Mathf.Max(0f, damageSlowRemaining - deltaTime);
+            if (damageSlowRemaining <= 0f && animator != null)
                 animator.speed = isRooted ? 0f : normalAnimationSpeed;
         }
         if (damageFlashRemaining > 0f)
@@ -429,7 +425,7 @@ public class Enemy : MonoBehaviour
 
     private void ClearDamageFeedback()
     {
-        damageAnimationSlowRemaining = 0f;
+        damageSlowRemaining = 0f;
         damageFlashRemaining = 0f;
         SetDamageFlash(false);
     }
